@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/keshon/melodix/datastore"
@@ -34,7 +36,7 @@ func NewBot(token string) (*Bot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating DataStore: %w", err)
 	}
-	return &Bot{Session: dg, DataStore: ds}, nil
+	return &Bot{Session: dg, DataStore: ds, Player: player.New(dg)}, nil
 }
 
 func (b *Bot) Start() {
@@ -78,7 +80,12 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	switch m.Content {
+	command, param, err := b.splitCommandFromParameter(m.Content)
+	if err != nil {
+		return
+	}
+
+	switch command {
 	case "!ping":
 		s.ChannelMessageSend(m.ChannelID, "Pong!")
 	case "!pong":
@@ -87,7 +94,16 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		record, _ := b.DataStore.Get(m.GuildID)
 		s.ChannelMessageSend(m.ChannelID, record.(*Record).GuildName)
 	case "!play":
+		channel, err := s.State.Channel(m.ChannelID)
+		if err != nil {
+			slog.Error("Error getting channel: %v", err)
+		}
+		guild, err := s.State.Guild(channel.GuildID)
+		if err != nil {
+			slog.Error("Error getting guild: %v", err)
+		}
 
+		b.Player.Play(channel.ID, guild.ID, param)
 	}
 }
 
@@ -105,6 +121,25 @@ func loadEnv() {
 	if os.Getenv("DISCORD_TOKEN") == "" {
 		log.Fatal("DISCORD_TOKEN is missing in environment variables")
 	}
+}
+
+func (b *Bot) splitCommandFromParameter(content string) (string, string, error) {
+	content = strings.ToLower(content)
+
+	words := strings.Fields(content)
+	if len(words) == 0 {
+		return "", "", fmt.Errorf("no command found")
+	}
+
+	command := strings.ToLower(words[0])
+	parameter := ""
+	if len(words) > 1 {
+		parameter = strings.Join(words[1:], " ")
+		parameter = strings.TrimSpace(parameter)
+	}
+
+	command = strings.ToLower(command)
+	return command, parameter, nil
 }
 
 func main() {
