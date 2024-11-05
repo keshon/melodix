@@ -1,12 +1,14 @@
 package main
 
 import (
-	"app/datastore"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/keshon/melodix/datastore"
+	"github.com/keshon/melodix/player"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
@@ -15,6 +17,7 @@ import (
 type Bot struct {
 	Session   *discordgo.Session
 	DataStore *datastore.DataStore
+	Player    *player.Player
 }
 
 type Record struct {
@@ -83,6 +86,8 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	case "!info":
 		record, _ := b.DataStore.Get(m.GuildID)
 		s.ChannelMessageSend(m.ChannelID, record.(*Record).GuildName)
+	case "!play":
+
 	}
 }
 
