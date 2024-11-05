@@ -48,7 +48,7 @@ func (source SongSource) String() string {
 	return sources[source]
 }
 
-func NewSong() *Song {
+func New() *Song {
 	return &Song{}
 }
 
@@ -68,7 +68,12 @@ func (s *Song) GetYoutubeSong(url string) (*Song, error) {
 		Timeout: 30 * time.Second,
 	}
 
-	song, err := client.GetVideo(url)
+	id, err := s.extractYoutubeID(url)
+	if err != nil {
+		return nil, err
+	}
+
+	song, err := client.GetVideo(id)
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +92,24 @@ func (s *Song) GetYoutubeSong(url string) (*Song, error) {
 		SongID:      song.ID,
 		Source:      SourceYouTube,
 	}, nil
+}
+
+func (s *Song) extractYoutubeID(url string) (string, error) {
+	parsedURL, err := urlstd.Parse(url)
+	if err != nil {
+		fmt.Println("Error parsing URL:", err)
+		return "", err
+	}
+	queryParams := parsedURL.Query()
+
+	videoID := queryParams.Get("v")
+	if videoID != "" {
+		fmt.Println("The video ID is:", videoID)
+		return videoID, nil
+	}
+
+	fmt.Println("Video ID not found.")
+	return "", nil
 }
 
 func (s *Song) GetInternetRadioSong(url string) (*Song, error) {

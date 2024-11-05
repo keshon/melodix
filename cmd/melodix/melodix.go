@@ -3,17 +3,17 @@ package main
 import (
 	"fmt"
 	"log"
-	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
-	"github.com/keshon/melodix/datastore"
-	"github.com/keshon/melodix/player"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
+	"github.com/keshon/melodix/datastore"
+	"github.com/keshon/melodix/player"
+	"github.com/keshon/melodix/song"
 )
 
 type Bot struct {
@@ -23,7 +23,7 @@ type Bot struct {
 }
 
 type Record struct {
-	GuildName string
+	GuildName string `json:"guild_name"`
 }
 
 func NewBot(token string) (*Bot, error) {
@@ -39,40 +39,49 @@ func NewBot(token string) (*Bot, error) {
 	return &Bot{Session: dg, DataStore: ds, Player: player.New(dg)}, nil
 }
 
-func (b *Bot) Start() {
-	b.setIntents()
-	b.registerHandlers()
-	b.openConnection()
+// Lifecycle Methods
+func (b *Bot) Start() error {
+	b.configureIntents()
+	b.registerEventHandlers()
 
-	guildInfo, err := b.Session.Guild(b.Session.State.Guilds[0].ID)
-	if err != nil {
-		log.Fatal("Error getting guild name:", err)
+	if err := b.openConnection(); err != nil {
+		return fmt.Errorf("error opening connection: %w", err)
 	}
-	b.DataStore.Add(guildInfo.ID, &Record{GuildName: guildInfo.Name})
+
+	if err := b.loadGuildInfo(); err != nil {
+		return fmt.Errorf("error loading guild info: %w", err)
+	}
+
+	return nil
 }
 
 func (b *Bot) Shutdown() {
 	if err := b.Session.Close(); err != nil {
-		log.Fatal("Error closing connection:", err)
+		log.Println("Error closing connection:", err)
 	}
 }
 
-func (b *Bot) setIntents() {
-	b.Session.Identify.Intents = discordgo.IntentsGuildMessages
+func (b *Bot) openConnection() error {
+	return b.Session.Open()
 }
 
-func (b *Bot) registerHandlers() {
+// Configuration Methods
+func (b *Bot) configureIntents() {
+	b.Session.Identify.Intents = discordgo.IntentsAll
+}
+
+func (b *Bot) registerEventHandlers() {
 	b.Session.AddHandler(b.onReady)
 	b.Session.AddHandler(b.onMessageCreate)
 }
 
+// Event Handlers
 func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
-
 	botInfo, err := s.User("@me")
 	if err != nil {
 		log.Fatalf("Error retrieving bot user: %v", err)
 	}
-	fmt.Printf("Bot %v is up!\n", botInfo.Username)
+	fmt.Printf("Bot %v is up and running!\n", botInfo.Username)
 }
 
 func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -80,7 +89,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	command, param, err := b.splitCommandFromParameter(m.Content)
+	command, param, err := b.parseCommand(m.Content)
 	if err != nil {
 		return
 	}
@@ -91,30 +100,79 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	case "!pong":
 		s.ChannelMessageSend(m.ChannelID, "Ping!")
 	case "!info":
-		record, _ := b.DataStore.Get(m.GuildID)
-		s.ChannelMessageSend(m.ChannelID, record.(*Record).GuildName)
+		record, exists := b.DataStore.Get(m.GuildID)
+		if exists {
+			s.ChannelMessageSend(m.ChannelID, record.(*Record).GuildName)
+		}
 	case "!play":
-		channel, err := s.State.Channel(m.ChannelID)
-		if err != nil {
-			slog.Error("Error getting channel: %v", err)
-		}
-		guild, err := s.State.Guild(channel.GuildID)
-		if err != nil {
-			slog.Error("Error getting guild: %v", err)
+		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
+		if err != nil || voiceState.ChannelID == "" {
+			s.ChannelMessageSend(m.ChannelID, "You must be in a voice channel to use this command.")
+			return
 		}
 
-		b.Player.Play(channel.ID, guild.ID, param)
+		song := song.New()
+		trackURL, err := url.Parse(param)
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error parsing URL: %v", err))
+			return
+		}
+		track, err := song.GetYoutubeSong(trackURL.String())
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song: %v", err))
+			return
+		}
+		b.Player.GuildID = m.GuildID
+		b.Player.ChannelID = voiceState.ChannelID
+		b.Player.Play(track, 0) // `param` has a link to YouTube
 	}
 }
 
-func (b *Bot) openConnection() {
-	if err := b.Session.Open(); err != nil {
-		log.Fatal("Error opening connection: ", err)
+// Utility Methods
+func (b *Bot) parseCommand(content string) (string, string, error) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return "", "", fmt.Errorf("no command found")
 	}
+
+	words := strings.Fields(content)
+	command := words[0]
+	parameter := strings.Join(words[1:], " ")
+
+	return command, strings.TrimSpace(parameter), nil
 }
 
-func loadEnv() {
-	if err := godotenv.Load(); err != nil {
+func (b *Bot) findUserVoiceState(guildID, userID string) (*discordgo.VoiceState, error) {
+	guild, err := b.Session.State.Guild(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving guild: %w", err)
+	}
+
+	for _, vs := range guild.VoiceStates {
+		if vs.UserID == userID {
+			return vs, nil
+		}
+	}
+	return nil, fmt.Errorf("user not in any voice channel")
+}
+
+func (b *Bot) loadGuildInfo() error {
+	if len(b.Session.State.Guilds) == 0 {
+		return fmt.Errorf("no guilds available for the bot")
+	}
+
+	guild := b.Session.State.Guilds[0]
+	if guildInfo, err := b.Session.Guild(guild.ID); err == nil {
+		b.DataStore.Add(guildInfo.ID, &Record{GuildName: guildInfo.Name})
+	} else {
+		return fmt.Errorf("error getting guild name: %w", err)
+	}
+	return nil
+}
+
+// Global Functions
+func loadEnv(path string) {
+	if err := godotenv.Load(path); err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
@@ -123,40 +181,27 @@ func loadEnv() {
 	}
 }
 
-func (b *Bot) splitCommandFromParameter(content string) (string, string, error) {
-	content = strings.ToLower(content)
-
-	words := strings.Fields(content)
-	if len(words) == 0 {
-		return "", "", fmt.Errorf("no command found")
-	}
-
-	command := strings.ToLower(words[0])
-	parameter := ""
-	if len(words) > 1 {
-		parameter = strings.Join(words[1:], " ")
-		parameter = strings.TrimSpace(parameter)
-	}
-
-	command = strings.ToLower(command)
-	return command, parameter, nil
-}
-
 func main() {
-	loadEnv()
+	loadEnv("d:\\Projects\\dev\\Keshon\\melodix\\.env") // full path is needed for VStudio Debugging
 
 	token := os.Getenv("DISCORD_TOKEN")
+	if token == "" {
+		log.Fatal("Discord token not found in environment variables")
+	}
 
 	bot, err := NewBot(token)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to create bot:", err)
 	}
-
-	bot.Start()
 	defer bot.Shutdown()
+
+	if err := bot.Start(); err != nil {
+		log.Fatal("Failed to start bot:", err)
+	}
 
 	fmt.Println("Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+	close(sc)
 }
