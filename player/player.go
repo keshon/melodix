@@ -45,6 +45,7 @@ const (
 	ActionStop Signal = iota
 	ActionSkip
 	ActionSwap
+	ActionPauseResume
 )
 
 func (status Status) String() string {
@@ -76,14 +77,14 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 
 	options := dca.StdEncodeOptions
 	options.RawOutput = true
-	options.Bitrate = 64
+	options.Bitrate = 96
 	options.Application = "lowdelay"
 	options.FrameDuration = 20
 	options.BufferedFrames = 200
 	options.CompressionLevel = 10
 	options.VBR = true
 	options.Volume = 1.0
-	options.StartTime = int(startAt.Seconds())
+	options.StartTime = startAt
 
 	encoding, err := dca.EncodeFile(song.StreamURL, options)
 	if err != nil {
@@ -95,108 +96,101 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 	if err != nil {
 		return err
 	}
-	// defer vc.Disconnect()
+	defer p.leaveVoiceChannel(vc) // Ensure vc is disconnected at the end
 
 	done := make(chan error)
 	streaming := dca.NewStream(encoding, vc, done)
-	if streaming.Paused() {
-		p.Status = StatusPaused
-	} else {
-		p.Status = StatusPlaying
-	}
+	p.Status = StatusPlaying
 
-	select {
-	case err := <-done:
-		if err != nil && err != io.EOF {
-			p.leaveVoiceChannel(vc)
-			return err
-		}
+	for {
+		select {
+		case err := <-done:
+			if err != nil && err != io.EOF {
+				p.leaveVoiceChannel(vc)
+				return err
+			}
 
-		if song != nil {
-			switch song.Source {
-			case songpkg.SourceYouTube:
-				duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
-				if err != nil {
-					return err
-				}
-				if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
-					fmt.Printf("Unexpected interruption of YouTube playback, restarting: \"%v\" from %vs", song.Title, int(startAt))
-
-					startAt := position.Seconds()
-					vc.Speaking(false)
-
-					go func() error {
-						song, err := song.GetYoutubeSong(song.StreamURL)
-						if err != nil {
-							return err
-						}
-						err = p.Play(song, time.Duration(startAt)*time.Second)
-						if err != nil {
-							return err
-						}
-						return nil
-					}()
-				}
-			case songpkg.SourceInternetRadio:
-				fmt.Printf("Unexpected interruption of Internet Radio playback, restarting: \"%v\" from %vs", song.Title, int(startAt))
-				vc.Speaking(false)
-				go func() error {
-					err = p.Play(song, 0)
+			if song != nil {
+				switch song.Source {
+				case songpkg.SourceYouTube:
+					duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
 					if err != nil {
 						return err
 					}
-					return nil
-				}()
-			case songpkg.SourceLocalFile:
-				duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
-				if err != nil {
-					return err
-				}
-				if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
-					fmt.Printf("Unexpected interruption of local file playback, restarting: \"%v\" from %vs", song.Title, int(startAt))
-					startAt := position.Seconds()
+					if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
+						fmt.Printf("Unexpected interruption of YouTube playback, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
+
+						vc.Speaking(false)
+
+						go func() error {
+							song, err := song.GetYoutubeSong(song.OfficalLink)
+							if err != nil {
+								return err
+							}
+							err = p.Play(song, position)
+							if err != nil {
+								return err
+							}
+							return nil
+						}()
+					} else {
+						fmt.Printf("Finished YouTube playback of \"%v\" at %vs of %s", song.Title, int(position.Seconds()), duration)
+					}
+				case songpkg.SourceInternetRadio:
+					fmt.Printf("Unexpected interruption of Internet Radio playback, restarting: \"%v\" from %vs\n", song.Title, float64(startAt))
 					vc.Speaking(false)
 					go func() error {
-						err = p.Play(song, time.Duration(startAt)*time.Second)
+						err = p.Play(song, 0)
 						if err != nil {
 							return err
 						}
 						return nil
 					}()
+				case songpkg.SourceLocalFile:
+					duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
+					if err != nil {
+						return err
+					}
+					if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
+						fmt.Printf("Unexpected interruption of local file playback, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
+						startAt := position.Seconds()
+						vc.Speaking(false)
+						go func() error {
+							err = p.Play(song, time.Duration(startAt)*time.Second)
+							if err != nil {
+								return err
+							}
+							return nil
+						}()
+					}
 				}
 			}
-		}
-		return err
-	case signal := <-p.Signals:
-		switch signal {
-		case ActionSkip:
-			vc.Speaking(false)
-		case ActionStop:
-			err := p.leaveVoiceChannel(vc)
-			if err != nil {
-				return err
-			}
-			song = nil
-			p.Queue = make([]*songpkg.Song, 0, 10)
-			p.Signals = make(chan Signal, 1)
-			p.Status = StatusResting
-		case ActionSwap:
-			err := p.leaveVoiceChannel(vc)
-			if err != nil {
-				return err
-			}
-			p.Status = StatusResting
-			go func() error {
-				err = p.Play(song, 0)
-				if err != nil {
-					return err
-				}
+			return err
+		case signal := <-p.Signals:
+			switch signal {
+			case ActionSkip:
+				// Skip to next song (if implemented in your main queue loop)
 				return nil
-			}()
+			case ActionStop:
+				p.Status = StatusResting
+				return p.leaveVoiceChannel(vc)
+			case ActionSwap:
+				p.Status = StatusResting
+				go p.Play(song, 0)
+				return nil
+			case ActionPauseResume:
+				if streaming.Paused() {
+					streaming.SetPaused(false)
+					p.Status = StatusPlaying
+					vc.Speaking(true)
+				} else {
+					streaming.SetPaused(true)
+					p.Status = StatusPaused
+					vc.Speaking(false)
+				}
+			}
 		}
 	}
-
-	return nil
 }
 
 func (p *Player) joinVoiceChannel(session *discordgo.Session, guildID, channelID string) (*discordgo.VoiceConnection, error) {
@@ -204,6 +198,7 @@ func (p *Player) joinVoiceChannel(session *discordgo.Session, guildID, channelID
 	for attempts := 0; attempts < 5; attempts++ {
 		voiceConnection, err := session.ChannelVoiceJoin(guildID, channelID, false, false)
 		if err == nil {
+			voiceConnection.Speaking(true)
 			return voiceConnection, nil
 		}
 		time.Sleep(300 * time.Millisecond)
@@ -219,9 +214,9 @@ func (p *Player) leaveVoiceChannel(vc *discordgo.VoiceConnection) error {
 }
 
 func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca.StreamingSession, song *songpkg.Song) (time.Duration, time.Duration, error) {
-	encodingStartTime := time.Duration(encoding.Options().StartTime) * time.Second
+	encodingStartTime := encoding.Options().StartTime
 	streamingPos := streaming.PlaybackPosition()
-	encodingDelay := encoding.Stats().Duration - streamingPos
+	streamingDelay := encoding.Stats().Duration - streamingPos
 
 	var songDuration time.Duration
 	var err error
@@ -245,10 +240,10 @@ func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca
 		return 0, 0, fmt.Errorf("unknown source: %v", song.Source)
 	}
 
-	playbackPos := encodingStartTime + streamingPos + encodingDelay.Abs()
+	playbackPos := encodingStartTime + streamingPos + streamingDelay.Abs() // the delay is wrong here, but I'm out of ideas how to fix the precision
 
-	fmt.Printf("Playback stopped at:\t%s,\tSong duration:\t%s", playbackPos, songDuration)
-	fmt.Printf("Encoding started at:\t%s,\tEncoding ahead:\t%s", encodingStartTime, encodingDelay)
+	fmt.Printf("Playback stopped at:\t%s,\tTotal Song duration:\t%s\n", playbackPos, songDuration)
+	fmt.Printf("Encoding started at:\t%s,\tStreaming delay:\t%s\n", encodingStartTime, streamingDelay)
 
 	return songDuration, playbackPos, nil
 }

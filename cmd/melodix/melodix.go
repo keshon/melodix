@@ -124,7 +124,16 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		b.Player.GuildID = m.GuildID
 		b.Player.ChannelID = voiceState.ChannelID
 		b.Player.Play(songs[0], 0) // `param` has a link to YouTube
+
+	case "!stop":
+		b.Player.Signals <- player.ActionStop
+
+	case "!skip":
+		b.Player.Signals <- player.ActionSkip
+	case "!pause", "!resume":
+		b.Player.Signals <- player.ActionPauseResume
 	}
+
 }
 
 // Utility Methods
