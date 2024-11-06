@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,7 +12,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/keshon/melodix/datastore"
 	"github.com/keshon/melodix/player"
-	"github.com/keshon/melodix/song"
+	songpkg "github.com/keshon/melodix/song"
+	"github.com/keshon/melodix/youtube"
 )
 
 type Bot struct {
@@ -89,7 +89,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	command, param, err := b.parseCommand(m.Content)
+	command, param, err := b.extractCommand(m.Content)
 	if err != nil {
 		return
 	}
@@ -111,35 +111,94 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			return
 		}
 
-		song := song.New()
-		trackURL, err := url.Parse(param)
-		if err != nil {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error parsing URL: %v", err))
-			return
-		}
-		track, err := song.GetYoutubeSong(trackURL.String())
+		songs, err := b.fetchSongs(param)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song: %v", err))
 			return
 		}
+		if len(songs) == 0 {
+			s.ChannelMessageSend(m.ChannelID, "No song found.")
+			return
+		}
+
 		b.Player.GuildID = m.GuildID
 		b.Player.ChannelID = voiceState.ChannelID
-		b.Player.Play(track, 0) // `param` has a link to YouTube
+		b.Player.Play(songs[0], 0) // `param` has a link to YouTube
 	}
 }
 
 // Utility Methods
-func (b *Bot) parseCommand(content string) (string, string, error) {
+func (b *Bot) extractCommand(content string) (string, string, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return "", "", fmt.Errorf("no command found")
 	}
 
 	words := strings.Fields(content)
-	command := words[0]
-	parameter := strings.Join(words[1:], " ")
+	cmd := strings.TrimSpace(words[0])
+	params := strings.TrimSpace(strings.Join(words[1:], " "))
 
-	return command, strings.TrimSpace(parameter), nil
+	return cmd, params, nil
+}
+
+func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
+	fmt.Println("param:", param)
+	if !strings.Contains(param, "https://") || !strings.Contains(param, "http://") {
+		// Consider it as Youtube Title
+
+		yt := youtube.New()
+		url, err := yt.GetVideoURLByTitle(param)
+		if err != nil {
+			return nil, err
+		}
+
+		song := songpkg.New()
+		fmt.Println("youtube url (from title):", url)
+		song, err = song.GetYoutubeSong(url)
+		if err != nil {
+			return nil, err
+		}
+		return []*songpkg.Song{
+			song,
+		}, nil
+	}
+
+	// Consider it as YouTube URL
+	if strings.Contains(param, "https://") && strings.Contains(param, "youtube") {
+		// split to multiple urls
+		splitURL := strings.Split(param, " ")
+		songs := make([]*songpkg.Song, 0, len(splitURL))
+		for _, url := range splitURL {
+			song := songpkg.New()
+
+			fmt.Println("youtube url:", url)
+			song, err := song.GetYoutubeSong(url)
+			if err != nil {
+				return nil, err
+			}
+			songs = append(songs, song)
+		}
+		return songs, nil
+	}
+
+	// Consider it as Internet Radio URL
+	if strings.Contains(param, "https://") || strings.Contains(param, "http://") && !strings.Contains(param, "youtube") {
+		// split to multiple urls
+		splitURL := strings.Split(param, " ")
+		songs := make([]*songpkg.Song, 0, len(splitURL))
+		for _, url := range splitURL {
+			song := songpkg.New()
+			fmt.Println("radio url:", url)
+			song, err := song.GetInternetRadioSong(url)
+			if err != nil {
+				return nil, err
+			}
+			songs = append(songs, song)
+		}
+		return songs, nil
+	}
+
+	return nil, nil
 }
 
 func (b *Bot) findUserVoiceState(guildID, userID string) (*discordgo.VoiceState, error) {
