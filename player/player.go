@@ -83,8 +83,10 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 	options.BufferedFrames = 200
 	options.CompressionLevel = 10
 	options.VBR = true
-	options.Volume = 1.0
+	options.VolumeFloat = 1.0
 	options.StartTime = startAt
+	options.EncodingLineLog = true
+	options.FfmpegBinaryPath = "c:\\ffmpeg\\bin\\"
 
 	encoding, err := dca.EncodeFile(song.StreamURL, options)
 	if err != nil {
@@ -99,6 +101,7 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 	defer p.leaveVoiceChannel(vc) // Ensure vc is disconnected at the end
 
 	done := make(chan error)
+
 	streaming := dca.NewStream(encoding, vc, done)
 	p.Status = StatusPlaying
 
@@ -120,7 +123,9 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 					if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
 						fmt.Printf("Unexpected interruption of YouTube playback, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
 
-						vc.Speaking(false)
+						encoding.Stop()
+						encoding.Cleanup()
+						p.leaveVoiceChannel(vc)
 
 						go func() error {
 							song, err := song.GetYoutubeSong(song.OfficalLink)
@@ -138,7 +143,11 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 					}
 				case songpkg.SourceInternetRadio:
 					fmt.Printf("Unexpected interruption of Internet Radio playback, restarting: \"%v\" from %vs\n", song.Title, float64(startAt))
-					vc.Speaking(false)
+
+					encoding.Stop()
+					encoding.Cleanup()
+					p.leaveVoiceChannel(vc)
+
 					go func() error {
 						err = p.Play(song, 0)
 						if err != nil {
@@ -154,7 +163,11 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 					if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
 						fmt.Printf("Unexpected interruption of local file playback, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
 						startAt := position.Seconds()
-						vc.Speaking(false)
+
+						encoding.Stop()
+						encoding.Cleanup()
+						p.leaveVoiceChannel(vc)
+
 						go func() error {
 							err = p.Play(song, time.Duration(startAt)*time.Second)
 							if err != nil {
@@ -207,6 +220,9 @@ func (p *Player) joinVoiceChannel(session *discordgo.Session, guildID, channelID
 }
 
 func (p *Player) leaveVoiceChannel(vc *discordgo.VoiceConnection) error {
+	if err := vc.Speaking(false); err != nil {
+		return err
+	}
 	if err := vc.Disconnect(); err != nil {
 		return err
 	}
