@@ -46,13 +46,17 @@ func New(filePath string) (*Storage, error) {
 	return &Storage{ds: ds}, nil
 }
 
-func (s *Storage) CreateGuild(guildID string) error {
+func (s *Storage) CreateGuild(guildID, prefix string) error {
 	if _, exists := s.ds.Get(guildID); exists {
 		return fmt.Errorf("guild already exists")
 	}
 
 	newRecord := Record{
-		GuildID: guildID,
+		GuildID:             guildID,
+		ModsList:            []string{},
+		PrefPrefix:          prefix,
+		CommandsHistoryList: make([]CommandHistoryRecord, 0),
+		TracksHistoryList:   make([]TracksHistoryRecord, 0),
 	}
 	s.ds.Add(guildID, newRecord)
 	return nil
@@ -83,11 +87,11 @@ func (s *Storage) ReadGuild(guildID string) (*Record, error) {
 	return &record, nil
 }
 
-func (s *Storage) UpdateGuild(guildID string, newRecord Record) error {
-	if _, exists := s.ds.Get(guildID); !exists {
+func (s *Storage) UpdateGuild(guildID string, newRecord *Record) error {
+	_, err := s.ReadGuild(guildID)
+	if err != nil {
 		return fmt.Errorf("guild not found")
 	}
-
 	s.ds.Add(guildID, newRecord)
 	return nil
 }
@@ -117,7 +121,7 @@ func (s *Storage) CreateCommandHistory(guildID, channelID, channelName, command,
 
 	record.CommandsHistoryList = append(record.CommandsHistoryList, newRecord)
 
-	return s.UpdateGuild(guildID, *record)
+	return s.UpdateGuild(guildID, record)
 }
 
 func (s *Storage) CreateTracksHistory(guildID, trackID, name, sourceType, publicLink string, totalCount int, totalDuration time.Duration, lastPlayed time.Time) error {
@@ -138,7 +142,7 @@ func (s *Storage) CreateTracksHistory(guildID, trackID, name, sourceType, public
 
 	record.TracksHistoryList = append(record.TracksHistoryList, newRecord)
 
-	return s.UpdateGuild(guildID, *record)
+	return s.UpdateGuild(guildID, record)
 }
 
 func (s *Storage) FindTrackByID(guildID, trackID string) (*TracksHistoryRecord, error) {
@@ -163,14 +167,14 @@ func (s *Storage) UpdateTrackDuration(guildID, trackID string, duration time.Dur
 
 	for i, track := range record.TracksHistoryList {
 		if track.ID == trackID {
-			record.TracksHistoryList[i].TotalDuration = duration
-			return s.UpdateGuild(guildID, *record)
+			record.TracksHistoryList[i].TotalDuration += duration
+			return s.UpdateGuild(guildID, record)
 		}
 	}
 	return fmt.Errorf("track not found")
 }
 
-func (s *Storage) UpdateTrackCount(guildID, trackID string, count int) error {
+func (s *Storage) UpdateTrackCountByOne(guildID, trackID string) error {
 	record, err := s.ReadGuild(guildID)
 	if err != nil {
 		return err
@@ -179,7 +183,7 @@ func (s *Storage) UpdateTrackCount(guildID, trackID string, count int) error {
 	for i, track := range record.TracksHistoryList {
 		if track.ID == trackID {
 			record.TracksHistoryList[i].TotalCount++
-			return s.UpdateGuild(guildID, *record)
+			return s.UpdateGuild(guildID, record)
 		}
 	}
 	return fmt.Errorf("track not found")

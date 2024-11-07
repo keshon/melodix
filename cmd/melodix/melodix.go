@@ -34,6 +34,7 @@ func NewBot(token string) (*Bot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating DataStore: %w", err)
 	}
+
 	return &Bot{
 		Session: dg,
 		Storage: s,
@@ -94,7 +95,18 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
+	switch command {
+	case "melodix-set-prefix":
+		b.prefix = param
+		s.ChannelMessageSend(m.ChannelID, "Prefix changed to "+param)
+		return
+	}
+
 	aliases := [][]string{
+		{"ping"},
+		{"pong"},
+		{"info"},
+		{"about"},
 		{"pause", "resume"},
 		{"play", "p"},
 		{"stop", "s"},
@@ -106,7 +118,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	}
 
 	canonical := b.getAliasedCommand(command, aliases)
-	if canonical == "" {
+	if len(canonical) == 0 {
 		return
 	}
 
@@ -118,7 +130,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	case "info":
 		record, err := b.Storage.ReadGuild(m.GuildID)
 		if err != nil {
-			b.Storage.CreateGuild(m.GuildID)
+			b.Storage.CreateGuild(m.GuildID, b.prefix)
 		}
 		s.ChannelMessageSend(m.ChannelID, record.GuildID)
 	case "about":
@@ -172,11 +184,12 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 // Utility Methods
 func (b *Bot) extractCommand(content, prefix string) (string, string, error) {
-	if !strings.HasPrefix(strings.ToLower(content), strings.ToLower(prefix)) {
+	lowerContent := strings.ToLower(content)
+	if strings.HasPrefix(lowerContent, strings.ToLower(prefix)) {
+		content = content[len(prefix):]
+	} else if !strings.HasPrefix(lowerContent, "melodix-set-prefix") {
 		return "", "", nil
 	}
-
-	content = content[len(prefix):]
 
 	words := strings.Fields(content)
 	if len(words) == 0 {
@@ -190,7 +203,6 @@ func (b *Bot) extractCommand(content, prefix string) (string, string, error) {
 		parameter = strings.TrimSpace(parameter)
 	}
 
-	command = strings.ToLower(command)
 	return command, parameter, nil
 }
 
