@@ -15,7 +15,7 @@ import (
 
 type Song struct {
 	Title          string        // Title of the song
-	OfficalLink    string        // Link to the song page
+	PublicLink     string        // Link to the song page
 	StreamURL      string        // URL for streaming the song
 	StreamFilepath string        // Path for streaming the song
 	Thumbnail      Thumbnail     // Thumbnail image for the song
@@ -84,13 +84,13 @@ func (s *Song) GetYoutubeSong(url string) (*Song, error) {
 	}
 
 	return &Song{
-		Title:       song.Title,
-		OfficalLink: url,
-		StreamURL:   song.Formats.WithAudioChannels()[0].URL,
-		Duration:    song.Duration,
-		Thumbnail:   thumbnail,
-		SongID:      song.ID,
-		Source:      SourceYouTube,
+		Title:      song.Title,
+		PublicLink: url,
+		StreamURL:  song.Formats.WithAudioChannels()[0].URL,
+		Duration:   song.Duration,
+		Thumbnail:  thumbnail,
+		SongID:     song.ID,
+		Source:     SourceYouTube,
 	}, nil
 }
 
@@ -129,13 +129,13 @@ func (s *Song) GetInternetRadioSong(url string) (*Song, error) {
 
 	if ir.IsValidAudioStream(contentType) {
 		return &Song{
-			Title:       u.Host,
-			OfficalLink: url,
-			StreamURL:   u.String(),
-			Thumbnail:   Thumbnail{},
-			Duration:    -1,
-			SongID:      fmt.Sprintf("%d", hash),
-			Source:      SourceInternetRadio,
+			Title:      u.Host,
+			PublicLink: url,
+			StreamURL:  u.String(),
+			Thumbnail:  Thumbnail{},
+			Duration:   -1,
+			SongID:     fmt.Sprintf("%d", hash),
+			Source:     SourceInternetRadio,
 		}, nil
 	} else {
 		return nil, fmt.Errorf("not a valid stream due to invalid content-type: %v", contentType)

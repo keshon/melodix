@@ -72,7 +72,12 @@ func (status Status) StringEmoji() string {
 
 func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 	if song == nil {
-		return fmt.Errorf("song is nil")
+		if len(p.Queue) == 0 {
+			return fmt.Errorf("queue is empty")
+		}
+
+		song = p.Queue[0]
+		p.Queue = p.Queue[1:]
 	}
 
 	options := dca.StdEncodeOptions
@@ -86,7 +91,6 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 	options.VolumeFloat = 1.0
 	options.StartTime = startAt
 	options.EncodingLineLog = true
-	options.FfmpegBinaryPath = "c:\\ffmpeg\\bin\\"
 
 	encoding, err := dca.EncodeFile(song.StreamURL, options)
 	if err != nil {
@@ -128,7 +132,7 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 						p.leaveVoiceChannel(vc)
 
 						go func() error {
-							song, err := song.GetYoutubeSong(song.OfficalLink)
+							song, err := song.GetYoutubeSong(song.PublicLink)
 							if err != nil {
 								return err
 							}
@@ -178,6 +182,7 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 					}
 				}
 			}
+
 			return err
 		case signal := <-p.Signals:
 			switch signal {
@@ -207,15 +212,21 @@ func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 }
 
 func (p *Player) joinVoiceChannel(session *discordgo.Session, guildID, channelID string) (*discordgo.VoiceConnection, error) {
+	var voiceConnection *discordgo.VoiceConnection
 	var err error
+
+	delay := 100 * time.Millisecond
+
 	for attempts := 0; attempts < 5; attempts++ {
-		voiceConnection, err := session.ChannelVoiceJoin(guildID, channelID, false, false)
+		voiceConnection, err = session.ChannelVoiceJoin(guildID, channelID, false, false)
 		if err == nil {
 			voiceConnection.Speaking(true)
 			return voiceConnection, nil
 		}
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(delay)
+		delay *= 2
 	}
+
 	return nil, fmt.Errorf("failed to join voice channel %s in guild %s after multiple attempts: %w", channelID, guildID, err)
 }
 
