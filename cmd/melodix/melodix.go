@@ -11,20 +11,17 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
-	"github.com/keshon/melodix/datastore"
 	"github.com/keshon/melodix/player"
 	songpkg "github.com/keshon/melodix/song"
+	"github.com/keshon/melodix/storage"
 	"github.com/keshon/melodix/youtube"
 )
 
 type Bot struct {
-	Session   *discordgo.Session
-	DataStore *datastore.DataStore
-	Player    *player.Player
-}
-
-type Record struct {
-	GuildName string `json:"guild_name"`
+	Session *discordgo.Session
+	Storage *storage.Storage
+	Player  *player.Player
+	prefix  string
 }
 
 func NewBot(token string) (*Bot, error) {
@@ -33,11 +30,16 @@ func NewBot(token string) (*Bot, error) {
 		return nil, fmt.Errorf("error creating Discord session: %w", err)
 	}
 
-	ds, err := datastore.New("datastore.json")
+	s, err := storage.New("datastore.json")
 	if err != nil {
 		return nil, fmt.Errorf("error creating DataStore: %w", err)
 	}
-	return &Bot{Session: dg, DataStore: ds, Player: player.New(dg)}, nil
+	return &Bot{
+		Session: dg,
+		Storage: s,
+		Player:  player.New(dg),
+		prefix:  "!",
+	}, nil
 }
 
 // Lifecycle Methods
@@ -49,14 +51,11 @@ func (b *Bot) Start() error {
 		return fmt.Errorf("error opening connection: %w", err)
 	}
 
-	if err := b.loadGuildInfo(); err != nil {
-		return fmt.Errorf("error loading guild info: %w", err)
-	}
-
 	return nil
 }
 
 func (b *Bot) Shutdown() {
+	b.Player.Signals <- player.ActionStop
 	if err := b.Session.Close(); err != nil {
 		log.Println("Error closing connection:", err)
 	}
@@ -90,22 +89,41 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	command, param, err := b.extractCommand(m.Content)
+	command, param, err := b.extractCommand(m.Content, b.prefix)
 	if err != nil {
 		return
 	}
 
-	switch command {
-	case "!ping":
+	aliases := [][]string{
+		{"pause", "resume"},
+		{"play", "p"},
+		{"stop", "s"},
+		{"list", "queue", "l", "q"},
+		{"add", "a", "+"},
+		{"skip", "next", "ff", ">>"},
+		{"history", "time", "t"},
+		{"now", "n"},
+	}
+
+	canonical := b.getAliasedCommand(command, aliases)
+	if canonical == "" {
+		return
+	}
+
+	switch canonical {
+	case "ping":
 		s.ChannelMessageSend(m.ChannelID, "Pong!")
-	case "!pong":
+	case "pong":
 		s.ChannelMessageSend(m.ChannelID, "Ping!")
-	case "!info":
-		record, exists := b.DataStore.Get(m.GuildID)
-		if exists {
-			s.ChannelMessageSend(m.ChannelID, record.(*Record).GuildName)
+	case "info":
+		record, err := b.Storage.ReadGuild(m.GuildID)
+		if err != nil {
+			b.Storage.CreateGuild(m.GuildID)
 		}
-	case "!play":
+		s.ChannelMessageSend(m.ChannelID, record.GuildID)
+	case "about":
+		s.ChannelMessageSend(m.ChannelID, "A new prototype of Melodix Player 2")
+	case "play":
 		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
 		if err != nil || voiceState.ChannelID == "" {
 			s.ChannelMessageSend(m.ChannelID, "You must be in a voice channel to use this command.")
@@ -126,13 +144,13 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		b.Player.GuildID = m.GuildID
 		b.Player.ChannelID = voiceState.ChannelID
 		b.Player.Play(nil, 0)
-	case "!stop":
+	case "stop":
 		b.Player.Signals <- player.ActionStop
-	case "!skip":
+	case "skip":
 		b.Player.Signals <- player.ActionSkip
-	case "!pause", "!resume":
+	case "pause", "!resume":
 		b.Player.Signals <- player.ActionPauseResume
-	case "!list":
+	case "list":
 		songs := b.Player.Queue
 		if len(songs) == 0 {
 			s.ChannelMessageSend(m.ChannelID, "Queue is empty.")
@@ -153,17 +171,39 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 }
 
 // Utility Methods
-func (b *Bot) extractCommand(content string) (string, string, error) {
-	content = strings.TrimSpace(content)
-	if content == "" {
+func (b *Bot) extractCommand(content, prefix string) (string, string, error) {
+	if !strings.HasPrefix(strings.ToLower(content), strings.ToLower(prefix)) {
+		return "", "", nil
+	}
+
+	content = content[len(prefix):]
+
+	words := strings.Fields(content)
+	if len(words) == 0 {
 		return "", "", fmt.Errorf("no command found")
 	}
 
-	words := strings.Fields(content)
-	cmd := strings.TrimSpace(words[0])
-	params := strings.TrimSpace(strings.Join(words[1:], " "))
+	command := strings.ToLower(words[0])
+	parameter := ""
+	if len(words) > 1 {
+		parameter = strings.Join(words[1:], " ")
+		parameter = strings.TrimSpace(parameter)
+	}
 
-	return cmd, params, nil
+	command = strings.ToLower(command)
+	return command, parameter, nil
+}
+
+func (b *Bot) getAliasedCommand(command string, aliases [][]string) string {
+	lowerCommand := strings.ToLower(command)
+	for _, aliasesPerCommand := range aliases {
+		for _, alias := range aliasesPerCommand {
+			if strings.ToLower(alias) == lowerCommand {
+				return strings.ToLower(aliasesPerCommand[0])
+			}
+		}
+	}
+	return ""
 }
 
 func (b *Bot) findUserVoiceState(guildID, userID string) (*discordgo.VoiceState, error) {
@@ -232,20 +272,6 @@ func isInternetRadioURL(url string) bool {
 
 func isMP3(filename string) bool {
 	return strings.HasSuffix(strings.ToLower(filename), ".mp3")
-}
-
-func (b *Bot) loadGuildInfo() error {
-	if len(b.Session.State.Guilds) == 0 {
-		return fmt.Errorf("no guilds available for the bot")
-	}
-
-	guild := b.Session.State.Guilds[0]
-	if guildInfo, err := b.Session.Guild(guild.ID); err == nil {
-		b.DataStore.Add(guildInfo.ID, &Record{GuildName: guildInfo.Name})
-	} else {
-		return fmt.Errorf("error getting guild name: %w", err)
-	}
-	return nil
 }
 
 // Global Functions
