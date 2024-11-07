@@ -71,140 +71,97 @@ func (status Status) StringEmoji() string {
 }
 
 func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
-	if song == nil {
-		if len(p.Queue) == 0 {
-			return fmt.Errorf("queue is empty")
+PLAYBACK_LOOP:
+	for {
+		if startAt == 0 {
+			if song == nil {
+				if len(p.Queue) == 0 {
+					return fmt.Errorf("queue is empty")
+				}
+				song = p.Queue[0]
+				p.Queue = p.Queue[1:]
+			}
 		}
 
-		song = p.Queue[0]
-		p.Queue = p.Queue[1:]
-	}
+		options := dca.StdEncodeOptions
+		options.RawOutput = true
+		options.Bitrate = 96
+		options.Application = "lowdelay"
+		options.FrameDuration = 20
+		options.BufferedFrames = 200
+		options.CompressionLevel = 10
+		options.VBR = true
+		options.VolumeFloat = 1.0
+		options.StartTime = startAt
+		options.EncodingLineLog = true
 
-	options := dca.StdEncodeOptions
-	options.RawOutput = true
-	options.Bitrate = 96
-	options.Application = "lowdelay"
-	options.FrameDuration = 20
-	options.BufferedFrames = 200
-	options.CompressionLevel = 10
-	options.VBR = true
-	options.VolumeFloat = 1.0
-	options.StartTime = startAt
-	options.EncodingLineLog = true
+		encoding, err := dca.EncodeFile(song.StreamURL, options)
+		if err != nil {
+			return err
+		}
+		defer encoding.Cleanup()
 
-	encoding, err := dca.EncodeFile(song.StreamURL, options)
-	if err != nil {
-		return err
-	}
-	defer encoding.Cleanup()
+		vc, err := p.joinVoiceChannel(p.Session, p.GuildID, p.ChannelID)
+		if err != nil {
+			return err
+		}
+		defer p.leaveVoiceChannel(vc)
 
-	vc, err := p.joinVoiceChannel(p.Session, p.GuildID, p.ChannelID)
-	if err != nil {
-		return err
-	}
-	defer p.leaveVoiceChannel(vc) // Ensure vc is disconnected at the end
+		done := make(chan error)
+		// defer close(done)
 
-	done := make(chan error)
+		p.Status = StatusResting
+		streaming := dca.NewStream(encoding, vc, done)
+		p.Status = StatusPlaying
 
-	streaming := dca.NewStream(encoding, vc, done)
-	p.Status = StatusPlaying
+		for {
+			select {
+			case err := <-done:
+				close(done)
+				if err != nil && err != io.EOF {
+					return err
+				}
 
-	for {
-		select {
-		case err := <-done:
-			if err != nil && err != io.EOF {
-				p.leaveVoiceChannel(vc)
-				return err
-			}
-
-			if song != nil {
-				switch song.Source {
-				case songpkg.SourceYouTube:
-					duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
-					if err != nil {
-						return err
-					}
-					if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
-						fmt.Printf("Unexpected interruption of YouTube playback, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
-
-						encoding.Stop()
-						encoding.Cleanup()
-						p.leaveVoiceChannel(vc)
-
-						go func() error {
-							song, err := song.GetYoutubeSong(song.PublicLink)
-							if err != nil {
-								return err
-							}
-							err = p.Play(song, position)
-							if err != nil {
-								return err
-							}
-							return nil
-						}()
-					} else {
-						fmt.Printf("Finished YouTube playback of \"%v\" at %vs of %s", song.Title, int(position.Seconds()), duration)
-					}
-				case songpkg.SourceInternetRadio:
-					fmt.Printf("Unexpected interruption of Internet Radio playback, restarting: \"%v\" from %vs\n", song.Title, float64(startAt))
-
+				duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
+				if err != nil {
+					return err
+				}
+				if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
+					fmt.Printf("Playback interrupted, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
 					encoding.Stop()
 					encoding.Cleanup()
-					p.leaveVoiceChannel(vc)
-
-					go func() error {
-						err = p.Play(song, 0)
-						if err != nil {
-							return err
-						}
-						return nil
-					}()
-				case songpkg.SourceLocalFile:
-					duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
-					if err != nil {
-						return err
-					}
-					if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
-						fmt.Printf("Unexpected interruption of local file playback, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
-						startAt := position.Seconds()
-
-						encoding.Stop()
-						encoding.Cleanup()
-						p.leaveVoiceChannel(vc)
-
-						go func() error {
-							err = p.Play(song, time.Duration(startAt)*time.Second)
-							if err != nil {
-								return err
-							}
-							return nil
-						}()
-					}
+					startAt = position
+					continue PLAYBACK_LOOP
 				}
-			}
+				fmt.Printf("Finished playback of \"%v\"", song.Title)
+				return nil
 
-			return err
-		case signal := <-p.Signals:
-			switch signal {
-			case ActionSkip:
-				// Skip to next song (if implemented in your main queue loop)
-				return nil
-			case ActionStop:
-				p.Status = StatusResting
-				return p.leaveVoiceChannel(vc)
-			case ActionSwap:
-				p.Status = StatusResting
-				go p.Play(song, 0)
-				return nil
-			case ActionPauseResume:
-				if streaming.Paused() {
-					streaming.SetPaused(false)
-					p.Status = StatusPlaying
-					vc.Speaking(true)
-				} else {
-					streaming.SetPaused(true)
-					p.Status = StatusPaused
-					vc.Speaking(false)
+			case signal := <-p.Signals:
+				switch signal {
+				case ActionSkip:
+					if len(p.Queue) > 0 {
+						startAt = 0
+						continue PLAYBACK_LOOP
+					}
+					p.Signals <- ActionStop
+				case ActionStop:
+					p.Status = StatusResting
+					return p.leaveVoiceChannel(vc)
+				case ActionSwap:
+					startAt = 0
+					encoding.Stop()
+					encoding.Cleanup()
+					continue PLAYBACK_LOOP
+				case ActionPauseResume:
+					if streaming.Paused() {
+						streaming.SetPaused(false)
+						p.Status = StatusPlaying
+						vc.Speaking(true)
+					} else {
+						streaming.SetPaused(true)
+						p.Status = StatusPaused
+						vc.Speaking(false)
+					}
 				}
 			}
 		}
