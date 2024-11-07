@@ -13,6 +13,7 @@ import (
 
 	"github.com/keshon/dca"
 	songpkg "github.com/keshon/melodix/song"
+	"github.com/keshon/melodix/storage"
 )
 
 type Player struct {
@@ -20,14 +21,16 @@ type Player struct {
 	GuildID   string
 	Session   *discordgo.Session
 	Status    Status
+	Storage   *storage.Storage
 	Queue     []*songpkg.Song
 	Signals   chan Signal
 }
 
-func New(ds *discordgo.Session) *Player {
+func New(ds *discordgo.Session, s *storage.Storage) *Player {
 	return &Player{
 		Session: ds,
 		Status:  StatusResting,
+		Storage: s,
 		Queue:   make([]*songpkg.Song, 0, 10),
 		Signals: make(chan Signal, 1),
 	}
@@ -113,6 +116,14 @@ PLAYBACK_LOOP:
 		p.Status = StatusResting
 		streaming := dca.NewStream(encoding, vc, done)
 		p.Status = StatusPlaying
+
+		go func() {
+			err = p.Storage.UpdateTrackCount(p.GuildID, song.SongID, 1)
+			if err != nil {
+				p.Storage.CreateTracksHistory(p.GuildID, song.SongID, song.Title, song.Source.String(), song.StreamURL, 1, encoding.Stats().Duration, time.Now())
+			}
+			time.Sleep(5 * time.Second)
+		}()
 
 		for {
 			select {

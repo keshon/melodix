@@ -178,7 +178,7 @@ func (s *Storage) UpdateTrackCount(guildID, trackID string, count int) error {
 
 	for i, track := range record.TracksHistoryList {
 		if track.ID == trackID {
-			record.TracksHistoryList[i].TotalCount = count
+			record.TracksHistoryList[i].TotalCount++
 			return s.UpdateGuild(guildID, *record)
 		}
 	}

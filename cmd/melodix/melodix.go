@@ -37,7 +37,7 @@ func NewBot(token string) (*Bot, error) {
 	return &Bot{
 		Session: dg,
 		Storage: s,
-		Player:  player.New(dg),
+		Player:  player.New(dg, s),
 		prefix:  "!",
 	}, nil
 }
