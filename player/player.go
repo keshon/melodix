@@ -117,14 +117,14 @@ PLAYBACK_LOOP:
 		streaming := dca.NewStream(encoding, vc, done)
 		p.Status = StatusPlaying
 
-		// go func() error {
-		// 	err := p.updateTrackCountHistory(song, startAt)
-		// 	return err
-		// }()
-		// go func() {
-		// 	p.updateTrackDurationHistory(song, streaming.PlaybackPosition())
-		// 	time.Sleep(5 * time.Second)
-		// }()
+		go func() error {
+			err := p.saveTrackCountHistory(song, startAt)
+			return err
+		}()
+		go func() {
+			p.saveTrackDurationHistory(song, streaming.PlaybackPosition())
+			time.Sleep(5 * time.Second)
+		}()
 
 		for {
 			select {
@@ -282,21 +282,22 @@ func (p *Player) fetchMP3Duration(filePath string) (time.Duration, error) {
 	return totalDuration, nil
 }
 
-// func (p *Player) updateTrackCountHistory(song *songpkg.Song, startAt time.Duration) error {
-// 	if startAt != 0 {
-// 		return nil
-// 	}
-// 	err := p.Storage.UpdateTrackCountByOne(p.GuildID, song.SongID)
-// 	if err != nil {
-// 		p.Storage.CreateTracksHistory(p.GuildID, song.SongID, song.Title, song.Source.String(), song.PublicLink, 1, 0, time.Now())
-// 	}
-// 	return nil
-// }
+// not working as for now
+func (p *Player) saveTrackCountHistory(song *songpkg.Song, startAt time.Duration) error {
+	if startAt != 0 {
+		return nil
+	}
+	err := p.Storage.AddTrackCountByOne(p.GuildID, song.SongID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-// func (p *Player) updateTrackDurationHistory(song *songpkg.Song, position time.Duration) error {
-// 	err := p.Storage.UpdateTrackDuration(p.GuildID, song.SongID, position)
-// 	if err != nil {
-// 		p.Storage.CreateTracksHistory(p.GuildID, song.SongID, song.Title, song.Source.String(), song.PublicLink, 1, 0, time.Now())
-// 	}
-// 	return nil
-// }
+func (p *Player) saveTrackDurationHistory(song *songpkg.Song, position time.Duration) error {
+	err := p.Storage.AddTrackDuration(p.GuildID, song.SongID, position)
+	if err != nil {
+		return err
+	}
+	return nil
+}

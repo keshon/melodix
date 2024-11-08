@@ -7,7 +7,9 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
@@ -16,6 +18,26 @@ import (
 	"github.com/keshon/melodix/storage"
 	"github.com/keshon/melodix/youtube"
 )
+
+var commandAliases = [][]string{
+	{"ping"},
+	{"pong"},
+	{"about"},
+	{"pause", "resume"},
+	{"play", "p"},
+	{"stop", "s"},
+	{"list", "queue", "l", "q"},
+	{"add", "a", "+"},
+	{"skip", "next", "ff", ">>"},
+	{"history", "time", "t"},
+	{"now", "n"},
+}
+
+var youtubeutil youtube.YouTube
+var youtubeutilOnce sync.Once
+
+var song songpkg.Song
+var songOnce sync.Once
 
 type Bot struct {
 	Session *discordgo.Session
@@ -80,7 +102,8 @@ func (b *Bot) registerEventHandlers() {
 func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 	botInfo, err := s.User("@me")
 	if err != nil {
-		log.Fatalf("Error retrieving bot user: %v", err)
+		log.Println("Warning: Error retrieving bot user:", err)
+		return
 	}
 	fmt.Printf("Bot %v is up and running!\n", botInfo.Username)
 }
@@ -102,23 +125,14 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	aliases := [][]string{
-		{"ping"},
-		{"pong"},
-		{"info"},
-		{"about"},
-		{"pause", "resume"},
-		{"play", "p"},
-		{"stop", "s"},
-		{"list", "queue", "l", "q"},
-		{"add", "a", "+"},
-		{"skip", "next", "ff", ">>"},
-		{"history", "time", "t"},
-		{"now", "n"},
+	canonical := b.getAliasedCommand(command, commandAliases)
+	if len(canonical) == 0 {
+		return
 	}
 
-	canonical := b.getAliasedCommand(command, aliases)
-	if len(canonical) == 0 {
+	err = b.saveCommandHistory(m.GuildID, m.ChannelID, canonical, param)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error saving command info: %v", err))
 		return
 	}
 
@@ -127,12 +141,6 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		s.ChannelMessageSend(m.ChannelID, "Pong!")
 	case "pong":
 		s.ChannelMessageSend(m.ChannelID, "Ping!")
-	case "info":
-		record, err := b.Storage.ReadGuild(m.GuildID)
-		if err != nil {
-			b.Storage.CreateGuild(m.GuildID, b.prefix)
-		}
-		s.ChannelMessageSend(m.ChannelID, record.GuildID)
 	case "about":
 		s.ChannelMessageSend(m.ChannelID, "A new prototype of Melodix Player 2")
 	case "play":
@@ -218,6 +226,33 @@ func (b *Bot) getAliasedCommand(command string, aliases [][]string) string {
 	return ""
 }
 
+func (b *Bot) saveCommandHistory(guildID, channelID, command, param string) error {
+	channel, err := b.Session.Channel(channelID)
+	if err != nil {
+		fmt.Println("Error retrieving channel:", err)
+		return err
+	}
+
+	guild, err := b.Session.Guild(guildID)
+	if err != nil {
+		fmt.Println("Error retrieving guild:", err)
+		return err
+	}
+
+	record := storage.CommandHistoryRecord{
+		ChannelID:   channel.ID,
+		ChannelName: channel.Name,
+		GuildName:   guild.Name,
+		Command:     command,
+		Param:       param,
+		Datetime:    time.Now(),
+	}
+
+	b.Storage.AppendCommandToHistory(guildID, record)
+
+	return nil
+}
+
 func (b *Bot) findUserVoiceState(guildID, userID string) (*discordgo.VoiceState, error) {
 	guild, err := b.Session.State.Guild(guildID)
 	if err != nil {
@@ -241,23 +276,30 @@ func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
 	urls := strings.Fields(param)
 	songs := make([]*songpkg.Song, 0, len(urls))
 
-	yt := youtube.New()
+	youtubeutilOnce.Do(func() {
+		youtubeutil = *youtube.New()
+	})
+
+	songOnce.Do(func() {
+		song = *songpkg.New()
+	})
+
 	for _, url := range urls {
 		var song *songpkg.Song
 		var err error
 
 		switch {
 		case isYoutubeURL(url):
-			song, err = songpkg.New().GetYoutubeSong(url)
+			song, err = song.GetYoutubeSong(url)
 		case isInternetRadioURL(url):
-			song, err = songpkg.New().GetInternetRadioSong(url)
+			song, err = song.GetInternetRadioSong(url)
 		case isMP3(url):
-			song, err = songpkg.New().GetLocalFileSong(url)
+			song, err = song.GetLocalFileSong(url)
 		default:
 			var videoURL string
-			videoURL, err = yt.GetVideoURLByTitle(url)
+			videoURL, err = youtubeutil.GetVideoURLByTitle(url)
 			if err == nil {
-				song, err = songpkg.New().GetYoutubeSong(videoURL)
+				song, err = song.GetYoutubeSong(videoURL)
 			}
 		}
 

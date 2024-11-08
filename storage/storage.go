@@ -15,6 +15,7 @@ type Storage struct {
 type CommandHistoryRecord struct {
 	ChannelID   string    `json:"channel_id"`
 	ChannelName string    `json:"channel_name"`
+	GuildName   string    `json:"guild_name"`
 	Command     string    `json:"command"`
 	Param       string    `json:"param"`
 	Datetime    time.Time `json:"datetime"`
@@ -31,9 +32,8 @@ type TracksHistoryRecord struct {
 }
 
 type Record struct {
-	GuildID             string                 `json:"guild_name"`
-	ModsList            []string               `json:"mods"`
 	PrefPrefix          string                 `json:"pref_prefix"`
+	ModUsersList        []string               `json:"mod_users"`
 	CommandsHistoryList []CommandHistoryRecord `json:"commands_history"`
 	TracksHistoryList   []TracksHistoryRecord  `json:"tracks_history"`
 }
@@ -46,136 +46,73 @@ func New(filePath string) (*Storage, error) {
 	return &Storage{ds: ds}, nil
 }
 
-func (s *Storage) CreateGuild(guildID, prefix string) error {
-	if _, exists := s.ds.Get(guildID); exists {
-		return fmt.Errorf("guild already exists")
-	}
-
-	newRecord := Record{
-		GuildID:             guildID,
-		ModsList:            []string{},
-		PrefPrefix:          prefix,
-		CommandsHistoryList: make([]CommandHistoryRecord, 0),
-		TracksHistoryList:   make([]TracksHistoryRecord, 0),
-	}
-	s.ds.Add(guildID, newRecord)
-	return nil
-}
-
-func (s *Storage) ReadGuild(guildID string) (*Record, error) {
+// Helper function to get or create a Record for a guild
+func (s *Storage) getOrCreateGuildRecord(guildID string) (*Record, error) {
 	data, exists := s.ds.Get(guildID)
 	if !exists {
-		return nil, fmt.Errorf("guild not found")
+		newRecord := &Record{
+			PrefPrefix:          "",
+			ModUsersList:        []string{},
+			CommandsHistoryList: []CommandHistoryRecord{},
+			TracksHistoryList:   []TracksHistoryRecord{},
+		}
+		s.ds.Add(guildID, newRecord)
+		return newRecord, nil
 	}
 
-	dataMap, ok := data.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid guild data: expected map[string]interface{}")
+	// Try to convert `data` (map[string]interface{}) into JSON format
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling data: %w", err)
 	}
 
+	// Unmarshal JSON data into the Record struct
 	var record Record
-	dataBytes, err := json.Marshal(dataMap)
+	err = json.Unmarshal(jsonData, &record)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal data for unmarshaling: %v", err)
-	}
-
-	err = json.Unmarshal(dataBytes, &record)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data into Record: %v", err)
+		return nil, fmt.Errorf("error unmarshalling to *Record: %w", err)
 	}
 
 	return &record, nil
 }
 
-func (s *Storage) UpdateGuild(guildID string, newRecord *Record) error {
-	_, err := s.ReadGuild(guildID)
+// AppendCommandToHistory appends a command history record for a guild
+func (s *Storage) AppendCommandToHistory(guildID string, command CommandHistoryRecord) error {
+	fmt.Println(guildID)
+	fmt.Println(command)
+	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
-		return fmt.Errorf("guild not found")
+		return err
 	}
-	s.ds.Add(guildID, newRecord)
+
+	fmt.Println(record)
+
+	record.CommandsHistoryList = append(record.CommandsHistoryList, command)
+	s.ds.Add(guildID, record)
 	return nil
 }
 
-func (s *Storage) DeleteGuild(guildID string) error {
-	if _, exists := s.ds.Get(guildID); !exists {
-		return fmt.Errorf("guild not found")
+// AppendTrackToHistory appends a track to the track history if it doesn't already exist
+func (s *Storage) AppendTrackToHistory(guildID string, track TracksHistoryRecord) error {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return err
 	}
 
-	s.ds.Delete(guildID)
+	for _, existingTrack := range record.TracksHistoryList {
+		if existingTrack.ID == track.ID {
+			return fmt.Errorf("track with ID %s already exists in guild %s", track.ID, guildID)
+		}
+	}
+
+	record.TracksHistoryList = append(record.TracksHistoryList, track)
+	s.ds.Add(guildID, record)
 	return nil
 }
 
-func (s *Storage) CreateCommandHistory(guildID, channelID, channelName, command, param string) error {
-	record, err := s.ReadGuild(guildID)
-	if err != nil {
-		return err
-	}
-
-	newRecord := CommandHistoryRecord{
-		ChannelID:   channelID,
-		ChannelName: channelName,
-		Command:     command,
-		Param:       param,
-		Datetime:    time.Now(),
-	}
-
-	record.CommandsHistoryList = append(record.CommandsHistoryList, newRecord)
-
-	return s.UpdateGuild(guildID, record)
-}
-
-func (s *Storage) CreateTracksHistory(guildID, trackID, name, sourceType, publicLink string, totalCount int, totalDuration time.Duration, lastPlayed time.Time) error {
-	record, err := s.ReadGuild(guildID)
-	if err != nil {
-		return err
-	}
-
-	newRecord := TracksHistoryRecord{
-		ID:            trackID,
-		Name:          name,
-		SourceType:    sourceType,
-		PublicLink:    publicLink,
-		TotalCount:    totalCount,
-		TotalDuration: totalDuration,
-		LastPlayed:    lastPlayed,
-	}
-
-	record.TracksHistoryList = append(record.TracksHistoryList, newRecord)
-
-	return s.UpdateGuild(guildID, record)
-}
-
-func (s *Storage) FindTrackByID(guildID, trackID string) (*TracksHistoryRecord, error) {
-	record, err := s.ReadGuild(guildID)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, track := range record.TracksHistoryList {
-		if track.ID == trackID {
-			return &track, nil
-		}
-	}
-	return nil, fmt.Errorf("track not found")
-}
-
-func (s *Storage) UpdateTrackDuration(guildID, trackID string, duration time.Duration) error {
-	record, err := s.ReadGuild(guildID)
-	if err != nil {
-		return err
-	}
-
-	for i, track := range record.TracksHistoryList {
-		if track.ID == trackID {
-			record.TracksHistoryList[i].TotalDuration += duration
-			return s.UpdateGuild(guildID, record)
-		}
-	}
-	return fmt.Errorf("track not found")
-}
-
-func (s *Storage) UpdateTrackCountByOne(guildID, trackID string) error {
-	record, err := s.ReadGuild(guildID)
+// AddTrackCountByOne increments the play count for a given track in a guild
+func (s *Storage) AddTrackCountByOne(guildID, trackID string) error {
+	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return err
 	}
@@ -183,8 +120,26 @@ func (s *Storage) UpdateTrackCountByOne(guildID, trackID string) error {
 	for i, track := range record.TracksHistoryList {
 		if track.ID == trackID {
 			record.TracksHistoryList[i].TotalCount++
-			return s.UpdateGuild(guildID, record)
+			s.ds.Add(guildID, record)
+			return nil
 		}
 	}
-	return fmt.Errorf("track not found")
+	return fmt.Errorf("track with ID %s not found in guild %s", trackID, guildID)
+}
+
+// AddTrackDuration increments the play duration for a given track in a guild
+func (s *Storage) AddTrackDuration(guildID, trackID string, duration time.Duration) error {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return err
+	}
+
+	for i, track := range record.TracksHistoryList {
+		if track.ID == trackID {
+			record.TracksHistoryList[i].TotalDuration += duration
+			s.ds.Add(guildID, record)
+			return nil
+		}
+	}
+	return fmt.Errorf("track with ID %s not found in guild %s", trackID, guildID)
 }
