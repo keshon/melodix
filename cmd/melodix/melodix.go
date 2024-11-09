@@ -29,8 +29,10 @@ var commandAliases = [][]string{
 	{"list", "queue", "l", "q"},
 	{"add", "a", "+"},
 	{"skip", "next", "ff", ">>"},
-	{"history", "time", "t"},
 	{"now", "n"},
+	{"tracks"},
+	{"log", "history", "time", "t"},
+	{"help", "h", "?"},
 }
 
 var youtubeutil youtube.YouTube

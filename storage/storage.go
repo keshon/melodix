@@ -23,7 +23,7 @@ type CommandHistoryRecord struct {
 
 type TracksHistoryRecord struct {
 	ID            string        `json:"id"`
-	Name          string        `json:"name"`
+	Title         string        `json:"name"`
 	SourceType    string        `json:"source_type"`
 	PublicLink    string        `json:"public_link"`
 	TotalCount    int           `json:"total_count"`
@@ -78,56 +78,77 @@ func (s *Storage) getOrCreateGuildRecord(guildID string) (*Record, error) {
 
 // AppendCommandToHistory appends a command history record for a guild
 func (s *Storage) AppendCommandToHistory(guildID string, command CommandHistoryRecord) error {
-	fmt.Println(guildID)
-	fmt.Println(command)
+
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return err
 	}
-
-	fmt.Println(record)
 
 	record.CommandsHistoryList = append(record.CommandsHistoryList, command)
 	s.ds.Add(guildID, record)
 	return nil
 }
 
-// AppendTrackToHistory appends a track to the track history if it doesn't already exist
+// AppendTrackToHistory appends a track to the track history or updates it if it already exists
 func (s *Storage) AppendTrackToHistory(guildID string, track TracksHistoryRecord) error {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return err
 	}
 
-	for _, existingTrack := range record.TracksHistoryList {
+	for i, existingTrack := range record.TracksHistoryList {
 		if existingTrack.ID == track.ID {
-			return fmt.Errorf("track with ID %s already exists in guild %s", track.ID, guildID)
+			// Update LastPlayed instead of blocking on duplicates
+			record.TracksHistoryList[i].LastPlayed = time.Now()
+			s.ds.Add(guildID, record)
+			return nil
 		}
 	}
 
+	// Track doesn't exist, so add a new one
+	track.LastPlayed = time.Now()
 	record.TracksHistoryList = append(record.TracksHistoryList, track)
 	s.ds.Add(guildID, record)
 	return nil
 }
 
-// AddTrackCountByOne increments the play count for a given track in a guild
-func (s *Storage) AddTrackCountByOne(guildID, trackID string) error {
+// AddTrackCountByOne increments the play count for a track in a guild
+func (s *Storage) AddTrackCountByOne(guildID, ID, Title, sourceType, publicLink string) error {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return err
 	}
 
 	for i, track := range record.TracksHistoryList {
-		if track.ID == trackID {
+		if track.ID == ID {
 			record.TracksHistoryList[i].TotalCount++
+			record.TracksHistoryList[i].LastPlayed = time.Now()
+			if record.TracksHistoryList[i].Title != Title {
+				record.TracksHistoryList[i].Title = Title
+			}
+			if record.TracksHistoryList[i].PublicLink != publicLink {
+				record.TracksHistoryList[i].PublicLink = publicLink
+			}
 			s.ds.Add(guildID, record)
 			return nil
 		}
 	}
-	return fmt.Errorf("track with ID %s not found in guild %s", trackID, guildID)
+
+	// If track is not found, create a new entry
+	newTrack := TracksHistoryRecord{
+		ID:         ID,
+		TotalCount: 1,
+		LastPlayed: time.Now(),
+		Title:      Title,
+		SourceType: sourceType,
+		PublicLink: publicLink,
+	}
+	record.TracksHistoryList = append(record.TracksHistoryList, newTrack)
+	s.ds.Add(guildID, record)
+	return nil
 }
 
-// AddTrackDuration increments the play duration for a given track in a guild
+// AddTrackDuration increments the play duration for a track in a guild
 func (s *Storage) AddTrackDuration(guildID, trackID string, duration time.Duration) error {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
@@ -141,5 +162,14 @@ func (s *Storage) AddTrackDuration(guildID, trackID string, duration time.Durati
 			return nil
 		}
 	}
-	return fmt.Errorf("track with ID %s not found in guild %s", trackID, guildID)
+
+	// If track is not found, create a new entry with initial duration
+	newTrack := TracksHistoryRecord{
+		ID:            trackID,
+		TotalDuration: duration,
+		LastPlayed:    time.Now(),
+	}
+	record.TracksHistoryList = append(record.TracksHistoryList, newTrack)
+	s.ds.Add(guildID, record)
+	return nil
 }

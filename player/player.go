@@ -117,14 +117,16 @@ PLAYBACK_LOOP:
 		streaming := dca.NewStream(encoding, vc, done)
 		p.Status = StatusPlaying
 
-		go func() error {
-			err := p.saveTrackCountHistory(song, startAt)
-			return err
-		}()
-		go func() {
-			p.saveTrackDurationHistory(song, streaming.PlaybackPosition())
-			time.Sleep(5 * time.Second)
-		}()
+		if startAt == 0 {
+			err := p.Storage.AddTrackCountByOne(p.GuildID, song.SongID, song.Title, song.Source.String(), song.PublicLink)
+			if err != nil {
+				return err
+			}
+		}
+		// go func() {
+		// 	p.saveTrackDurationHistory(song, streaming.PlaybackPosition())
+		// 	time.Sleep(5 * time.Second)
+		// }()
 
 		for {
 			select {
@@ -287,7 +289,7 @@ func (p *Player) saveTrackCountHistory(song *songpkg.Song, startAt time.Duration
 	if startAt != 0 {
 		return nil
 	}
-	err := p.Storage.AddTrackCountByOne(p.GuildID, song.SongID)
+	err := p.Storage.AddTrackCountByOne(p.GuildID, song.SongID, song.Title, song.Source.String(), song.PublicLink)
 	if err != nil {
 		return err
 	}
