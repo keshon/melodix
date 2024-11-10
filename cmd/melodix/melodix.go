@@ -189,6 +189,27 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 
 		s.ChannelMessageSend(m.ChannelID, songList.String())
+	case "add":
+		songs, err := b.fetchSongs(param)
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song: %v", err))
+			return
+		}
+		if len(songs) == 0 {
+			s.ChannelMessageSend(m.ChannelID, "No song found.")
+			return
+		}
+
+		b.Player.Queue = append(b.Player.Queue, songs...)
+	case "now":
+		if b.Player.Song != nil {
+			title, err := songpkg.ExtractMetadata(b.Player.Song.StreamURL)
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song info: %v", err))
+			}
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing: %s", title))
+		}
+
 	}
 }
 

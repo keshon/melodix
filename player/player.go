@@ -22,6 +22,7 @@ type Player struct {
 	Session   *discordgo.Session
 	Status    Status
 	Storage   *storage.Storage
+	Song      *songpkg.Song
 	Queue     []*songpkg.Song
 	Signals   chan Signal
 }
@@ -76,14 +77,20 @@ func (status Status) StringEmoji() string {
 func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
 PLAYBACK_LOOP:
 	for {
+		p.Song = song
+
 		if startAt == 0 {
-			if song == nil {
+			if p.Song == nil {
 				if len(p.Queue) == 0 {
 					return fmt.Errorf("queue is empty")
 				}
-				song = p.Queue[0]
+				p.Song = p.Queue[0]
 				p.Queue = p.Queue[1:]
 			}
+		}
+
+		if p.Song == nil {
+			return fmt.Errorf("song is empty")
 		}
 
 		options := dca.StdEncodeOptions
@@ -98,7 +105,7 @@ PLAYBACK_LOOP:
 		options.StartTime = startAt
 		options.EncodingLineLog = true
 
-		encoding, err := dca.EncodeFile(song.StreamURL, options)
+		encoding, err := dca.EncodeFile(p.Song.StreamURL, options)
 		if err != nil {
 			return err
 		}
@@ -118,7 +125,7 @@ PLAYBACK_LOOP:
 		p.Status = StatusPlaying
 
 		if startAt == 0 {
-			err := p.Storage.AddTrackCountByOne(p.GuildID, song.SongID, song.Title, song.Source.String(), song.PublicLink)
+			err := p.Storage.AddTrackCountByOne(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink)
 			if err != nil {
 				return err
 			}
@@ -136,18 +143,18 @@ PLAYBACK_LOOP:
 					return err
 				}
 
-				duration, position, err := p.getPlaybackDuration(encoding, streaming, song)
+				duration, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
 				if err != nil {
 					return err
 				}
 				if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
-					fmt.Printf("Playback interrupted, restarting: \"%v\" from %vs\n", song.Title, position.Seconds())
+					fmt.Printf("Playback interrupted, restarting: \"%v\" from %vs\n", p.Song.Title, position.Seconds())
 					encoding.Stop()
 					encoding.Cleanup()
 					startAt = position
 					continue PLAYBACK_LOOP
 				}
-				fmt.Printf("Finished playback of \"%v\"", song.Title)
+				fmt.Printf("Finished playback of \"%v\"", p.Song.Title)
 				return nil
 
 			case signal := <-p.Signals:

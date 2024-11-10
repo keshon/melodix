@@ -1,11 +1,15 @@
 package song
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"hash/crc32"
 	"net"
 	"net/http"
 	urlstd "net/url"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/keshon/melodix/iradio"
@@ -140,6 +144,34 @@ func (s *Song) GetInternetRadioSong(url string) (*Song, error) {
 	} else {
 		return nil, fmt.Errorf("not a valid stream due to invalid content-type: %v", contentType)
 	}
+}
+
+func ExtractMetadata(url string) (string, error) {
+	cmd := exec.Command("ffmpeg", "-i", url, "-f", "ffmetadata", "-")
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("error running ffmpeg command: %v", err)
+	}
+
+	var title string
+	scanner := bufio.NewScanner(&out)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "StreamTitle=") {
+			title = strings.TrimPrefix(line, "StreamTitle=")
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading metadata: %v", err)
+	}
+
+	return title, nil
 }
 
 // NOT IMPLEMENTED
