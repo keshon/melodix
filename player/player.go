@@ -143,9 +143,11 @@ PLAYBACK_LOOP:
 				case <-ctx.Done(): // context cancellation signal
 					return
 				case <-ticker.C:
-					err := p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink, 2*time.Second)
-					if err != nil {
-						fmt.Printf("Error saving track duration: %v\n", err)
+					if p.Song != nil { // or it will crash on stop signal
+						err := p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink, 2*time.Second)
+						if err != nil {
+							fmt.Printf("Error saving track duration: %v\n", err)
+						}
 					}
 				}
 			}

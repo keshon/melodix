@@ -73,7 +73,7 @@ func New() *Song {
 	return &Song{}
 }
 
-func (s *Song) FetchSong(url string) ([]*Song, error) {
+func (s *Song) FetchSongs(url string) ([]*Song, error) {
 	youtubeutil := *youtube.New()
 
 	var songs []*Song

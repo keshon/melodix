@@ -351,18 +351,10 @@ func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
 	if param == "" {
 		return nil, fmt.Errorf("no song title or URL provided")
 	}
-
-	urls := strings.Fields(param)
-	songs := make([]*songpkg.Song, 0, len(urls))
-
-	for _, url := range urls {
-		song, err := songpkg.New().FetchSong(url)
-		if err != nil {
-			continue
-		}
-		songs = append(songs, song...)
+	songs, err := songpkg.New().FetchSongs(param)
+	if err != nil {
+		return nil, err
 	}
-
 	if len(songs) == 0 {
 		return nil, fmt.Errorf("no songs found")
 	}
