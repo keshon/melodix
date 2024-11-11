@@ -73,46 +73,46 @@ func New() *Song {
 	return &Song{}
 }
 
-func (s *Song) FetchSongs(url string) ([]*Song, error) {
+func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
 	youtubeutil := *youtube.New()
 
 	var songs []*Song
 
 	switch {
-	case isYoutubeURL(url):
-		if strings.Contains(url, "list=") {
+	case isYoutubeURL(urlOrTitle):
+		if strings.Contains(urlOrTitle, "list=") {
 			// its a playlist
-			songsFromPlaylist, err := s.fetchYoutubePlaylist(url)
+			songsFromPlaylist, err := s.fetchYoutubePlaylist(urlOrTitle)
 			if err != nil {
-				return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+				return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 			}
 			songs = append(songs, songsFromPlaylist...)
 		} else {
 			// its a single song
-			song, err := s.fetchYoutubeSong(url)
+			song, err := s.fetchYoutubeSong(urlOrTitle)
 
 			if err != nil {
-				return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+				return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 			}
 			songs = append(songs, song)
 		}
-	case isInternetRadioURL(url):
-		song, err := s.fetchInternetRadioSong(url)
+	case isInternetRadioURL(urlOrTitle):
+		song, err := s.fetchInternetRadioSong(urlOrTitle)
 
 		if err != nil {
-			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 		}
 		songs = append(songs, song)
 	default:
 		var videoURL string
-		videoURL, err := youtubeutil.FetchVideoURLByTitle(url) // url is the song title
+		videoURL, err := youtubeutil.FetchVideoURLByTitle(urlOrTitle) // url is the song title
 		if err != nil {
-			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 		}
 
 		song, err := s.fetchYoutubeSong(videoURL)
 		if err != nil {
-			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 		}
 		songs = append(songs, song)
 	}

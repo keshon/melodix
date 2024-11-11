@@ -180,11 +180,17 @@ PLAYBACK_LOOP:
 				case ActionSkip:
 					if len(p.Queue) > 0 {
 						startAt = 0
+						encoding.Stop()
+						encoding.Cleanup()
+						p.Song = nil
+						p.Status = StatusResting
 						continue PLAYBACK_LOOP
 					}
 					p.Signals <- ActionStop
 				case ActionStop:
 					startAt = 0
+					encoding.Stop()
+					encoding.Cleanup()
 					p.Song = nil
 					p.Status = StatusResting
 					return p.leaveVoiceChannel(vc)

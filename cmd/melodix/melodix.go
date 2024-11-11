@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -164,7 +165,9 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, "No song found.")
 			return
 		}
-
+		for _, song := range songs {
+			fmt.Println("Song title:", song.Title)
+		}
 		b.Player.Queue = append(b.Player.Queue, songs...)
 		b.Player.GuildID = m.GuildID
 		b.Player.ChannelID = voiceState.ChannelID
@@ -351,12 +354,35 @@ func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
 	if param == "" {
 		return nil, fmt.Errorf("no song title or URL provided")
 	}
-	songs, err := songpkg.New().FetchSongs(param)
-	if err != nil {
-		return nil, err
+
+	fetcher := songpkg.New()
+	var songs []*songpkg.Song
+	var err error
+
+	urlPattern := `https?://\S+`
+	isURL := regexp.MustCompile(urlPattern).MatchString(param)
+
+	if isURL {
+		urls := regexp.MustCompile(`\s+`).Split(param, -1)
+		for _, url := range urls {
+			if !regexp.MustCompile(urlPattern).MatchString(url) {
+				continue
+			}
+			fetchedSongs, err := fetcher.FetchSongs(url)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch songs from URL %s: %v", url, err)
+			}
+			songs = append(songs, fetchedSongs...)
+		}
+	} else {
+		songs, err = fetcher.FetchSongs(param)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch songs for search term '%s': %v", param, err)
+		}
 	}
+
 	if len(songs) == 0 {
-		return nil, fmt.Errorf("no songs found")
+		return nil, fmt.Errorf("no songs found for input '%s'", param)
 	}
 	return songs, nil
 }
