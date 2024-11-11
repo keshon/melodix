@@ -10,7 +10,9 @@ import (
 	urlstd "net/url"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/keshon/melodix/iradio"
@@ -18,6 +20,20 @@ import (
 
 	kkdai_youtube "github.com/kkdai/youtube/v2"
 )
+
+var client = &kkdai_youtube.Client{HTTPClient: &http.Client{
+	Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	},
+	Timeout: 30 * time.Second,
+}}
 
 type Song struct {
 	Title          string        // Title of the song
@@ -58,30 +74,51 @@ func New() *Song {
 	return &Song{}
 }
 
-func (s *Song) FetchSong(url string) (*Song, error) {
+func (s *Song) FetchSong(url string) ([]*Song, error) {
 	youtubeutil := *youtube.New()
 
-	var song *Song
-	var err error
+	var songs []*Song
 
 	switch {
 	case isYoutubeURL(url):
-		song, err = s.fetchYoutubeSong(url)
+		if strings.Contains(url, "list=") {
+			// its a playlist
+			songsFromPlaylist, err := s.fetchYoutubePlaylist(url)
+			if err != nil {
+				return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+			}
+			songs = append(songs, songsFromPlaylist...)
+		} else {
+			// its a single song
+			song, err := s.fetchYoutubeSong(url)
+
+			if err != nil {
+				return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+			}
+			songs = append(songs, song)
+		}
 	case isInternetRadioURL(url):
-		song, err = s.fetchInternetRadioSong(url)
+		song, err := s.fetchInternetRadioSong(url)
+
+		if err != nil {
+			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+		}
+		songs = append(songs, song)
 	default:
 		var videoURL string
-		videoURL, err = youtubeutil.GetVideoURLByTitle(url)
-		if err == nil {
-			song, err = s.fetchYoutubeSong(videoURL)
+		videoURL, err := youtubeutil.GetVideoURLByTitle(url)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
 		}
+
+		song, err := s.fetchYoutubeSong(videoURL)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+		}
+		songs = append(songs, song)
 	}
 
-	if err != nil {
-		return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
-	}
-
-	return song, nil
+	return songs, nil
 }
 func isYoutubeURL(url string) bool {
 	youtubeRegex := regexp.MustCompile(`^(https?://)?(www\.)?(m\.)?(music\.)?(youtube\.com|youtu\.be)(/|$)`)
@@ -93,20 +130,6 @@ func isInternetRadioURL(url string) bool {
 }
 
 func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
-	client := &kkdai_youtube.Client{}
-	client.HTTPClient = &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout: 30 * time.Second,
-			}).DialContext,
-			MaxIdleConns:          10,
-			IdleConnTimeout:       30 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
-		Timeout: 30 * time.Second,
-	}
 
 	id, err := s.extractYoutubeID(url)
 	if err != nil {
@@ -132,6 +155,67 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 		SongID:     song.ID,
 		Source:     SourceYouTube,
 	}, nil
+}
+
+func (s *Song) fetchYoutubePlaylist(url string) ([]*Song, error) {
+	var songs []*Song
+
+	playlist, err := client.GetPlaylist(url)
+	if err != nil {
+		if err.Error() == "extractPlaylistID failed: no playlist detected or invalid playlist ID" {
+			// we assume it's a 'Youtube Mix Playlist' that kkdai_youtube doesn't support
+			urls, err := youtube.New().GetVideoURLByMixPlaylistLink(url)
+			if err != nil {
+				return nil, err
+			}
+
+			playlist = &kkdai_youtube.Playlist{
+				Videos: make([]*kkdai_youtube.PlaylistEntry, len(urls)),
+			}
+
+			for i, track := range urls {
+				playlist.Videos[i] = &kkdai_youtube.PlaylistEntry{
+					ID: track,
+				}
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	var wg sync.WaitGroup
+
+	videoIndex := make(map[string]int)
+	for i, video := range playlist.Videos {
+		videoIndex[video.ID] = i
+	}
+
+	for _, video := range playlist.Videos {
+		wg.Add(1)
+		go func(videoID string) {
+			defer wg.Done()
+
+			videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+			song, err := s.fetchYoutubeSong(videoURL)
+			if err != nil {
+				fmt.Printf("Error fetching song for video ID %s: %v\n", videoID, err)
+				return
+			}
+
+			songs = append(songs, song)
+		}(video.ID)
+	}
+
+	wg.Wait()
+
+	sort.SliceStable(songs, func(i, j int) bool {
+		indexI := videoIndex[songs[i].SongID]
+		indexJ := videoIndex[songs[j].SongID]
+
+		return indexI < indexJ
+	})
+
+	return songs, nil
 }
 
 func (s *Song) extractYoutubeID(url string) (string, error) {

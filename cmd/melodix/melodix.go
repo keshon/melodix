@@ -181,6 +181,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, "Queue is empty.")
 			return
 		}
+
 		var songList strings.Builder
 		for i, song := range songs {
 			if song.PublicLink != "" {
@@ -189,7 +190,21 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 				fmt.Fprintf(&songList, "%d. %s\n", i+1, song.Title)
 			}
 		}
-		s.ChannelMessageSend(m.ChannelID, songList.String())
+
+		content := songList.String()
+		if len(content) > 2000 {
+			lines := strings.Split(content, "\n")
+			var truncatedList strings.Builder
+			for _, line := range lines {
+				if truncatedList.Len()+len(line)+1 > 2000 { // +1 for newline character
+					break
+				}
+				truncatedList.WriteString(line + "\n")
+			}
+			content = truncatedList.String()
+		}
+
+		s.ChannelMessageSend(m.ChannelID, content)
 	case "add":
 		songs, err := b.fetchSongs(param)
 		if err != nil {
@@ -327,7 +342,7 @@ func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
 		if err != nil {
 			continue
 		}
-		songs = append(songs, song)
+		songs = append(songs, song...)
 	}
 
 	if len(songs) == 0 {
