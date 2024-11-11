@@ -15,9 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/keshon/melodix/iradio"
+	"github.com/keshon/melodix/stream"
 	"github.com/keshon/melodix/youtube"
-
 	kkdai_youtube "github.com/kkdai/youtube/v2"
 )
 
@@ -56,15 +55,15 @@ type SongSource int32
 
 const (
 	SourceYouTube SongSource = iota
-	SourceInternetRadio
+	SourceRadioStream
 	SourceLocalFile
 )
 
 func (source SongSource) String() string {
 	sources := map[SongSource]string{
-		SourceYouTube:       "YouTube",
-		SourceInternetRadio: "InternetRadio",
-		SourceLocalFile:     "LocalFile",
+		SourceYouTube:     "YouTube",
+		SourceRadioStream: "RadioStream",
+		SourceLocalFile:   "LocalFile", // not implemented
 	}
 
 	return sources[source]
@@ -106,7 +105,7 @@ func (s *Song) FetchSong(url string) ([]*Song, error) {
 		songs = append(songs, song)
 	default:
 		var videoURL string
-		videoURL, err := youtubeutil.GetVideoURLByTitle(url)
+		videoURL, err := youtubeutil.FetchVideoURLByTitle(url) // url is the song title
 		if err != nil {
 			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
 		}
@@ -163,8 +162,8 @@ func (s *Song) fetchYoutubePlaylist(url string) ([]*Song, error) {
 	playlist, err := client.GetPlaylist(url)
 	if err != nil {
 		if err.Error() == "extractPlaylistID failed: no playlist detected or invalid playlist ID" {
-			// we assume it's a 'Youtube Mix Playlist' that kkdai_youtube doesn't support
-			urls, err := youtube.New().GetVideoURLByMixPlaylistLink(url)
+			// we assume it's a 'Youtube Mix Playlist' that kkdai_youtube doesn't support natively
+			urls, err := youtube.New().FetchMixPlaylistVideoURLs(url)
 			if err != nil {
 				return nil, err
 			}
@@ -244,14 +243,14 @@ func (s *Song) fetchInternetRadioSong(url string) (*Song, error) {
 
 	hash := crc32.ChecksumIEEE([]byte(u.Host))
 
-	ir := iradio.New()
+	stream := stream.New()
 
-	contentType, err := ir.GetContentTypeFromURL(u.String())
+	contentType, err := stream.GetContentType(u.String())
 	if err != nil {
 		return nil, fmt.Errorf("error getting content-type: %v", err)
 	}
 
-	if ir.IsValidAudioStream(contentType) {
+	if stream.IsValidStreamType(contentType) {
 		return &Song{
 			Title:      u.Host,
 			PublicLink: url,
@@ -259,7 +258,7 @@ func (s *Song) fetchInternetRadioSong(url string) (*Song, error) {
 			Thumbnail:  Thumbnail{},
 			Duration:   -1,
 			SongID:     fmt.Sprintf("%d", hash),
-			Source:     SourceInternetRadio,
+			Source:     SourceRadioStream,
 		}, nil
 	} else {
 		return nil, fmt.Errorf("not a valid stream due to invalid content-type: %v", contentType)
@@ -270,7 +269,7 @@ func (s *Song) GetInfo(song *Song) (string, string, string, error) {
 	switch song.Source {
 	case SourceYouTube:
 		return song.Title, song.Source.String(), song.PublicLink, nil
-	case SourceInternetRadio:
+	case SourceRadioStream:
 		return s.getInternetRadioSongMetadata(song.StreamURL)
 	default:
 		return "", "", "", fmt.Errorf("unknown source: %v", song.Source)

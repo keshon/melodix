@@ -22,13 +22,13 @@ type CommandHistoryRecord struct {
 }
 
 type TracksHistoryRecord struct {
-	ID            string        `json:"id"`
-	Title         string        `json:"name"`
-	SourceType    string        `json:"source_type"`
-	PublicLink    string        `json:"public_link"`
-	TotalCount    int           `json:"total_count"`
-	TotalDuration time.Duration `json:"total_duration"`
-	LastPlayed    time.Time     `json:"last_played"`
+	ID            string    `json:"id"`
+	Title         string    `json:"name"`
+	SourceType    string    `json:"source_type"`
+	PublicLink    string    `json:"public_link"`
+	TotalCount    int       `json:"total_count"`
+	TotalDuration float64   `json:"total_duration"`
+	LastPlayed    time.Time `json:"last_played"`
 }
 
 type Record struct {
@@ -123,6 +123,7 @@ func (s *Storage) AddTrackCountByOne(guildID, ID, Title, sourceType, publicLink 
 		if track.ID == ID {
 			record.TracksHistoryList[i].TotalCount++
 			record.TracksHistoryList[i].LastPlayed = time.Now()
+
 			if record.TracksHistoryList[i].Title != Title {
 				record.TracksHistoryList[i].Title = Title
 			}
@@ -149,15 +150,23 @@ func (s *Storage) AddTrackCountByOne(guildID, ID, Title, sourceType, publicLink 
 }
 
 // AddTrackDuration increments the play duration for a track in a guild
-func (s *Storage) AddTrackDuration(guildID, trackID string, duration time.Duration) error {
+func (s *Storage) AddTrackDuration(guildID, ID, Title, sourceType, publicLink string, duration time.Duration) error {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return err
 	}
 
 	for i, track := range record.TracksHistoryList {
-		if track.ID == trackID {
-			record.TracksHistoryList[i].TotalDuration += duration
+		if track.ID == ID {
+			record.TracksHistoryList[i].TotalDuration += duration.Seconds()
+			record.TracksHistoryList[i].LastPlayed = time.Now()
+
+			if record.TracksHistoryList[i].Title != Title {
+				record.TracksHistoryList[i].Title = Title
+			}
+			if record.TracksHistoryList[i].PublicLink != publicLink {
+				record.TracksHistoryList[i].PublicLink = publicLink
+			}
 			s.ds.Add(guildID, record)
 			return nil
 		}
@@ -165,9 +174,12 @@ func (s *Storage) AddTrackDuration(guildID, trackID string, duration time.Durati
 
 	// If track is not found, create a new entry with initial duration
 	newTrack := TracksHistoryRecord{
-		ID:            trackID,
-		TotalDuration: duration,
-		LastPlayed:    time.Now(),
+		ID:         ID,
+		TotalCount: 1,
+		LastPlayed: time.Now(),
+		Title:      Title,
+		SourceType: sourceType,
+		PublicLink: publicLink,
 	}
 	record.TracksHistoryList = append(record.TracksHistoryList, newTrack)
 	s.ds.Add(guildID, record)

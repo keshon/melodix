@@ -130,7 +130,27 @@ PLAYBACK_LOOP:
 			}
 		}
 
-		// TODO: add duration history for a song
+		interval := 2 * time.Second
+		ticker := time.NewTicker(interval)
+		tickerStop := make(chan bool)
+		defer func() {
+			ticker.Stop()
+			tickerStop <- true
+		}()
+
+		go func() error {
+			for {
+				select {
+				case <-ticker.C:
+					err := p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink, interval)
+					if err != nil {
+						return err
+					}
+				case <-tickerStop:
+					return nil
+				}
+			}
+		}()
 
 		for {
 			select {

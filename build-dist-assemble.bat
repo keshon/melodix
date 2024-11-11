@@ -19,9 +19,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem Change directory to the root level
-cd ..
-
 rem Create or clear the "dist" directory for the target platform
 if exist dist\%TARGET_PLATFORM% rmdir /s /q dist\%TARGET_PLATFORM%
 mkdir dist\%TARGET_PLATFORM%
@@ -33,8 +30,6 @@ copy LICENSE dist\%TARGET_PLATFORM%
 copy .env.example dist\%TARGET_PLATFORM%\.env
 xcopy /E /I /Y assets dist\%TARGET_PLATFORM%\assets
 xcopy /E /I /Y docs dist\%TARGET_PLATFORM%\docs
-mkdir dist\%TARGET_PLATFORM%\cache
-mkdir dist\%TARGET_PLATFORM%\upload
 
 rem Use UPX packer if available, otherwise download and use it
 if not exist %UPX_PATH% (
