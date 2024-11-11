@@ -5,9 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"regexp"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -16,30 +14,35 @@ import (
 	"github.com/keshon/melodix/player"
 	songpkg "github.com/keshon/melodix/song"
 	"github.com/keshon/melodix/storage"
-	"github.com/keshon/melodix/youtube"
 )
 
-var commandAliases = [][]string{
-	{"ping"},
-	{"pong"},
-	{"about"},
-	{"pause", "resume"},
-	{"play", "p"},
-	{"stop", "s"},
-	{"list", "queue", "l", "q"},
-	{"add", "a", "+"},
-	{"skip", "next", "ff", ">>"},
-	{"now", "n"},
-	{"tracks"},
-	{"log", "history", "time", "t"},
-	{"help", "h", "?"},
+type Command struct {
+	Name        string   // Primary command name
+	Aliases     []string // List of alias names
+	Description string
+	Category    string
 }
 
-var youtubeutil youtube.YouTube
-var youtubeutilOnce sync.Once
+var commands = []Command{
+	{"play", []string{"p", ">"}, "Play a song or add it to the queue", "Playback"},
+	{"skip", []string{"next", "ff", ">>"}, "Skip the current song", "Playback"},
+	{"stop", []string{"s", "x"}, "Stop the music and clear the queue", "Playback"},
 
-var song songpkg.Song
-var songOnce sync.Once
+	{"list", []string{"queue", "l", "q"}, "Show the current music queue", "Advanced Playback"},
+	{"add", []string{"a", "+"}, "Add a song to the queue", "Advanced Playback"},
+	{"resume", nil, "Resume the current song", "Advanced Playback"},
+	{"pause", nil, "Pause the current song", "Advanced Playback"},
+
+	{"now", []string{"n"}, "Display the currently playing song", "Information"},
+	{"tracks", nil, "Display music tracks history", "Information"},
+	{"log", []string{"history", "time", "t"}, "Display command history", "Information"},
+
+	{"ping", []string{"pong"}, "Check if the bot is responsive", "Utility"},
+	{"melodix-set-prefix", nil, "Set a custom command prefix", "Utility"},
+
+	{"about", nil, "Information about the bot", "General"},
+	{"help", []string{"h", "?"}, "Show this help message", "General"},
+}
 
 type Bot struct {
 	Session *discordgo.Session
@@ -115,30 +118,30 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	command, param, err := b.extractCommand(m.Content, b.prefix)
+	commandName, param, err := b.extractCommand(m.Content, b.prefix)
 	if err != nil {
 		return
 	}
 
-	switch command {
+	switch commandName {
 	case "melodix-set-prefix":
 		b.prefix = param
 		s.ChannelMessageSend(m.ChannelID, "Prefix changed to "+param)
 		return
 	}
 
-	canonical := b.getAliasedCommand(command, commandAliases)
-	if len(canonical) == 0 {
-		return
+	cmd := b.getAliasedCommand(commandName)
+	if cmd == nil {
+		return // Command not found
 	}
 
-	err = b.saveCommandHistory(m.GuildID, m.ChannelID, canonical, param)
+	err = b.saveCommandHistory(m.GuildID, m.ChannelID, cmd.Name, param)
 	if err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error saving command info: %v", err))
 		return
 	}
 
-	switch canonical {
+	switch cmd.Name {
 	case "ping":
 		s.ChannelMessageSend(m.ChannelID, "Pong!")
 	case "pong":
@@ -165,12 +168,12 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		b.Player.Queue = append(b.Player.Queue, songs...)
 		b.Player.GuildID = m.GuildID
 		b.Player.ChannelID = voiceState.ChannelID
-		b.Player.Play(nil, 0)
+		b.Player.Play()
 	case "stop":
 		b.Player.Signals <- player.ActionStop
 	case "skip":
 		b.Player.Signals <- player.ActionSkip
-	case "pause", "!resume":
+	case "pause", "resume":
 		b.Player.Signals <- player.ActionPauseResume
 	case "list":
 		songs := b.Player.Queue
@@ -178,7 +181,6 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, "Queue is empty.")
 			return
 		}
-
 		var songList strings.Builder
 		for i, song := range songs {
 			if song.PublicLink != "" {
@@ -187,7 +189,6 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 				fmt.Fprintf(&songList, "%d. %s\n", i+1, song.Title)
 			}
 		}
-
 		s.ChannelMessageSend(m.ChannelID, songList.String())
 	case "add":
 		songs, err := b.fetchSongs(param)
@@ -199,17 +200,36 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, "No song found.")
 			return
 		}
-
 		b.Player.Queue = append(b.Player.Queue, songs...)
 	case "now":
 		if b.Player.Song != nil {
-			title, err := songpkg.ExtractMetadata(b.Player.Song.StreamURL)
+			title, source, url, err := b.Player.Song.GetInfo(b.Player.Song)
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song info: %v", err))
 			}
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing: %s", title))
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing from %s:\n[%s](%s)", source, title, url))
+			return
 		}
-
+		s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
+	case "help":
+		categoryOrder := []string{"Playback", "Advanced Playback", "Information", "Utility", "General"}
+		categories := make(map[string][]Command)
+		for _, cmd := range commands {
+			categories[cmd.Category] = append(categories[cmd.Category], cmd)
+		}
+		var helpMsg strings.Builder
+		for _, category := range categoryOrder {
+			cmds, exists := categories[category]
+			if !exists {
+				continue
+			}
+			helpMsg.WriteString(fmt.Sprintf("**%s**\n", category))
+			for _, cmd := range cmds {
+				helpMsg.WriteString(fmt.Sprintf("  _%s_ - %s\n", b.prefix+cmd.Name, cmd.Description))
+			}
+			helpMsg.WriteString("\n")
+		}
+		s.ChannelMessageSend(m.ChannelID, helpMsg.String())
 	}
 }
 
@@ -237,16 +257,19 @@ func (b *Bot) extractCommand(content, prefix string) (string, string, error) {
 	return command, parameter, nil
 }
 
-func (b *Bot) getAliasedCommand(command string, aliases [][]string) string {
-	lowerCommand := strings.ToLower(command)
-	for _, aliasesPerCommand := range aliases {
-		for _, alias := range aliasesPerCommand {
-			if strings.ToLower(alias) == lowerCommand {
-				return strings.ToLower(aliasesPerCommand[0])
+func (b *Bot) getAliasedCommand(input string) *Command {
+	input = strings.ToLower(input)
+	for _, cmd := range commands {
+		if input == cmd.Name {
+			return &cmd
+		}
+		for _, alias := range cmd.Aliases {
+			if input == alias {
+				return &cmd
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
 func (b *Bot) saveCommandHistory(guildID, channelID, command, param string) error {
@@ -299,35 +322,10 @@ func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
 	urls := strings.Fields(param)
 	songs := make([]*songpkg.Song, 0, len(urls))
 
-	youtubeutilOnce.Do(func() {
-		youtubeutil = *youtube.New()
-	})
-
-	songOnce.Do(func() {
-		song = *songpkg.New()
-	})
-
 	for _, url := range urls {
-		var song *songpkg.Song
-		var err error
-
-		switch {
-		case isYoutubeURL(url):
-			song, err = song.GetYoutubeSong(url)
-		case isInternetRadioURL(url):
-			song, err = song.GetInternetRadioSong(url)
-		case isMP3(url):
-			song, err = song.GetLocalFileSong(url)
-		default:
-			var videoURL string
-			videoURL, err = youtubeutil.GetVideoURLByTitle(url)
-			if err == nil {
-				song, err = song.GetYoutubeSong(videoURL)
-			}
-		}
-
+		song, err := songpkg.New().FetchSong(url)
 		if err != nil {
-			return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+			continue
 		}
 		songs = append(songs, song)
 	}
@@ -336,19 +334,6 @@ func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
 		return nil, fmt.Errorf("no songs found")
 	}
 	return songs, nil
-}
-
-func isYoutubeURL(url string) bool {
-	youtubeRegex := regexp.MustCompile(`^(https?://)?(www\.)?(m\.)?(music\.)?(youtube\.com|youtu\.be)(/|$)`)
-	return youtubeRegex.MatchString(url)
-}
-
-func isInternetRadioURL(url string) bool {
-	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") && !isYoutubeURL(url)
-}
-
-func isMP3(filename string) bool {
-	return strings.HasSuffix(strings.ToLower(filename), ".mp3")
 }
 
 // Global Functions

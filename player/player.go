@@ -74,11 +74,10 @@ func (status Status) StringEmoji() string {
 	return m[status]
 }
 
-func (p *Player) Play(song *songpkg.Song, startAt time.Duration) error {
+func (p *Player) Play() error {
+	var startAt time.Duration = 0
 PLAYBACK_LOOP:
 	for {
-		p.Song = song
-
 		if startAt == 0 {
 			if p.Song == nil {
 				if len(p.Queue) == 0 {
@@ -130,10 +129,8 @@ PLAYBACK_LOOP:
 				return err
 			}
 		}
-		// go func() {
-		// 	p.saveTrackDurationHistory(song, streaming.PlaybackPosition())
-		// 	time.Sleep(5 * time.Second)
-		// }()
+
+		// TODO: add duration history for a song
 
 		for {
 			select {
@@ -166,6 +163,8 @@ PLAYBACK_LOOP:
 					}
 					p.Signals <- ActionStop
 				case ActionStop:
+					startAt = 0
+					p.Song = nil
 					p.Status = StatusResting
 					return p.leaveVoiceChannel(vc)
 				case ActionSwap:
@@ -289,24 +288,4 @@ func (p *Player) fetchMP3Duration(filePath string) (time.Duration, error) {
 	totalDuration := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
 
 	return totalDuration, nil
-}
-
-// not working as for now
-func (p *Player) saveTrackCountHistory(song *songpkg.Song, startAt time.Duration) error {
-	if startAt != 0 {
-		return nil
-	}
-	err := p.Storage.AddTrackCountByOne(p.GuildID, song.SongID, song.Title, song.Source.String(), song.PublicLink)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *Player) saveTrackDurationHistory(song *songpkg.Song, position time.Duration) error {
-	err := p.Storage.AddTrackDuration(p.GuildID, song.SongID, position)
-	if err != nil {
-		return err
-	}
-	return nil
 }

@@ -9,10 +9,12 @@ import (
 	"net/http"
 	urlstd "net/url"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/keshon/melodix/iradio"
+	"github.com/keshon/melodix/youtube"
 
 	kkdai_youtube "github.com/kkdai/youtube/v2"
 )
@@ -56,7 +58,41 @@ func New() *Song {
 	return &Song{}
 }
 
-func (s *Song) GetYoutubeSong(url string) (*Song, error) {
+func (s *Song) FetchSong(url string) (*Song, error) {
+	youtubeutil := *youtube.New()
+
+	var song *Song
+	var err error
+
+	switch {
+	case isYoutubeURL(url):
+		song, err = s.fetchYoutubeSong(url)
+	case isInternetRadioURL(url):
+		song, err = s.fetchInternetRadioSong(url)
+	default:
+		var videoURL string
+		videoURL, err = youtubeutil.GetVideoURLByTitle(url)
+		if err == nil {
+			song, err = s.fetchYoutubeSong(videoURL)
+		}
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("error fetching song for %s: %w", url, err)
+	}
+
+	return song, nil
+}
+func isYoutubeURL(url string) bool {
+	youtubeRegex := regexp.MustCompile(`^(https?://)?(www\.)?(m\.)?(music\.)?(youtube\.com|youtu\.be)(/|$)`)
+	return youtubeRegex.MatchString(url)
+}
+
+func isInternetRadioURL(url string) bool {
+	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") && !isYoutubeURL(url)
+}
+
+func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 	client := &kkdai_youtube.Client{}
 	client.HTTPClient = &http.Client{
 		Transport: &http.Transport{
@@ -116,7 +152,7 @@ func (s *Song) extractYoutubeID(url string) (string, error) {
 	return "", nil
 }
 
-func (s *Song) GetInternetRadioSong(url string) (*Song, error) {
+func (s *Song) fetchInternetRadioSong(url string) (*Song, error) {
 	u, err := urlstd.Parse(url)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing url: %v", err)
@@ -146,7 +182,18 @@ func (s *Song) GetInternetRadioSong(url string) (*Song, error) {
 	}
 }
 
-func ExtractMetadata(url string) (string, error) {
+func (s *Song) GetInfo(song *Song) (string, string, string, error) {
+	switch song.Source {
+	case SourceYouTube:
+		return song.Title, song.Source.String(), song.PublicLink, nil
+	case SourceInternetRadio:
+		return s.getInternetRadioSongMetadata(song.StreamURL)
+	default:
+		return "", "", "", fmt.Errorf("unknown source: %v", song.Source)
+	}
+}
+
+func (s *Song) getInternetRadioSongMetadata(url string) (string, string, string, error) {
 	cmd := exec.Command("ffmpeg", "-i", url, "-f", "ffmetadata", "-")
 
 	var out bytes.Buffer
@@ -155,26 +202,30 @@ func ExtractMetadata(url string) (string, error) {
 
 	err := cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("error running ffmpeg command: %v", err)
+		return "", "", "", fmt.Errorf("error running ffmpeg command: %v", err)
 	}
 
-	var title string
+	var streamTitle string
+	var icyName string
+	var icyURL string
 	scanner := bufio.NewScanner(&out)
 	for scanner.Scan() {
 		line := scanner.Text()
+		fmt.Println(line)
 		if strings.HasPrefix(line, "StreamTitle=") {
-			title = strings.TrimPrefix(line, "StreamTitle=")
+			streamTitle = strings.TrimPrefix(line, "StreamTitle=")
+		}
+		if strings.HasPrefix(line, "icy-name=") {
+			icyName = strings.TrimPrefix(line, "icy-name=")
+		}
+		if strings.HasPrefix(line, "icy-url=") {
+			icyURL = strings.TrimPrefix(line, "icy-url=")
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("error reading metadata: %v", err)
+		return "", "", "", fmt.Errorf("error reading metadata: %v", err)
 	}
 
-	return title, nil
-}
-
-// NOT IMPLEMENTED
-func (s *Song) GetLocalFileSong(url string) (*Song, error) {
-	return nil, nil
+	return streamTitle, icyName, icyURL, nil
 }
