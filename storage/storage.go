@@ -16,6 +16,8 @@ type CommandHistoryRecord struct {
 	ChannelID   string    `json:"channel_id"`
 	ChannelName string    `json:"channel_name"`
 	GuildName   string    `json:"guild_name"`
+	UserID      string    `json:"user_id"`
+	Username    string    `json:"username"`
 	Command     string    `json:"command"`
 	Param       string    `json:"param"`
 	Datetime    time.Time `json:"datetime"`
@@ -184,4 +186,13 @@ func (s *Storage) AddTrackDuration(guildID, ID, Title, sourceType, publicLink st
 	record.TracksHistoryList = append(record.TracksHistoryList, newTrack)
 	s.ds.Add(guildID, record)
 	return nil
+}
+
+func (s *Storage) FetchCommandHistory(guildID string) ([]CommandHistoryRecord, error) {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return nil, err
+	}
+
+	return record.CommandsHistoryList, nil
 }

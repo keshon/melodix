@@ -1,6 +1,7 @@
 package player
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -130,24 +131,22 @@ PLAYBACK_LOOP:
 			}
 		}
 
-		interval := 2 * time.Second
-		ticker := time.NewTicker(interval)
-		tickerStop := make(chan bool)
-		defer func() {
-			ticker.Stop()
-			tickerStop <- true
-		}()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-		go func() error {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		go func() {
 			for {
 				select {
+				case <-ctx.Done(): // context cancellation signal
+					return
 				case <-ticker.C:
-					err := p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink, interval)
+					err := p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink, 2*time.Second)
 					if err != nil {
-						return err
+						fmt.Printf("Error saving track duration: %v\n", err)
 					}
-				case <-tickerStop:
-					return nil
 				}
 			}
 		}()

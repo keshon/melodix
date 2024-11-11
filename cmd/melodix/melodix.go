@@ -135,7 +135,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return // Command not found
 	}
 
-	err = b.saveCommandHistory(m.GuildID, m.ChannelID, cmd.Name, param)
+	err = b.saveCommandHistory(m.GuildID, m.ChannelID, m.Author.ID, m.Author.Username, cmd.Name, param)
 	if err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error saving command info: %v", err))
 		return
@@ -245,6 +245,22 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			helpMsg.WriteString("\n")
 		}
 		s.ChannelMessageSend(m.ChannelID, helpMsg.String())
+
+	case "log":
+		list, err := b.Storage.FetchCommandHistory(m.GuildID)
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting command history: %v", err))
+			return
+		}
+
+		var logMsg strings.Builder
+		for _, record := range list {
+			if strings.HasPrefix(record.Command, "play") {
+				username := fmt.Sprintf("@%s", record.Username)
+				logMsg.WriteString(fmt.Sprintf("%s %s by %s\n", b.prefix+record.Command, record.Param, username))
+			}
+		}
+		s.ChannelMessageSend(m.ChannelID, logMsg.String())
 	}
 }
 
@@ -287,7 +303,7 @@ func (b *Bot) getAliasedCommand(input string) *Command {
 	return nil
 }
 
-func (b *Bot) saveCommandHistory(guildID, channelID, command, param string) error {
+func (b *Bot) saveCommandHistory(guildID, channelID, userID, username, command, param string) error {
 	channel, err := b.Session.Channel(channelID)
 	if err != nil {
 		fmt.Println("Error retrieving channel:", err)
@@ -304,6 +320,8 @@ func (b *Bot) saveCommandHistory(guildID, channelID, command, param string) erro
 		ChannelID:   channel.ID,
 		ChannelName: channel.Name,
 		GuildName:   guild.Name,
+		UserID:      userID,
+		Username:    username,
 		Command:     command,
 		Param:       param,
 		Datetime:    time.Now(),
@@ -363,7 +381,7 @@ func loadEnv(path string) {
 }
 
 func main() {
-	loadEnv("d:\\Projects\\dev\\Keshon\\melodix\\.env") // full path is needed for VStudio Debugging
+	loadEnv(".env") // full path is needed for VStudio Debugging
 
 	token := os.Getenv("DISCORD_TOKEN")
 	if token == "" {
