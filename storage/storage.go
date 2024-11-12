@@ -35,7 +35,6 @@ type TracksHistoryRecord struct {
 
 type Record struct {
 	PrefPrefix          string                 `json:"pref_prefix"`
-	ModUsersList        []string               `json:"mod_users"`
 	CommandsHistoryList []CommandHistoryRecord `json:"commands_history"`
 	TracksHistoryList   []TracksHistoryRecord  `json:"tracks_history"`
 }
@@ -54,7 +53,6 @@ func (s *Storage) getOrCreateGuildRecord(guildID string) (*Record, error) {
 	if !exists {
 		newRecord := &Record{
 			PrefPrefix:          "",
-			ModUsersList:        []string{},
 			CommandsHistoryList: []CommandHistoryRecord{},
 			TracksHistoryList:   []TracksHistoryRecord{},
 		}
@@ -107,7 +105,7 @@ func (s *Storage) AppendTrackToHistory(guildID string, track TracksHistoryRecord
 		}
 	}
 
-	// Track doesn't exist, so add a new one
+	// If track is not found, create a new entry
 	track.LastPlayed = time.Now()
 	record.TracksHistoryList = append(record.TracksHistoryList, track)
 	s.ds.Add(guildID, record)
@@ -174,7 +172,7 @@ func (s *Storage) AddTrackDuration(guildID, ID, Title, sourceType, publicLink st
 		}
 	}
 
-	// If track is not found, create a new entry with initial duration
+	// If track is not found, create a new entry
 	newTrack := TracksHistoryRecord{
 		ID:         ID,
 		TotalCount: 1,
@@ -204,4 +202,26 @@ func (s *Storage) FetchTrackHistory(guildID string) ([]TracksHistoryRecord, erro
 	}
 
 	return record.TracksHistoryList, nil
+}
+
+// SavePrefix saves or updates the prefix for a specific guild in storage.
+func (s *Storage) SavePrefix(guildID, prefix string) error {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return err
+	}
+
+	record.PrefPrefix = prefix
+	s.ds.Add(guildID, record)
+	return nil
+}
+
+// FetchPrefix retrieves the prefix for a specific guild from storage.
+func (s *Storage) FetchPrefix(guildID string) (string, error) {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return "", err
+	}
+
+	return record.PrefPrefix, nil
 }

@@ -21,37 +21,42 @@ import (
 )
 
 type Command struct {
-	Name        string   // Primary command name
-	Aliases     []string // List of alias names
+	Name        string
+	Aliases     []string
 	Description string
 	Category    string
 }
 
-var commands = []Command{
-	{"play", []string{"p", ">"}, "Play a song or add it to the queue", "Playback"},
-	{"skip", []string{"next", "ff", ">>"}, "Skip the current song", "Playback"},
-	{"stop", []string{"s", "x"}, "Stop the music and clear the queue", "Playback"},
+var (
+	commands = []Command{
+		{"play", []string{"p", ">"}, "Play a song or add it to the queue", "Playback"},
+		{"skip", []string{"next", "ff", ">>"}, "Skip the current song", "Playback"},
+		{"stop", []string{"s", "x"}, "Stop the music and clear the queue", "Playback"},
 
-	{"list", []string{"queue", "l", "q"}, "Show the current music queue", "Advanced Playback"},
-	{"resume", nil, "Resume the current song", "Advanced Playback"},
-	{"pause", nil, "Pause the current song", "Advanced Playback"},
+		{"list", []string{"queue", "l", "q"}, "Show the current music queue", "Advanced Playback"},
+		{"resume", nil, "Resume the current song", "Advanced Playback"},
+		{"pause", nil, "Pause the current song", "Advanced Playback"},
 
-	{"now", []string{"n"}, "Display the currently playing song", "Information"},
-	{"tracks", nil, "Display music tracks history", "Information"},
-	{"log", []string{"history", "time", "t"}, "Display command history", "Information"},
+		{"now", []string{"n"}, "Display the currently playing song", "Information"},
+		{"tracks", nil, "Display music tracks history", "Information"},
+		{"log", []string{"history", "time", "t"}, "Display command history", "Information"},
 
-	{"ping", []string{"pong"}, "Check if the bot is responsive", "Utility"},
-	{"melodix-set-prefix", nil, "Set a custom command prefix", "Utility"},
+		{"ping", nil, "Check if the bot is responsive", "Utility"},
+		{"set-prefix", nil, "Set a custom command prefix", "Utility"},
+		{"melodix-reset-prefix", nil, "Reset the command prefix to the default `!`", "Utility"},
 
-	{"about", nil, "Information about the bot", "General"},
-	{"help", []string{"h", "?"}, "Show this help message", "General"},
-}
+		{"about", nil, "Information about the bot", "General"},
+		{"help", []string{"h", "?"}, "Show this help message", "General"},
+	}
+	embedColor = 0x9f00d4
+)
 
 type Bot struct {
-	Session *discordgo.Session
-	Storage *storage.Storage
-	Player  *player.Player
-	prefix  string
+	Session       *discordgo.Session
+	Storage       *storage.Storage
+	Players       map[string]*player.Player
+	prefixCache   map[string]string
+	defaultPrefix string
 }
 
 func NewBot(token string) (*Bot, error) {
@@ -66,10 +71,11 @@ func NewBot(token string) (*Bot, error) {
 	}
 
 	return &Bot{
-		Session: dg,
-		Storage: s,
-		Player:  player.New(dg, s),
-		prefix:  "!",
+		Session:       dg,
+		Storage:       s,
+		Players:       make(map[string]*player.Player),
+		prefixCache:   make(map[string]string),
+		defaultPrefix: "!",
 	}, nil
 }
 
@@ -86,7 +92,9 @@ func (b *Bot) Start() error {
 }
 
 func (b *Bot) Shutdown() {
-	b.Player.Signals <- player.ActionStop
+	for _, instance := range b.Players {
+		instance.Signals <- player.ActionStop
+	}
 	if err := b.Session.Close(); err != nil {
 		log.Println("Error closing connection:", err)
 	}
@@ -121,21 +129,28 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	commandName, param, err := b.extractCommand(m.Content, b.prefix)
+	prefix, err := b.getPrefixForGuild(m.GuildID)
+	if err != nil {
+		log.Printf("Error fetching prefix for guild %s: %v", m.GuildID, err)
+		prefix = b.defaultPrefix
+	}
+
+	command, rawCommand, param, err := b.extractCommand(m.Content, prefix)
 	if err != nil {
 		return
 	}
 
-	switch commandName {
-	case "melodix-set-prefix":
-		b.prefix = param
-		s.ChannelMessageSend(m.ChannelID, "Prefix changed to "+param)
+	switch rawCommand {
+	case "melodix-reset-prefix":
+		b.prefixCache[m.GuildID] = b.defaultPrefix
+		b.Storage.SavePrefix(m.GuildID, b.defaultPrefix)
+		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Prefix reset to `"+b.defaultPrefix+"`\nUse `"+b.defaultPrefix+"help` for a list of commands.").MessageEmbed)
 		return
 	}
 
-	cmd := b.getAliasedCommand(commandName)
+	cmd := b.getAliasedCommand(command)
 	if cmd == nil {
-		return // Command not found
+		return
 	}
 
 	err = b.saveCommandHistory(m.GuildID, m.ChannelID, m.Author.ID, m.Author.Username, cmd.Name, param)
@@ -146,14 +161,8 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 	switch cmd.Name {
 	case "ping":
-		s.ChannelMessageSend(m.ChannelID, "Pong!")
-	case "pong":
-		s.ChannelMessageSend(m.ChannelID, "Ping!")
+		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Pong!").MessageEmbed)
 	case "about":
-		title := "ℹ️ About Project"
-		content := fmt.Sprintf("**%v** — %v", version.AppName, version.AppDescription)
-		content = fmt.Sprintf("%v\n\nProject repository: https://github.com/keshon/melodix\n", content)
-
 		buildDate := "unknown"
 		if version.BuildDate != "" {
 			t, err := time.Parse(time.RFC3339, version.BuildDate)
@@ -176,13 +185,13 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 
 		embedMsg := embed.NewEmbed().
-			SetDescription(fmt.Sprintf("%v\n\n%v\n\n", title, content)).
-			AddField("```"+buildDate+"```", "Build date").
-			AddField("```"+goVer+"```", "Go version").
-			AddField("```Innokentiy Sokolov```", "[Linkedin](https://www.linkedin.com/in/keshon), [GitHub](https://github.com/keshon), [Homepage](https://keshon.ru)").
-			InlineAllFields().
+			SetColor(embedColor).
+			SetDescription(fmt.Sprintf("%v\n\n%v — %v", "ℹ️ About", version.AppName, version.AppDescription)).
+			AddField("Made by Innokentiy Sokolov", "[Linkedin](https://www.linkedin.com/in/keshon), [GitHub](https://github.com/keshon), [Homepage](https://keshon.ru)").
+			AddField("Repository", "https://github.com/keshon/melodix").
+			AddField("Release:", buildDate+" (go version "+strings.TrimLeft(goVer, "go")+")").
 			SetImage("attachment://" + filepath.Base(imagePath)).
-			SetColor(0x9f00d4).MessageEmbed
+			MessageEmbed
 
 		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{embedMsg},
@@ -211,18 +220,24 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		for _, song := range songs {
 			fmt.Printf("%v - %v (%v)\n", song.Title, song.PublicLink, song.SongID)
 		}
-		b.Player.Queue = append(b.Player.Queue, songs...)
-		b.Player.GuildID = m.GuildID
-		b.Player.ChannelID = voiceState.ChannelID
-		b.Player.Play()
+
+		instance := b.getOrCreatePlayer(m.GuildID)
+		instance.Queue = append(instance.Queue, songs...)
+		instance.GuildID = m.GuildID
+		instance.ChannelID = voiceState.ChannelID
+		instance.Play()
 	case "stop":
-		b.Player.Signals <- player.ActionStop
+		instance := b.getOrCreatePlayer(m.GuildID)
+		instance.Signals <- player.ActionStop
 	case "skip":
-		b.Player.Signals <- player.ActionSkip
+		instance := b.getOrCreatePlayer(m.GuildID)
+		instance.Signals <- player.ActionSkip
 	case "pause", "resume":
-		b.Player.Signals <- player.ActionPauseResume
+		instance := b.getOrCreatePlayer(m.GuildID)
+		instance.Signals <- player.ActionPauseResume
 	case "list":
-		songs := b.Player.Queue
+		instance := b.getOrCreatePlayer(m.GuildID)
+		songs := instance.Queue
 		if len(songs) == 0 {
 			s.ChannelMessageSend(m.ChannelID, "Queue is empty.")
 			return
@@ -237,8 +252,9 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(songList.String()))
 	case "now":
-		if b.Player.Song != nil {
-			title, source, url, err := b.Player.Song.GetInfo(b.Player.Song)
+		instance := b.getOrCreatePlayer(m.GuildID)
+		if instance.Song != nil {
+			title, source, url, err := instance.Song.GetInfo(instance.Song)
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song info: %v", err))
 			}
@@ -260,7 +276,11 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			}
 			helpMsg.WriteString(fmt.Sprintf("**%s**\n", category))
 			for _, cmd := range cmds {
-				helpMsg.WriteString(fmt.Sprintf("  _%s_ - %s\n", b.prefix+cmd.Name, cmd.Description))
+				if cmd.Name != "melodix-reset-prefix" {
+					cmd.Name = prefix + cmd.Name
+				}
+
+				helpMsg.WriteString(fmt.Sprintf("  _%s_ - %s\n", cmd.Name, cmd.Description))
 			}
 			helpMsg.WriteString("\n")
 		}
@@ -276,7 +296,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		for _, record := range list {
 			if strings.HasPrefix(record.Command, "play") {
 				username := fmt.Sprintf("@%s", record.Username)
-				logList.WriteString(fmt.Sprintf("%s %s by %s\n", b.prefix+record.Command, record.Param, username))
+				logList.WriteString(fmt.Sprintf("%s %s by %s\n", prefix+record.Command, record.Param, username))
 			}
 		}
 		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(logList.String()))
@@ -298,21 +318,63 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			tracksList.WriteString(fmt.Sprintf("%s - %s (%d plays, %s)\n", record.Title, record.PublicLink, record.TotalCount, durationFormatted))
 		}
 		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(tracksList.String()))
+	case "set-prefix":
+		if len(param) == 0 {
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Please provide a prefix.").MessageEmbed)
+			return
+		}
+		b.prefixCache[m.GuildID] = param
+		err := b.Storage.SavePrefix(m.GuildID, param)
+		if err != nil {
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Error saving new prefix.").MessageEmbed)
+			return
+		}
+
+		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Prefix changed to `"+param+"`\nUse `"+param+"help` for a list of commands.").MessageEmbed)
+
 	}
 }
 
 // Utility Methods
-func (b *Bot) extractCommand(content, prefix string) (string, string, error) {
+func (b *Bot) getOrCreatePlayer(guildID string) *player.Player {
+	if player, exists := b.Players[guildID]; exists {
+		return player
+	}
+
+	// Create a new Player instance for the guild and store it in the map
+	newPlayer := player.New(b.Session, b.Storage)
+	b.Players[guildID] = newPlayer
+	return newPlayer
+}
+
+func (b *Bot) getPrefixForGuild(guildID string) (string, error) {
+	// Check cache first
+	if prefix, exists := b.prefixCache[guildID]; exists {
+		return prefix, nil
+	}
+
+	// If not cached, fetch from storage
+	prefix, err := b.Storage.FetchPrefix(guildID)
+	if err != nil || prefix == "" {
+		prefix = b.defaultPrefix // Use default if there's an error or no prefix is set
+	}
+
+	// Cache the result for future calls
+	b.prefixCache[guildID] = prefix
+	return prefix, nil
+}
+
+func (b *Bot) extractCommand(content, prefix string) (string, string, string, error) {
 	lowerContent := strings.ToLower(content)
 	if strings.HasPrefix(lowerContent, strings.ToLower(prefix)) {
 		content = content[len(prefix):]
 	} else if !strings.HasPrefix(lowerContent, "melodix-set-prefix") {
-		return "", "", nil
+		return "", content, "", nil
 	}
 
 	words := strings.Fields(content)
 	if len(words) == 0 {
-		return "", "", fmt.Errorf("no command found")
+		return "", "", "", fmt.Errorf("no command found")
 	}
 
 	command := strings.ToLower(words[0])
@@ -322,7 +384,7 @@ func (b *Bot) extractCommand(content, prefix string) (string, string, error) {
 		parameter = strings.TrimSpace(parameter)
 	}
 
-	return command, parameter, nil
+	return command, "", parameter, nil
 }
 
 func (b *Bot) getAliasedCommand(input string) *Command {
