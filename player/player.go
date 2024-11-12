@@ -51,6 +51,7 @@ const (
 	ActionSkip
 	ActionSwap
 	ActionPauseResume
+	ActionPlay // not used
 )
 
 func (status Status) String() string {
@@ -123,6 +124,7 @@ PLAYBACK_LOOP:
 		p.Status = StatusResting
 		streaming := dca.NewStream(encoding, vc, done)
 		p.Status = StatusPlaying
+		p.Signals <- ActionPlay
 
 		if startAt == 0 {
 			err := p.Storage.AddTrackCountByOne(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink)

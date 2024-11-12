@@ -214,7 +214,6 @@ func (s *Song) extractYoutubeID(url string) (string, error) {
 
 	videoID := queryParams.Get("v")
 	if videoID != "" {
-		fmt.Println("The video ID is:", videoID)
 		return videoID, nil
 	}
 

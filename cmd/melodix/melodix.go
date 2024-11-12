@@ -19,36 +19,35 @@ import (
 	embed "github.com/keshon/melodix/third_party/discord_embed"
 )
 
+const embedColor = 0x9f00d4
+
+var commands = []Command{
+	{"play", []string{"p", ">"}, "Play a song or add it to the queue", "Playback"},
+	{"skip", []string{"next", "ff", ">>"}, "Skip the current song", "Playback"},
+	{"stop", []string{"s", "x"}, "Stop the music and clear the queue", "Playback"},
+
+	{"list", []string{"queue", "l", "q"}, "Show the current music queue", "Advanced Playback"},
+	{"resume", nil, "Resume the current song", "Advanced Playback"},
+	{"pause", nil, "Pause the current song", "Advanced Playback"},
+
+	{"now", []string{"n"}, "Display the currently playing song", "Information"},
+	{"tracks", nil, "Display music tracks history", "Information"},
+	{"log", []string{"history", "time", "t"}, "Display command history", "Information"},
+
+	{"ping", nil, "Check if the bot is responsive", "Utility"},
+	{"set-prefix", nil, "Set a custom command prefix", "Utility"},
+	{"melodix-reset-prefix", nil, "Reset the command prefix to the default `!`", "Utility"},
+
+	{"about", nil, "Information about the bot", "General"},
+	{"help", []string{"h", "?"}, "Show this help message", "General"},
+}
+
 type Command struct {
 	Name        string
 	Aliases     []string
 	Description string
 	Category    string
 }
-
-var (
-	commands = []Command{
-		{"play", []string{"p", ">"}, "Play a song or add it to the queue", "Playback"},
-		{"skip", []string{"next", "ff", ">>"}, "Skip the current song", "Playback"},
-		{"stop", []string{"s", "x"}, "Stop the music and clear the queue", "Playback"},
-
-		{"list", []string{"queue", "l", "q"}, "Show the current music queue", "Advanced Playback"},
-		{"resume", nil, "Resume the current song", "Advanced Playback"},
-		{"pause", nil, "Pause the current song", "Advanced Playback"},
-
-		{"now", []string{"n"}, "Display the currently playing song", "Information"},
-		{"tracks", nil, "Display music tracks history", "Information"},
-		{"log", []string{"history", "time", "t"}, "Display command history", "Information"},
-
-		{"ping", nil, "Check if the bot is responsive", "Utility"},
-		{"set-prefix", nil, "Set a custom command prefix", "Utility"},
-		{"melodix-reset-prefix", nil, "Reset the command prefix to the default `!`", "Utility"},
-
-		{"about", nil, "Information about the bot", "General"},
-		{"help", []string{"h", "?"}, "Show this help message", "General"},
-	}
-	embedColor = 0x9f00d4
-)
 
 type Bot struct {
 	session       *discordgo.Session
@@ -225,6 +224,17 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		instance.GuildID = m.GuildID
 		instance.ChannelID = voiceState.ChannelID
 		instance.Play()
+	case "now":
+		instance := b.getOrCreatePlayer(m.GuildID)
+		if instance.Song != nil {
+			title, source, url, err := instance.Song.GetInfo(instance.Song)
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song info: %v", err))
+			}
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing from %s:\n[%s](%s)", source, title, url))
+			return
+		}
+		s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
 	case "stop":
 		instance := b.getOrCreatePlayer(m.GuildID)
 		instance.Signals <- player.ActionStop
@@ -241,26 +251,19 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, "Queue is empty.")
 			return
 		}
-		var songList strings.Builder
-		for i, song := range songs {
-			if song.PublicLink != "" {
-				fmt.Fprintf(&songList, "%d. [%s](%s)\n", i+1, song.Title, song.PublicLink)
-			} else {
-				fmt.Fprintf(&songList, "%d. %s\n", i+1, song.Title)
-			}
+		embedMessage := embed.NewEmbed().SetColor(embedColor).SetDescription("Queue").MessageEmbed
+		for index, song := range songs {
+			embedMessage.Fields = append(embedMessage.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("%d. %s", index+1, song.Title),
+				Value:  fmt.Sprintf("[%s](%s)", song.Title, song.PublicLink),
+				Inline: false,
+			})
 		}
-		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(songList.String()))
-	case "now":
-		instance := b.getOrCreatePlayer(m.GuildID)
-		if instance.Song != nil {
-			title, source, url, err := instance.Song.GetInfo(instance.Song)
-			if err != nil {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song info: %v", err))
-			}
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing from %s:\n[%s](%s)", source, title, url))
-			return
-		}
-		s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
+
+		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			Embeds: []*discordgo.MessageEmbed{embedMessage},
+		})
+
 	case "help":
 		categoryOrder := []string{"Playback", "Advanced Playback", "Information", "Utility", "General"}
 		categories := make(map[string][]Command)
@@ -300,23 +303,31 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(logList.String()))
 	case "tracks":
-		list, err := b.storage.FetchTrackHistory(m.GuildID)
+		tracks, err := b.storage.FetchTrackHistory(m.GuildID)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting track history: %v", err))
 			return
 		}
-		var tracksList strings.Builder
-		for _, record := range list {
-			totalDuration := time.Duration(record.TotalDuration * float64(time.Second))
+		embedMessage := embed.NewEmbed().SetColor(embedColor).SetDescription("Tracks").MessageEmbed
+		for index, track := range tracks {
+			totalDuration := time.Duration(track.TotalDuration * float64(time.Second))
 
 			hours := int(totalDuration.Hours())
 			minutes := int(totalDuration.Minutes()) % 60
 			seconds := int(totalDuration.Seconds()) % 60
 
 			durationFormatted := fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-			tracksList.WriteString(fmt.Sprintf("%s - %s (%d plays, %s)\n", record.Title, record.PublicLink, record.TotalCount, durationFormatted))
+			embedMessage.Fields = append(embedMessage.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("%d. %s", index+1, track.Title),
+				Value:  fmt.Sprintf("`%s`\t`x%v`\t[Public Link](%s)", durationFormatted, track.TotalCount, track.PublicLink),
+				Inline: false,
+			})
 		}
-		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(tracksList.String()))
+
+		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			Embeds: []*discordgo.MessageEmbed{embedMessage},
+		})
+
 	case "set-prefix":
 		if len(param) == 0 {
 			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Please provide a prefix.").MessageEmbed)
@@ -340,25 +351,21 @@ func (b *Bot) getOrCreatePlayer(guildID string) *player.Player {
 		return player
 	}
 
-	// Create a new Player instance for the guild and store it in the map
 	newPlayer := player.New(b.session, b.storage)
 	b.players[guildID] = newPlayer
 	return newPlayer
 }
 
 func (b *Bot) getPrefixForGuild(guildID string) (string, error) {
-	// Check cache first
 	if prefix, exists := b.prefixCache[guildID]; exists {
 		return prefix, nil
 	}
 
-	// If not cached, fetch from storage
 	prefix, err := b.storage.FetchPrefix(guildID)
 	if err != nil || prefix == "" {
 		prefix = b.defaultPrefix // Use default if there's an error or no prefix is set
 	}
 
-	// Cache the result for future calls
 	b.prefixCache[guildID] = prefix
 	return prefix, nil
 }

@@ -8,6 +8,11 @@ import (
 	"github.com/keshon/melodix/datastore"
 )
 
+const (
+	commandHistoryLimit int = 20
+	tracksHistoryLimit  int = 40
+)
+
 type Storage struct {
 	ds *datastore.DataStore
 }
@@ -71,6 +76,14 @@ func (s *Storage) getOrCreateGuildRecord(guildID string) (*Record, error) {
 	err = json.Unmarshal(jsonData, &record)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling to *Record: %w", err)
+	}
+
+	if len(record.CommandsHistoryList) > commandHistoryLimit {
+		record.CommandsHistoryList = record.CommandsHistoryList[len(record.CommandsHistoryList)-20:]
+	}
+
+	if len(record.TracksHistoryList) > tracksHistoryLimit {
+		record.TracksHistoryList = record.TracksHistoryList[len(record.TracksHistoryList)-20:]
 	}
 
 	return &record, nil
