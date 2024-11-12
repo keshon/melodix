@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -52,9 +51,9 @@ var (
 )
 
 type Bot struct {
-	Session       *discordgo.Session
-	Storage       *storage.Storage
-	Players       map[string]*player.Player
+	session       *discordgo.Session
+	storage       *storage.Storage
+	players       map[string]*player.Player
 	prefixCache   map[string]string
 	defaultPrefix string
 }
@@ -71,9 +70,9 @@ func NewBot(token string) (*Bot, error) {
 	}
 
 	return &Bot{
-		Session:       dg,
-		Storage:       s,
-		Players:       make(map[string]*player.Player),
+		session:       dg,
+		storage:       s,
+		players:       make(map[string]*player.Player),
 		prefixCache:   make(map[string]string),
 		defaultPrefix: "!",
 	}, nil
@@ -92,26 +91,26 @@ func (b *Bot) Start() error {
 }
 
 func (b *Bot) Shutdown() {
-	for _, instance := range b.Players {
+	for _, instance := range b.players {
 		instance.Signals <- player.ActionStop
 	}
-	if err := b.Session.Close(); err != nil {
+	if err := b.session.Close(); err != nil {
 		log.Println("Error closing connection:", err)
 	}
 }
 
 func (b *Bot) openConnection() error {
-	return b.Session.Open()
+	return b.session.Open()
 }
 
 // Configuration Methods
 func (b *Bot) configureIntents() {
-	b.Session.Identify.Intents = discordgo.IntentsAll
+	b.session.Identify.Intents = discordgo.IntentsAll
 }
 
 func (b *Bot) registerEventHandlers() {
-	b.Session.AddHandler(b.onReady)
-	b.Session.AddHandler(b.onMessageCreate)
+	b.session.AddHandler(b.onReady)
+	b.session.AddHandler(b.onMessageCreate)
 }
 
 // Event Handlers
@@ -143,7 +142,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	switch rawCommand {
 	case "melodix-reset-prefix":
 		b.prefixCache[m.GuildID] = b.defaultPrefix
-		b.Storage.SavePrefix(m.GuildID, b.defaultPrefix)
+		b.storage.SavePrefix(m.GuildID, b.defaultPrefix)
 		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Prefix reset to `"+b.defaultPrefix+"`\nUse `"+b.defaultPrefix+"help` for a list of commands.").MessageEmbed)
 		return
 	}
@@ -181,7 +180,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		imagePath := "./assets/about-banner.webp"
 		imageBytes, err := os.Open(imagePath)
 		if err != nil {
-			slog.Error("Error opening image file:", err)
+			fmt.Printf("Error opening image: %v", err)
 		}
 
 		embedMsg := embed.NewEmbed().
@@ -287,7 +286,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(helpMsg.String()))
 
 	case "log":
-		list, err := b.Storage.FetchCommandHistory(m.GuildID)
+		list, err := b.storage.FetchCommandHistory(m.GuildID)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting command history: %v", err))
 			return
@@ -301,7 +300,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(logList.String()))
 	case "tracks":
-		list, err := b.Storage.FetchTrackHistory(m.GuildID)
+		list, err := b.storage.FetchTrackHistory(m.GuildID)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting track history: %v", err))
 			return
@@ -324,7 +323,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			return
 		}
 		b.prefixCache[m.GuildID] = param
-		err := b.Storage.SavePrefix(m.GuildID, param)
+		err := b.storage.SavePrefix(m.GuildID, param)
 		if err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Error saving new prefix.").MessageEmbed)
 			return
@@ -337,13 +336,13 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 // Utility Methods
 func (b *Bot) getOrCreatePlayer(guildID string) *player.Player {
-	if player, exists := b.Players[guildID]; exists {
+	if player, exists := b.players[guildID]; exists {
 		return player
 	}
 
 	// Create a new Player instance for the guild and store it in the map
-	newPlayer := player.New(b.Session, b.Storage)
-	b.Players[guildID] = newPlayer
+	newPlayer := player.New(b.session, b.storage)
+	b.players[guildID] = newPlayer
 	return newPlayer
 }
 
@@ -354,7 +353,7 @@ func (b *Bot) getPrefixForGuild(guildID string) (string, error) {
 	}
 
 	// If not cached, fetch from storage
-	prefix, err := b.Storage.FetchPrefix(guildID)
+	prefix, err := b.storage.FetchPrefix(guildID)
 	if err != nil || prefix == "" {
 		prefix = b.defaultPrefix // Use default if there's an error or no prefix is set
 	}
@@ -403,13 +402,13 @@ func (b *Bot) getAliasedCommand(input string) *Command {
 }
 
 func (b *Bot) saveCommandHistory(guildID, channelID, userID, username, command, param string) error {
-	channel, err := b.Session.Channel(channelID)
+	channel, err := b.session.Channel(channelID)
 	if err != nil {
 		fmt.Println("Error retrieving channel:", err)
 		return err
 	}
 
-	guild, err := b.Session.Guild(guildID)
+	guild, err := b.session.Guild(guildID)
 	if err != nil {
 		fmt.Println("Error retrieving guild:", err)
 		return err
@@ -426,13 +425,13 @@ func (b *Bot) saveCommandHistory(guildID, channelID, userID, username, command, 
 		Datetime:    time.Now(),
 	}
 
-	b.Storage.AppendCommandToHistory(guildID, record)
+	b.storage.AppendCommandToHistory(guildID, record)
 
 	return nil
 }
 
 func (b *Bot) findUserVoiceState(guildID, userID string) (*discordgo.VoiceState, error) {
-	guild, err := b.Session.State.Guild(guildID)
+	guild, err := b.session.State.Guild(guildID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving guild: %w", err)
 	}
