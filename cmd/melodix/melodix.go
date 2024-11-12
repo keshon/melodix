@@ -294,14 +294,21 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting command history: %v", err))
 			return
 		}
-		var logList strings.Builder
-		for _, record := range list {
-			if strings.HasPrefix(record.Command, "play") {
-				username := fmt.Sprintf("@%s", record.Username)
-				logList.WriteString(fmt.Sprintf("%s %s by %s\n", prefix+record.Command, record.Param, username))
+		embedMessage := embed.NewEmbed().SetColor(embedColor).SetDescription("Command History").MessageEmbed
+		for index, command := range list {
+			if command.Command != "play" {
+				continue
 			}
+			embedMessage.Fields = append(embedMessage.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("%d. %s", index+1, command.Command),
+				Value:  fmt.Sprintf("`%s` - `%s`", command.Username, command.Param),
+				Inline: false,
+			})
 		}
-		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(logList.String()))
+
+		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			Embeds: []*discordgo.MessageEmbed{embedMessage},
+		})
 	case "tracks":
 		tracks, err := b.storage.FetchTrackHistory(m.GuildID)
 		if err != nil {
