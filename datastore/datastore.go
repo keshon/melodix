@@ -26,7 +26,6 @@ func New(filePath string) (*DataStore, error) {
 		done:   make(chan bool),
 	}
 
-	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		if err := os.WriteFile(filePath, []byte("{}"), 0644); err != nil {
 			return nil, fmt.Errorf("failed to create empty JSON file: %v", err)

@@ -20,19 +20,22 @@ import (
 	kkdai_youtube "github.com/kkdai/youtube/v2"
 )
 
-var client = &kkdai_youtube.Client{HTTPClient: &http.Client{
-	Transport: &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout: 30 * time.Second,
-		}).DialContext,
-		MaxIdleConns:          10,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	},
-	Timeout: 30 * time.Second,
-}}
+var (
+	kkdaiClient = &kkdai_youtube.Client{HTTPClient: &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          10,
+			IdleConnTimeout:       30 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Timeout: 30 * time.Second,
+	}}
+	youtubeClient = *youtube.New()
+)
 
 type Song struct {
 	Title          string        // Title of the song
@@ -74,19 +77,12 @@ func New() *Song {
 }
 
 func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
-	youtubeutil := *youtube.New()
-
-	var songs []*Song
 
 	switch {
 	case isYoutubeURL(urlOrTitle):
 		if strings.Contains(urlOrTitle, "list=") {
 			// its a playlist
-			songsFromPlaylist, err := s.fetchYoutubePlaylist(urlOrTitle)
-			if err != nil {
-				return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
-			}
-			songs = append(songs, songsFromPlaylist...)
+			return s.fetchYoutubePlaylist(urlOrTitle)
 		} else {
 			// its a single song
 			song, err := s.fetchYoutubeSong(urlOrTitle)
@@ -94,7 +90,7 @@ func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 			}
-			songs = append(songs, song)
+			return []*Song{song}, nil
 		}
 	case isInternetRadioURL(urlOrTitle):
 		song, err := s.fetchInternetRadioSong(urlOrTitle)
@@ -102,10 +98,10 @@ func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 		}
-		songs = append(songs, song)
+		return []*Song{song}, nil
 	default:
 		var videoURL string
-		videoURL, err := youtubeutil.FetchVideoURLByTitle(urlOrTitle) // url is the song title
+		videoURL, err := youtubeClient.FetchVideoURLByTitle(urlOrTitle) // url is the song title
 		if err != nil {
 			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 		}
@@ -114,10 +110,8 @@ func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
 		}
-		songs = append(songs, song)
+		return []*Song{song}, nil
 	}
-
-	return songs, nil
 }
 func isYoutubeURL(url string) bool {
 	youtubeRegex := regexp.MustCompile(`^(https?://)?(www\.)?(m\.)?(music\.)?(youtube\.com|youtu\.be)(/|$)`)
@@ -135,7 +129,7 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 		return nil, err
 	}
 
-	song, err := client.GetVideo(id)
+	song, err := kkdaiClient.GetVideo(id)
 	if err != nil {
 		return nil, err
 	}
@@ -158,60 +152,53 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 
 func (s *Song) fetchYoutubePlaylist(url string) ([]*Song, error) {
 	var songs []*Song
+	playlist, err := kkdaiClient.GetPlaylist(url)
 
-	playlist, err := client.GetPlaylist(url)
-	if err != nil {
-		if err.Error() == "extractPlaylistID failed: no playlist detected or invalid playlist ID" {
-			// we assume it's a 'Youtube Mix Playlist' that kkdai_youtube doesn't support natively
-			urls, err := youtube.New().FetchMixPlaylistVideoURLs(url)
-			if err != nil {
-				return nil, err
-			}
-
-			playlist = &kkdai_youtube.Playlist{
-				Videos: make([]*kkdai_youtube.PlaylistEntry, len(urls)),
-			}
-
-			for i, track := range urls {
-				playlist.Videos[i] = &kkdai_youtube.PlaylistEntry{
-					ID: track,
-				}
-			}
-		} else {
-			return nil, err
+	// Check if it's a YouTube Mix Playlist that `kkdai_youtube` doesn't natively support
+	if err != nil && err.Error() == "extractPlaylistID failed: no playlist detected or invalid playlist ID" {
+		urls, mixErr := youtube.New().FetchMixPlaylistVideoURLs(url)
+		if mixErr != nil {
+			return nil, mixErr
 		}
+		// Create a synthetic playlist from the fetched URLs
+		playlist = &kkdai_youtube.Playlist{
+			Videos: make([]*kkdai_youtube.PlaylistEntry, len(urls)),
+		}
+		for i, id := range urls {
+			playlist.Videos[i] = &kkdai_youtube.PlaylistEntry{ID: id}
+		}
+	} else if err != nil {
+		return nil, err
 	}
 
-	var wg sync.WaitGroup
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		index = make(map[string]int, len(playlist.Videos))
+	)
 
-	videoIndex := make(map[string]int)
 	for i, video := range playlist.Videos {
-		videoIndex[video.ID] = i
-	}
-
-	for _, video := range playlist.Videos {
+		index[video.ID] = i
 		wg.Add(1)
 		go func(videoID string) {
 			defer wg.Done()
-
 			videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-			song, err := s.fetchYoutubeSong(videoURL)
-			if err != nil {
-				fmt.Printf("Error fetching song for video ID %s: %v\n", videoID, err)
+			song, fetchErr := s.fetchYoutubeSong(videoURL)
+			if fetchErr != nil {
+				fmt.Printf("Error fetching song for video ID %s: %v\n", videoID, fetchErr)
 				return
 			}
-
+			mu.Lock()
 			songs = append(songs, song)
+			mu.Unlock()
 		}(video.ID)
 	}
 
 	wg.Wait()
 
+	// Stable sort to maintain the order based on the original playlist
 	sort.SliceStable(songs, func(i, j int) bool {
-		indexI := videoIndex[songs[i].SongID]
-		indexJ := videoIndex[songs[j].SongID]
-
-		return indexI < indexJ
+		return index[songs[i].SongID] < index[songs[j].SongID]
 	})
 
 	return songs, nil

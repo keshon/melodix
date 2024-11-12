@@ -196,3 +196,12 @@ func (s *Storage) FetchCommandHistory(guildID string) ([]CommandHistoryRecord, e
 
 	return record.CommandsHistoryList, nil
 }
+
+func (s *Storage) FetchTrackHistory(guildID string) ([]TracksHistoryRecord, error) {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return nil, err
+	}
+
+	return record.TracksHistoryList, nil
+}

@@ -3,18 +3,21 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
-	"regexp"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
+	"github.com/keshon/melodix/internal/version"
 	"github.com/keshon/melodix/player"
 	songpkg "github.com/keshon/melodix/song"
 	"github.com/keshon/melodix/storage"
+	embed "github.com/keshon/melodix/third_party/discord_embed"
 )
 
 type Command struct {
@@ -30,7 +33,6 @@ var commands = []Command{
 	{"stop", []string{"s", "x"}, "Stop the music and clear the queue", "Playback"},
 
 	{"list", []string{"queue", "l", "q"}, "Show the current music queue", "Advanced Playback"},
-	{"add", []string{"a", "+"}, "Add a song to the queue", "Advanced Playback"},
 	{"resume", nil, "Resume the current song", "Advanced Playback"},
 	{"pause", nil, "Pause the current song", "Advanced Playback"},
 
@@ -148,14 +150,55 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	case "pong":
 		s.ChannelMessageSend(m.ChannelID, "Ping!")
 	case "about":
-		s.ChannelMessageSend(m.ChannelID, "A new prototype of Melodix Player 2")
+		title := "ℹ️ About Project"
+		content := fmt.Sprintf("**%v** — %v", version.AppName, version.AppDescription)
+		content = fmt.Sprintf("%v\n\nProject repository: https://github.com/keshon/melodix\n", content)
+
+		buildDate := "unknown"
+		if version.BuildDate != "" {
+			t, err := time.Parse(time.RFC3339, version.BuildDate)
+			if err == nil {
+				buildDate = t.Format("2006-01-02")
+			} else {
+				buildDate = "invalid date"
+			}
+		}
+
+		goVer := "unknown"
+		if version.GoVersion != "" {
+			goVer = version.GoVersion
+		}
+
+		imagePath := "./assets/about-banner.webp"
+		imageBytes, err := os.Open(imagePath)
+		if err != nil {
+			slog.Error("Error opening image file:", err)
+		}
+
+		embedMsg := embed.NewEmbed().
+			SetDescription(fmt.Sprintf("%v\n\n%v\n\n", title, content)).
+			AddField("```"+buildDate+"```", "Build date").
+			AddField("```"+goVer+"```", "Go version").
+			AddField("```Innokentiy Sokolov```", "[Linkedin](https://www.linkedin.com/in/keshon), [GitHub](https://github.com/keshon), [Homepage](https://keshon.ru)").
+			InlineAllFields().
+			SetImage("attachment://" + filepath.Base(imagePath)).
+			SetColor(0x9f00d4).MessageEmbed
+
+		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			Embeds: []*discordgo.MessageEmbed{embedMsg},
+			Files: []*discordgo.File{
+				{
+					Name:   filepath.Base(imagePath),
+					Reader: imageBytes,
+				},
+			},
+		})
 	case "play":
 		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
 		if err != nil || voiceState.ChannelID == "" {
 			s.ChannelMessageSend(m.ChannelID, "You must be in a voice channel to use this command.")
 			return
 		}
-
 		songs, err := b.fetchSongs(param)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song: %v", err))
@@ -166,7 +209,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			return
 		}
 		for _, song := range songs {
-			fmt.Println("Song title:", song.Title)
+			fmt.Printf("%v - %v (%v)\n", song.Title, song.PublicLink, song.SongID)
 		}
 		b.Player.Queue = append(b.Player.Queue, songs...)
 		b.Player.GuildID = m.GuildID
@@ -184,7 +227,6 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, "Queue is empty.")
 			return
 		}
-
 		var songList strings.Builder
 		for i, song := range songs {
 			if song.PublicLink != "" {
@@ -193,32 +235,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 				fmt.Fprintf(&songList, "%d. %s\n", i+1, song.Title)
 			}
 		}
-
-		content := songList.String()
-		if len(content) > 2000 {
-			lines := strings.Split(content, "\n")
-			var truncatedList strings.Builder
-			for _, line := range lines {
-				if truncatedList.Len()+len(line)+1 > 2000 { // +1 for newline character
-					break
-				}
-				truncatedList.WriteString(line + "\n")
-			}
-			content = truncatedList.String()
-		}
-
-		s.ChannelMessageSend(m.ChannelID, content)
-	case "add":
-		songs, err := b.fetchSongs(param)
-		if err != nil {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song: %v", err))
-			return
-		}
-		if len(songs) == 0 {
-			s.ChannelMessageSend(m.ChannelID, "No song found.")
-			return
-		}
-		b.Player.Queue = append(b.Player.Queue, songs...)
+		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(songList.String()))
 	case "now":
 		if b.Player.Song != nil {
 			title, source, url, err := b.Player.Song.GetInfo(b.Player.Song)
@@ -247,7 +264,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			}
 			helpMsg.WriteString("\n")
 		}
-		s.ChannelMessageSend(m.ChannelID, helpMsg.String())
+		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(helpMsg.String()))
 
 	case "log":
 		list, err := b.Storage.FetchCommandHistory(m.GuildID)
@@ -255,15 +272,32 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting command history: %v", err))
 			return
 		}
-
-		var logMsg strings.Builder
+		var logList strings.Builder
 		for _, record := range list {
 			if strings.HasPrefix(record.Command, "play") {
 				username := fmt.Sprintf("@%s", record.Username)
-				logMsg.WriteString(fmt.Sprintf("%s %s by %s\n", b.prefix+record.Command, record.Param, username))
+				logList.WriteString(fmt.Sprintf("%s %s by %s\n", b.prefix+record.Command, record.Param, username))
 			}
 		}
-		s.ChannelMessageSend(m.ChannelID, logMsg.String())
+		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(logList.String()))
+	case "tracks":
+		list, err := b.Storage.FetchTrackHistory(m.GuildID)
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting track history: %v", err))
+			return
+		}
+		var tracksList strings.Builder
+		for _, record := range list {
+			totalDuration := time.Duration(record.TotalDuration * float64(time.Second))
+
+			hours := int(totalDuration.Hours())
+			minutes := int(totalDuration.Minutes()) % 60
+			seconds := int(totalDuration.Seconds()) % 60
+
+			durationFormatted := fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+			tracksList.WriteString(fmt.Sprintf("%s - %s (%d plays, %s)\n", record.Title, record.PublicLink, record.TotalCount, durationFormatted))
+		}
+		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(tracksList.String()))
 	}
 }
 
@@ -349,42 +383,51 @@ func (b *Bot) findUserVoiceState(guildID, userID string) (*discordgo.VoiceState,
 	return nil, fmt.Errorf("user not in any voice channel")
 }
 
-func (b *Bot) fetchSongs(param string) ([]*songpkg.Song, error) {
-	param = strings.TrimSpace(param)
-	if param == "" {
+func (b *Bot) fetchSongs(input string) ([]*songpkg.Song, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
 		return nil, fmt.Errorf("no song title or URL provided")
 	}
 
-	fetcher := songpkg.New()
 	var songs []*songpkg.Song
-	var err error
+	songFetcher := songpkg.New()
 
-	urlPattern := `https?://\S+`
-	isURL := regexp.MustCompile(urlPattern).MatchString(param)
-
-	if isURL {
-		urls := regexp.MustCompile(`\s+`).Split(param, -1)
+	if strings.Contains(input, "http://") || strings.Contains(input, "https://") {
+		urls := strings.Fields(input)
 		for _, url := range urls {
-			if !regexp.MustCompile(urlPattern).MatchString(url) {
-				continue
-			}
-			fetchedSongs, err := fetcher.FetchSongs(url)
+			song, err := songFetcher.FetchSongs(url)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch songs from URL %s: %v", url, err)
+				return nil, fmt.Errorf("error fetching songs from URL %s: %w", url, err)
 			}
-			songs = append(songs, fetchedSongs...)
+			songs = append(songs, song...)
 		}
 	} else {
-		songs, err = fetcher.FetchSongs(param)
+		song, err := songFetcher.FetchSongs(input)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch songs for search term '%s': %v", param, err)
+			return nil, fmt.Errorf("error fetching songs for title %q: %w", input, err)
 		}
+		songs = append(songs, song...)
 	}
 
 	if len(songs) == 0 {
-		return nil, fmt.Errorf("no songs found for input '%s'", param)
+		return nil, fmt.Errorf("no songs found for the provided input")
 	}
 	return songs, nil
+}
+
+func (b *Bot) truncatListWithNewlines(content string) string {
+	if len(content) > 2000 {
+		lines := strings.Split(content, "\n")
+		var truncatedList strings.Builder
+		for _, line := range lines {
+			if truncatedList.Len()+len(line)+1 > 2000 { // +1 for newline character
+				break
+			}
+			truncatedList.WriteString(line + "\n")
+		}
+		return truncatedList.String()
+	}
+	return content
 }
 
 // Global Functions
@@ -399,7 +442,7 @@ func loadEnv(path string) {
 }
 
 func main() {
-	loadEnv(".env") // full path is needed for VStudio Debugging
+	loadEnv("./.env") // full path is needed for VStudio Debugging
 
 	token := os.Getenv("DISCORD_TOKEN")
 	if token == "" {
