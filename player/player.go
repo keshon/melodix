@@ -47,11 +47,11 @@ const (
 	StatusPaused
 	StatusError
 
-	ActionStop Signal = iota
-	ActionSkip
-	ActionSwap
-	ActionPauseResume
-	ActionPlay // not used
+	ActionStop        Signal = iota // Stop the player
+	ActionSkip                      // Skip the current song
+	ActionSwap                      // Channel swap
+	ActionPauseResume               // Pause or resume
+	ActionPlay                      // Play
 )
 
 func (status Status) String() string {
@@ -159,10 +159,11 @@ PLAYBACK_LOOP:
 			select {
 			case err := <-done:
 				close(done)
+				// stop if there is an error
 				if err != nil && err != io.EOF {
 					return err
 				}
-
+				// restart if there is an interrupt
 				duration, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
 				if err != nil {
 					return err
@@ -174,9 +175,18 @@ PLAYBACK_LOOP:
 					startAt = position
 					continue PLAYBACK_LOOP
 				}
+				// skip to the next song
+				if len(p.Queue) > 0 {
+					startAt = 0
+					encoding.Stop()
+					encoding.Cleanup()
+					p.Song = nil
+					p.Status = StatusResting
+					continue PLAYBACK_LOOP
+				}
+				// finished
 				fmt.Printf("Finished playback of \"%v\"", p.Song.Title)
 				return nil
-
 			case signal := <-p.Signals:
 				switch signal {
 				case ActionSkip:
@@ -194,10 +204,10 @@ PLAYBACK_LOOP:
 					encoding.Stop()
 					encoding.Cleanup()
 					p.Song = nil
+					p.Queue = nil
 					p.Status = StatusResting
 					return p.leaveVoiceChannel(vc)
 				case ActionSwap:
-					startAt = 0
 					encoding.Stop()
 					encoding.Cleanup()
 					continue PLAYBACK_LOOP

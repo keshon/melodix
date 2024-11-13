@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -31,14 +32,14 @@ var commands = []Command{
 	{"pause", nil, "Pause the current song", "Advanced Playback"},
 
 	{"now", []string{"n"}, "Display the currently playing song", "Information"},
-	{"tracks", nil, "Display music tracks history", "Information"},
-	{"log", []string{"history", "time", "t"}, "Display command history", "Information"},
+	{"stats", []string{"tracks"}, "Display recent playback stats", "Information"},
+	{"log", []string{"history", "time", "t"}, "Display recent playback history", "Information"},
 
 	{"ping", nil, "Check if the bot is responsive", "Utility"},
 	{"set-prefix", nil, "Set a custom command prefix", "Utility"},
 	{"melodix-reset-prefix", nil, "Reset the command prefix to the default `!`", "Utility"},
 
-	{"about", nil, "Information about the bot", "General"},
+	{"about", nil, "About the bot", "General"},
 	{"help", []string{"h", "?"}, "Show this help message", "General"},
 }
 
@@ -170,19 +171,16 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 				buildDate = "invalid date"
 			}
 		}
-
 		goVer := "unknown"
 		if version.GoVersion != "" {
 			goVer = version.GoVersion
 		}
-
 		imagePath := "./assets/about-banner.webp"
 		imageBytes, err := os.Open(imagePath)
 		if err != nil {
 			fmt.Printf("Error opening image: %v", err)
 		}
-
-		embedMsg := embed.NewEmbed().
+		emb := embed.NewEmbed().
 			SetColor(embedColor).
 			SetDescription(fmt.Sprintf("%v\n\n%v — %v", "ℹ️ About", version.AppName, version.AppDescription)).
 			AddField("Made by Innokentiy Sokolov", "[Linkedin](https://www.linkedin.com/in/keshon), [GitHub](https://github.com/keshon), [Homepage](https://keshon.ru)").
@@ -190,9 +188,8 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			AddField("Release:", buildDate+" (go version "+strings.TrimLeft(goVer, "go")+")").
 			SetImage("attachment://" + filepath.Base(imagePath)).
 			MessageEmbed
-
 		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Embeds: []*discordgo.MessageEmbed{embedMsg},
+			Embeds: []*discordgo.MessageEmbed{emb},
 			Files: []*discordgo.File{
 				{
 					Name:   filepath.Base(imagePath),
@@ -202,23 +199,23 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		})
 	case "play":
 		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
+		emb := embed.NewEmbed().SetColor(embedColor)
 		if err != nil || voiceState.ChannelID == "" {
-			s.ChannelMessageSend(m.ChannelID, "You must be in a voice channel to use this command.")
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("You must be in a voice channel to use this command.").MessageEmbed)
 			return
 		}
 		songs, err := b.fetchSongs(param)
 		if err != nil {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song: %v", err))
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting song: %v", err)).MessageEmbed)
 			return
 		}
 		if len(songs) == 0 {
-			s.ChannelMessageSend(m.ChannelID, "No song found.")
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("No song found.").MessageEmbed)
 			return
 		}
 		for _, song := range songs {
 			fmt.Printf("%v - %v (%v)\n", song.Title, song.PublicLink, song.SongID)
 		}
-
 		instance := b.getOrCreatePlayer(m.GuildID)
 		instance.Queue = append(instance.Queue, songs...)
 		instance.GuildID = m.GuildID
@@ -243,27 +240,34 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		instance.Signals <- player.ActionSkip
 	case "pause", "resume":
 		instance := b.getOrCreatePlayer(m.GuildID)
-		instance.Signals <- player.ActionPauseResume
+		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
+		if err != nil || voiceState.ChannelID == "" {
+			emb := embed.NewEmbed().SetColor(embedColor)
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("You must be in a voice channel to use this command.").MessageEmbed)
+			return
+		}
+		if instance.ChannelID != voiceState.ChannelID {
+			instance.ChannelID = voiceState.ChannelID
+			instance.Signals <- player.ActionSwap
+		} else {
+			instance.Signals <- player.ActionPauseResume
+		}
 	case "list":
 		instance := b.getOrCreatePlayer(m.GuildID)
 		songs := instance.Queue
+		emb := embed.NewEmbed().SetColor(embedColor).SetDescription("Queue")
 		if len(songs) == 0 {
-			s.ChannelMessageSend(m.ChannelID, "Queue is empty.")
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Queue is empty.").MessageEmbed)
 			return
 		}
-		embedMessage := embed.NewEmbed().SetColor(embedColor).SetDescription("Queue").MessageEmbed
 		for index, song := range songs {
-			embedMessage.Fields = append(embedMessage.Fields, &discordgo.MessageEmbedField{
+			emb.Fields = append(emb.Fields, &discordgo.MessageEmbedField{
 				Name:   fmt.Sprintf("%d. %s", index+1, song.Title),
 				Value:  fmt.Sprintf("[%s](%s)", song.Title, song.PublicLink),
 				Inline: false,
 			})
 		}
-
-		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Embeds: []*discordgo.MessageEmbed{embedMessage},
-		})
-
+		s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
 	case "help":
 		categoryOrder := []string{"Playback", "Advanced Playback", "Information", "Utility", "General"}
 		categories := make(map[string][]Command)
@@ -287,36 +291,51 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			helpMsg.WriteString("\n")
 		}
 		s.ChannelMessageSend(m.ChannelID, b.truncatListWithNewlines(helpMsg.String()))
-
 	case "log":
-		list, err := b.storage.FetchCommandHistory(m.GuildID)
+		emb := embed.NewEmbed().SetColor(embedColor)
+		records, err := b.storage.FetchCommandHistory(m.GuildID)
 		if err != nil {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting command history: %v", err))
+			emb.SetDescription(fmt.Sprintf("Error getting command history: %v", err))
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
 			return
 		}
-		embedMessage := embed.NewEmbed().SetColor(embedColor).SetDescription("Command History").MessageEmbed
-		for index, command := range list {
+		for i, j := 0, len(records)-1; i < j; i, j = i+1, j-1 {
+			records[i], records[j] = records[j], records[i]
+		}
+		emb.SetDescription("Play History")
+		for _, command := range records {
 			if command.Command != "play" {
 				continue
 			}
-			embedMessage.Fields = append(embedMessage.Fields, &discordgo.MessageEmbedField{
-				Name:   fmt.Sprintf("%d. %s", index+1, command.Command),
-				Value:  fmt.Sprintf("`%s` - `%s`", command.Username, command.Param),
+			emb.Fields = append(emb.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("%s - %s", command.Datetime.Format("2006.01.02 15:04:05"), command.Username),
+				Value:  command.Param,
 				Inline: false,
 			})
 		}
-
-		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Embeds: []*discordgo.MessageEmbed{embedMessage},
-		})
-	case "tracks":
-		tracks, err := b.storage.FetchTrackHistory(m.GuildID)
+		s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
+	case "stats":
+		records, err := b.storage.FetchTrackHistory(m.GuildID)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting track history: %v", err))
 			return
 		}
-		embedMessage := embed.NewEmbed().SetColor(embedColor).SetDescription("Tracks").MessageEmbed
-		for index, track := range tracks {
+		switch param {
+		case "count":
+			sort.Slice(records, func(i, j int) bool {
+				return records[i].TotalCount > records[j].TotalCount
+			})
+		case "date":
+			sort.Slice(records, func(i, j int) bool {
+				return records[i].LastPlayed.After(records[j].LastPlayed)
+			})
+		default:
+			sort.Slice(records, func(i, j int) bool {
+				return records[i].TotalDuration > records[j].TotalDuration
+			})
+		}
+		emb := embed.NewEmbed().SetColor(embedColor).SetDescription("Tracks Statistics").MessageEmbed
+		for index, track := range records {
 			totalDuration := time.Duration(track.TotalDuration * float64(time.Second))
 
 			hours := int(totalDuration.Hours())
@@ -324,31 +343,28 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			seconds := int(totalDuration.Seconds()) % 60
 
 			durationFormatted := fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-			embedMessage.Fields = append(embedMessage.Fields, &discordgo.MessageEmbedField{
+			emb.Fields = append(emb.Fields, &discordgo.MessageEmbedField{
 				Name:   fmt.Sprintf("%d. %s", index+1, track.Title),
-				Value:  fmt.Sprintf("`%s`\t`x%v`\t[Public Link](%s)", durationFormatted, track.TotalCount, track.PublicLink),
+				Value:  fmt.Sprintf("`%s`\t`x%v`\t[%s](%s)", durationFormatted, track.TotalCount, track.SourceType, track.PublicLink),
 				Inline: false,
 			})
 		}
-
 		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Embeds: []*discordgo.MessageEmbed{embedMessage},
+			Embeds: []*discordgo.MessageEmbed{emb},
 		})
-
 	case "set-prefix":
+		emb := embed.NewEmbed().SetColor(embedColor)
 		if len(param) == 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Please provide a prefix.").MessageEmbed)
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Please provide a prefix.").MessageEmbed)
 			return
 		}
 		b.prefixCache[m.GuildID] = param
 		err := b.storage.SavePrefix(m.GuildID, param)
 		if err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Error saving new prefix.").MessageEmbed)
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Error saving new prefix.").MessageEmbed)
 			return
 		}
-
-		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Prefix changed to `"+param+"`\nUse `"+param+"help` for a list of commands.").MessageEmbed)
-
+		s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Prefix changed to `"+param+"`\nUse `"+param+"help` for a list of commands.").MessageEmbed)
 	}
 }
 
