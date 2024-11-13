@@ -1,0 +1,11 @@
+services:
+  app:
+    container_name: ${ALIAS}
+    restart: always
+    image: '${ALIAS}-image'
+    volumes:
+      - ./data/datastore.json:/usr/project/datastore.json
+    environment:
+      - DISCORD_TOKEN
+
+    entrypoint: /usr/project/app

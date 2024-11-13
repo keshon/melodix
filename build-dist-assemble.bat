@@ -29,7 +29,6 @@ copy README.md dist\%TARGET_PLATFORM%
 copy LICENSE dist\%TARGET_PLATFORM%
 copy .env.example dist\%TARGET_PLATFORM%\.env
 xcopy /E /I /Y assets dist\%TARGET_PLATFORM%\assets
-xcopy /E /I /Y docs dist\%TARGET_PLATFORM%\docs
 
 rem Use UPX packer if available, otherwise download and use it
 if not exist %UPX_PATH% (

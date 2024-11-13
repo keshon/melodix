@@ -1,4 +1,4 @@
-datastore.json
+/datastore.json
 .env
 *.exe
 /dist
