@@ -548,7 +548,7 @@ func (b *Bot) truncatListWithNewlines(content string) string {
 // Global Functions
 func loadEnv(path string) {
 	if err := godotenv.Load(path); err != nil {
-		log.Fatal("Error loading .env file")
+		log.Println("Error loading .env file")
 	}
 
 	if os.Getenv("DISCORD_TOKEN") == "" {
