@@ -18,44 +18,44 @@ import (
 )
 
 type Player struct {
-	ChannelID string
-	GuildID   string
-	Session   *discordgo.Session
-	Status    Status
-	Storage   *storage.Storage
-	Song      *songpkg.Song
-	Queue     []*songpkg.Song
-	Signals   chan Signal
+	ChannelID     string
+	GuildID       string
+	Session       *discordgo.Session
+	Storage       *storage.Storage
+	Song          *songpkg.Song
+	Queue         []*songpkg.Song
+	StatusSignals chan StatusSignal
+	ActionSignals chan ActionSignal
 }
 
 func New(ds *discordgo.Session, s *storage.Storage) *Player {
 	return &Player{
-		Session: ds,
-		Status:  StatusResting,
-		Storage: s,
-		Queue:   make([]*songpkg.Song, 0, 10),
-		Signals: make(chan Signal, 1),
+		Session:       ds,
+		Storage:       s,
+		Queue:         make([]*songpkg.Song, 0, 10),
+		StatusSignals: make(chan StatusSignal, 1),
+		ActionSignals: make(chan ActionSignal, 1),
 	}
 }
 
-type Status int32
-type Signal int32
+type StatusSignal int32
+type ActionSignal int32
 
 const (
-	StatusResting Status = iota
-	StatusPlaying
-	StatusPaused
-	StatusError
+	StatusPlaying StatusSignal = iota
+	StatusPaused               // reserved, not used
+	StatusResting              // reserved, not used
+	StatusError                // reserved, not used
 
-	ActionStop        Signal = iota // Stop the player
-	ActionSkip                      // Skip the current song
-	ActionSwap                      // Channel swap
-	ActionPauseResume               // Pause or resume
-	ActionPlay                      // Play
+	ActionStop        ActionSignal = iota // stop the player
+	ActionSkip                            // skip the current song
+	ActionSwap                            // channel swap
+	ActionPauseResume                     // pause or resume
+	ActionPlay                            // play
 )
 
-func (status Status) String() string {
-	m := map[Status]string{
+func (status StatusSignal) String() string {
+	m := map[StatusSignal]string{
 		StatusResting: "Resting",
 		StatusPlaying: "Playing",
 		StatusPaused:  "Paused",
@@ -65,8 +65,8 @@ func (status Status) String() string {
 	return m[status]
 }
 
-func (status Status) StringEmoji() string {
-	m := map[Status]string{
+func (status StatusSignal) StringEmoji() string {
+	m := map[StatusSignal]string{
 		StatusResting: "💤",
 		StatusPlaying: "▶️",
 		StatusPaused:  "⏸",
@@ -121,10 +121,8 @@ PLAYBACK_LOOP:
 		done := make(chan error)
 		// defer close(done)
 
-		p.Status = StatusResting
 		streaming := dca.NewStream(encoding, vc, done)
-		p.Status = StatusPlaying
-		p.Signals <- ActionPlay
+		p.StatusSignals <- StatusPlaying
 
 		if startAt == 0 {
 			err := p.Storage.AddTrackCountByOne(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink)
@@ -181,13 +179,12 @@ PLAYBACK_LOOP:
 					encoding.Stop()
 					encoding.Cleanup()
 					p.Song = nil
-					p.Status = StatusResting
 					continue PLAYBACK_LOOP
 				}
 				// finished
 				fmt.Printf("Finished playback of \"%v\"", p.Song.Title)
 				return nil
-			case signal := <-p.Signals:
+			case signal := <-p.ActionSignals:
 				switch signal {
 				case ActionSkip:
 					if len(p.Queue) > 0 {
@@ -195,17 +192,15 @@ PLAYBACK_LOOP:
 						encoding.Stop()
 						encoding.Cleanup()
 						p.Song = nil
-						p.Status = StatusResting
 						continue PLAYBACK_LOOP
 					}
-					p.Signals <- ActionStop
+					p.ActionSignals <- ActionStop
 				case ActionStop:
 					startAt = 0
 					encoding.Stop()
 					encoding.Cleanup()
 					p.Song = nil
 					p.Queue = nil
-					p.Status = StatusResting
 					return p.leaveVoiceChannel(vc)
 				case ActionSwap:
 					encoding.Stop()
@@ -214,11 +209,9 @@ PLAYBACK_LOOP:
 				case ActionPauseResume:
 					if streaming.Paused() {
 						streaming.SetPaused(false)
-						p.Status = StatusPlaying
 						vc.Speaking(true)
 					} else {
 						streaming.SetPaused(true)
-						p.Status = StatusPaused
 						vc.Speaking(false)
 					}
 				}

@@ -59,14 +59,14 @@ type SongSource int32
 const (
 	SourceYouTube SongSource = iota
 	SourceRadioStream
-	SourceLocalFile
+	SourceLocalFile // reserved, not used
 )
 
 func (source SongSource) String() string {
 	sources := map[SongSource]string{
 		SourceYouTube:     "YouTube",
 		SourceRadioStream: "RadioStream",
-		SourceLocalFile:   "LocalFile", // not implemented
+		SourceLocalFile:   "LocalFile", // reserved, not used
 	}
 
 	return sources[source]
@@ -77,7 +77,6 @@ func New() *Song {
 }
 
 func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
-
 	switch {
 	case isYoutubeURL(urlOrTitle):
 		if strings.Contains(urlOrTitle, "list=") {

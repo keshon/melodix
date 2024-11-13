@@ -92,7 +92,7 @@ func (b *Bot) Start() error {
 
 func (b *Bot) Shutdown() {
 	for _, instance := range b.players {
-		instance.Signals <- player.ActionStop
+		instance.ActionSignals <- player.ActionStop
 	}
 	if err := b.session.Close(); err != nil {
 		log.Println("Error closing connection:", err)
@@ -111,6 +111,7 @@ func (b *Bot) configureIntents() {
 func (b *Bot) registerEventHandlers() {
 	b.session.AddHandler(b.onReady)
 	b.session.AddHandler(b.onMessageCreate)
+	b.session.AddHandler(b.onPlayback)
 }
 
 // Event Handlers
@@ -224,20 +225,22 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	case "now":
 		instance := b.getOrCreatePlayer(m.GuildID)
 		if instance.Song != nil {
-			title, source, url, err := instance.Song.GetInfo(instance.Song)
-			if err != nil {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error getting song info: %v", err))
+			emb := embed.NewEmbed().SetColor(embedColor)
+			emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), instance.Song.Title, instance.Song.Source, instance.Song.PublicLink))
+			if len(instance.Song.Thumbnail.URL) > 0 {
+				emb.SetThumbnail(instance.Song.Thumbnail.URL)
 			}
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing from %s:\n[%s](%s)", source, title, url))
+			emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
 			return
 		}
 		s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
 	case "stop":
 		instance := b.getOrCreatePlayer(m.GuildID)
-		instance.Signals <- player.ActionStop
+		instance.ActionSignals <- player.ActionStop
 	case "skip":
 		instance := b.getOrCreatePlayer(m.GuildID)
-		instance.Signals <- player.ActionSkip
+		instance.ActionSignals <- player.ActionSkip
 	case "pause", "resume":
 		instance := b.getOrCreatePlayer(m.GuildID)
 		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
@@ -248,9 +251,9 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 		if instance.ChannelID != voiceState.ChannelID {
 			instance.ChannelID = voiceState.ChannelID
-			instance.Signals <- player.ActionSwap
+			instance.ActionSignals <- player.ActionSwap
 		} else {
-			instance.Signals <- player.ActionPauseResume
+			instance.ActionSignals <- player.ActionPauseResume
 		}
 	case "list":
 		instance := b.getOrCreatePlayer(m.GuildID)
@@ -349,9 +352,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 				Inline: false,
 			})
 		}
-		s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Embeds: []*discordgo.MessageEmbed{emb},
-		})
+		s.ChannelMessageSendEmbed(m.ChannelID, emb)
 	case "set-prefix":
 		emb := embed.NewEmbed().SetColor(embedColor)
 		if len(param) == 0 {
@@ -366,6 +367,29 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 		s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Prefix changed to `"+param+"`\nUse `"+param+"help` for a list of commands.").MessageEmbed)
 	}
+}
+
+func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.Author.ID == s.State.User.ID {
+		return
+	}
+	go func() {
+		instance := b.getOrCreatePlayer(m.GuildID)
+		signal := <-instance.StatusSignals
+		if signal == player.StatusPlaying {
+			if instance.Song != nil {
+				emb := embed.NewEmbed().SetColor(embedColor)
+				emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), instance.Song.Title, instance.Song.Source, instance.Song.PublicLink))
+				if len(instance.Song.Thumbnail.URL) > 0 {
+					emb.SetThumbnail(instance.Song.Thumbnail.URL)
+				}
+				emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
+				s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
+				return
+			}
+			s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
+		}
+	}()
 }
 
 // Utility Methods

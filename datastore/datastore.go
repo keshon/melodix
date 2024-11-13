@@ -11,11 +11,11 @@ import (
 )
 
 type DataStore struct {
-	data   map[string]interface{} // In-memory data storage
-	file   string                 // File path for persistent storage
-	mu     sync.RWMutex           // Mutex for thread-safe access
-	ticker *time.Ticker           // Ticker for periodic saving
-	done   chan bool              // Channel for shutting down the auto-save
+	data   map[string]interface{} // in-memory data storage
+	file   string                 // file path for persistent storage
+	mu     sync.RWMutex           // mutex for thread-safe access
+	ticker *time.Ticker           // ticker for periodic saving
+	done   chan bool              // channel for shutting down the auto-save
 }
 
 func New(filePath string) (*DataStore, error) {
@@ -38,8 +38,8 @@ func New(filePath string) (*DataStore, error) {
 		return nil, fmt.Errorf("failed to check file existence: %v", err)
 	}
 
-	go store.autoSave()    // Start the auto-save routine
-	store.handleShutdown() // Setup graceful shutdown
+	go store.autoSave()    // start the auto-save routine
+	store.handleShutdown() // setup graceful shutdown
 
 	return store, nil
 }
