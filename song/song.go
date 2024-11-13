@@ -38,14 +38,14 @@ var (
 )
 
 type Song struct {
-	Title          string        // Title of the song
-	PublicLink     string        // Link to the song page
+	Title          string        // title of the song
+	PublicLink     string        // link to the song page
 	StreamURL      string        // URL for streaming the song
-	StreamFilepath string        // Path for streaming the song
-	Thumbnail      Thumbnail     // Thumbnail image for the song
-	Duration       time.Duration // Duration of the song
-	SongID         string        // Unique ID for the song
-	Source         SongSource    // Source type of the song
+	StreamFilepath string        // path for streaming the song
+	Thumbnail      Thumbnail     // thumbnail image for the song
+	Duration       time.Duration // duration of the song
+	SongID         string        // unique ID for the song
+	Source         SongSource    // source type of the song
 }
 
 type Thumbnail struct {

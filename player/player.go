@@ -121,6 +121,8 @@ PLAYBACK_LOOP:
 		done := make(chan error)
 		// defer close(done)
 
+		time.Sleep(250 * time.Millisecond) // questionable
+
 		streaming := dca.NewStream(encoding, vc, done)
 		p.StatusSignals <- StatusPlaying
 

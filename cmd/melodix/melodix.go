@@ -266,7 +266,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		for index, song := range songs {
 			emb.Fields = append(emb.Fields, &discordgo.MessageEmbedField{
 				Name:   fmt.Sprintf("%d. %s", index+1, song.Title),
-				Value:  fmt.Sprintf("[%s](%s)", song.Title, song.PublicLink),
+				Value:  fmt.Sprintf("[%s](%s)", song.Source, song.PublicLink),
 				Inline: false,
 			})
 		}
