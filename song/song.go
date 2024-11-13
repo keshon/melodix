@@ -87,7 +87,7 @@ func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
 			song, err := s.fetchYoutubeSong(urlOrTitle)
 
 			if err != nil {
-				return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
+				return nil, err
 			}
 			return []*Song{song}, nil
 		}
@@ -95,19 +95,19 @@ func (s *Song) FetchSongs(urlOrTitle string) ([]*Song, error) {
 		song, err := s.fetchInternetRadioSong(urlOrTitle)
 
 		if err != nil {
-			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
+			return nil, err
 		}
 		return []*Song{song}, nil
 	default:
 		var videoURL string
 		videoURL, err := youtubeClient.FetchVideoURLByTitle(urlOrTitle) // url is the song title
 		if err != nil {
-			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
+			return nil, err
 		}
 
 		song, err := s.fetchYoutubeSong(videoURL)
 		if err != nil {
-			return nil, fmt.Errorf("error fetching song for %s: %w", urlOrTitle, err)
+			return nil, err
 		}
 		return []*Song{song}, nil
 	}
@@ -130,6 +130,9 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 
 	song, err := kkdaiClient.GetVideo(id)
 	if err != nil {
+		if strings.Contains(err.Error(), "UNPLAYABLE") {
+			return nil, fmt.Errorf("YouTube video is unplayable, possibly due to `region restrictions` or other issues.\n\n¯\\_(ツ)_/¯")
+		}
 		return nil, err
 	}
 

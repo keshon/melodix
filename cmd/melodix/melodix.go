@@ -153,12 +153,6 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	err = b.saveCommandHistory(m.GuildID, m.ChannelID, m.Author.ID, m.Author.Username, cmd.Name, param)
-	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error saving command info: %v", err))
-		return
-	}
-
 	switch cmd.Name {
 	case "ping":
 		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Pong!").MessageEmbed)
@@ -199,6 +193,12 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			},
 		})
 	case "play":
+		err = b.saveCommandHistory(m.GuildID, m.ChannelID, m.Author.ID, m.Author.Username, cmd.Name, param)
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error saving command info: %v", err))
+			return
+		}
+
 		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
 		emb := embed.NewEmbed().SetColor(embedColor)
 		if err != nil || voiceState.ChannelID == "" {
@@ -207,7 +207,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 		songs, err := b.fetchSongs(param)
 		if err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting song: %v", err)).MessageEmbed)
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
 			return
 		}
 		if len(songs) == 0 {
@@ -376,7 +376,8 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 	go func() {
 		instance := b.getOrCreatePlayer(m.GuildID)
 		signal := <-instance.StatusSignals
-		if signal == player.StatusPlaying {
+		switch signal {
+		case player.StatusPlaying:
 			if instance.Song != nil {
 				emb := embed.NewEmbed().SetColor(embedColor)
 				emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), instance.Song.Title, instance.Song.Source, instance.Song.PublicLink))
@@ -388,7 +389,10 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 				return
 			}
 			s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
+		case player.StatusResuming:
+			s.ChannelMessageSend(m.ChannelID, "Disconnect detected. Resuming playback...")
 		}
+
 	}()
 }
 
@@ -512,14 +516,14 @@ func (b *Bot) fetchSongs(input string) ([]*songpkg.Song, error) {
 		for _, url := range urls {
 			song, err := songFetcher.FetchSongs(url)
 			if err != nil {
-				return nil, fmt.Errorf("error fetching songs from URL %s: %w", url, err)
+				return nil, err
 			}
 			songs = append(songs, song...)
 		}
 	} else {
 		song, err := songFetcher.FetchSongs(input)
 		if err != nil {
-			return nil, fmt.Errorf("error fetching songs for title %q: %w", input, err)
+			return nil, err
 		}
 		songs = append(songs, song...)
 	}

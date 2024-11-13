@@ -43,9 +43,10 @@ type ActionSignal int32
 
 const (
 	StatusPlaying StatusSignal = iota
-	StatusPaused               // reserved, not used
-	StatusResting              // reserved, not used
-	StatusError                // reserved, not used
+	StatusResuming
+	StatusPaused  // reserved, not used
+	StatusResting // reserved, not used
+	StatusError   // reserved, not used
 
 	ActionStop        ActionSignal = iota // stop the player
 	ActionSkip                            // skip the current song
@@ -56,10 +57,11 @@ const (
 
 func (status StatusSignal) String() string {
 	m := map[StatusSignal]string{
-		StatusResting: "Resting",
-		StatusPlaying: "Playing",
-		StatusPaused:  "Paused",
-		StatusError:   "Error",
+		StatusResting:  "Resting",
+		StatusPlaying:  "Playing",
+		StatusResuming: "Resuming",
+		StatusPaused:   "Paused",
+		StatusError:    "Error",
 	}
 
 	return m[status]
@@ -67,10 +69,11 @@ func (status StatusSignal) String() string {
 
 func (status StatusSignal) StringEmoji() string {
 	m := map[StatusSignal]string{
-		StatusResting: "💤",
-		StatusPlaying: "▶️",
-		StatusPaused:  "⏸",
-		StatusError:   "❌",
+		StatusResting:  "💤",
+		StatusPlaying:  "▶️",
+		StatusResuming: "▶️",
+		StatusPaused:   "⏸",
+		StatusError:    "❌",
 	}
 
 	return m[status]
@@ -124,7 +127,11 @@ PLAYBACK_LOOP:
 		time.Sleep(250 * time.Millisecond) // questionable
 
 		streaming := dca.NewStream(encoding, vc, done)
-		p.StatusSignals <- StatusPlaying
+		if startAt == 0 {
+			p.StatusSignals <- StatusPlaying
+		} else {
+			p.StatusSignals <- StatusResuming
+		}
 
 		if startAt == 0 {
 			err := p.Storage.AddTrackCountByOne(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink)

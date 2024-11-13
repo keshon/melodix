@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	commandHistoryLimit int = 100
-	tracksHistoryLimit  int = 30
+	commandHistoryLimit int = 20
+	tracksHistoryLimit  int = 12
 )
 
 type Storage struct {
