@@ -226,7 +226,12 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		instance := b.getOrCreatePlayer(m.GuildID)
 		if instance.Song != nil {
 			emb := embed.NewEmbed().SetColor(embedColor)
-			emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), instance.Song.Title, instance.Song.Source, instance.Song.PublicLink))
+			title, source, publicLink, err := instance.Song.GetInfo(instance.Song)
+			if err != nil {
+				s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
+				return
+			}
+			emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), title, source, publicLink))
 			if len(instance.Song.Thumbnail.URL) > 0 {
 				emb.SetThumbnail(instance.Song.Thumbnail.URL)
 			}
@@ -328,7 +333,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			sort.Slice(records, func(i, j int) bool {
 				return records[i].TotalCount > records[j].TotalCount
 			})
-		case "date":
+		case "date", "recent":
 			sort.Slice(records, func(i, j int) bool {
 				return records[i].LastPlayed.After(records[j].LastPlayed)
 			})
@@ -380,7 +385,12 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 		case player.StatusPlaying:
 			if instance.Song != nil {
 				emb := embed.NewEmbed().SetColor(embedColor)
-				emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), instance.Song.Title, instance.Song.Source, instance.Song.PublicLink))
+				title, source, publicLink, err := instance.Song.GetInfo(instance.Song)
+				if err != nil {
+					s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
+					return
+				}
+				emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), title, source, publicLink))
 				if len(instance.Song.Thumbnail.URL) > 0 {
 					emb.SetThumbnail(instance.Song.Thumbnail.URL)
 				}
