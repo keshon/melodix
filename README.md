@@ -1,5 +1,6 @@
 ![# Header](https://raw.githubusercontent.com/keshon/melodix/master/assets/readme-banner.webp)
 
+![Go report](https://goreportcard.com/badge/keshon/melodix)
 # 🎵 Melodix — Self-hosted Discord music bot
 
 Melodix is my pet project written in Go that plays audio from YouTube and audio streaming links to Discord voice channels. It's a continuation of my original buggy [prototype](https://github.com/keshon/melodix-player).
