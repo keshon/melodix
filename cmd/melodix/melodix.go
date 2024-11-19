@@ -198,7 +198,6 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error saving command info: %v", err))
 			return
 		}
-
 		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
 		emb := embed.NewEmbed().SetColor(embedColor)
 		if err != nil || voiceState.ChannelID == "" {
@@ -221,6 +220,10 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		instance.Queue = append(instance.Queue, songs...)
 		instance.GuildID = m.GuildID
 		instance.ChannelID = voiceState.ChannelID
+		if instance.Song != nil {
+			instance.StatusSignals <- player.StatusAdded
+			return
+		}
 		instance.Play()
 	case "now":
 		instance := b.getOrCreatePlayer(m.GuildID)
@@ -401,6 +404,9 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
 		case player.StatusResuming:
 			s.ChannelMessageSend(m.ChannelID, "Disconnect detected. Resuming playback...")
+		case player.StatusAdded:
+			desc := fmt.Sprintf("Song(s) added to queue\n\nUse `%slist` to see the current queue.", b.prefixCache[m.GuildID])
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription(desc).MessageEmbed)
 		}
 
 	}()

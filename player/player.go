@@ -44,6 +44,7 @@ type ActionSignal int32
 const (
 	StatusPlaying StatusSignal = iota
 	StatusResuming
+	StatusAdded
 	StatusPaused  // reserved, not used
 	StatusResting // reserved, not used
 	StatusError   // reserved, not used
