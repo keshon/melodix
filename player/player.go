@@ -99,7 +99,7 @@ PLAYBACK_LOOP:
 		}
 
 		options := dca.StdEncodeOptions
-		options.RawOutput = false
+		options.RawOutput = true
 		options.Bitrate = 96
 		options.Application = "lowdelay"
 		options.FrameDuration = 20
