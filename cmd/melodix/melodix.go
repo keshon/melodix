@@ -224,7 +224,11 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			instance.StatusSignals <- player.StatusAdded
 			return
 		}
-		instance.Play()
+		err = instance.Play()
+		if err != nil {
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error playing this song(s)\n\n%v", err)).MessageEmbed)
+			return
+		}
 	case "now":
 		instance := b.getOrCreatePlayer(m.GuildID)
 		if instance.Song != nil {
@@ -582,6 +586,11 @@ func main() {
 	token := os.Getenv("DISCORD_TOKEN")
 	if token == "" {
 		log.Fatal("Discord token not found in environment variables")
+	}
+
+	err := os.RemoveAll("./cache")
+	if err != nil {
+		log.Fatal("Failed to remove cache folder:", err)
 	}
 
 	bot, err := NewBot(token)

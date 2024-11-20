@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	kkdaiClient = &kkdai_youtube.Client{HTTPClient: &http.Client{
+	KkdaiClient = &kkdai_youtube.Client{HTTPClient: &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
@@ -38,14 +38,15 @@ var (
 )
 
 type Song struct {
-	Title          string        // title of the song
-	PublicLink     string        // link to the song page
-	StreamURL      string        // URL for streaming the song
-	StreamFilepath string        // path for streaming the song
-	Thumbnail      Thumbnail     // thumbnail image for the song
-	Duration       time.Duration // duration of the song
-	SongID         string        // unique ID for the song
-	Source         SongSource    // source type of the song
+	Title          string               // title of the song
+	PublicLink     string               // link to the song page
+	StreamURL      string               // URL for streaming the song
+	StreamFilepath string               // path for streaming the song
+	Thumbnail      Thumbnail            // thumbnail image for the song
+	Duration       time.Duration        // duration of the song
+	SongID         string               // unique ID for the song
+	Source         SongSource           // source type of the song
+	YTVideo        *kkdai_youtube.Video // YouTube video data from `kkdai_youtube`
 }
 
 type Thumbnail struct {
@@ -128,7 +129,7 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 		return nil, err
 	}
 
-	song, err := kkdaiClient.GetVideo(id)
+	song, err := KkdaiClient.GetVideo(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNPLAYABLE") {
 			return nil, fmt.Errorf("YouTube video is unplayable, possibly due to `region restrictions` or other issues.\n\n¯\\_(ツ)_/¯")
@@ -149,12 +150,13 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 		Thumbnail:  thumbnail,
 		SongID:     song.ID,
 		Source:     SourceYouTube,
+		YTVideo:    song,
 	}, nil
 }
 
 func (s *Song) fetchYoutubePlaylist(url string) ([]*Song, error) {
 	var songs []*Song
-	playlist, err := kkdaiClient.GetPlaylist(url)
+	playlist, err := KkdaiClient.GetPlaylist(url)
 
 	// Check if it's a YouTube Mix Playlist that `kkdai_youtube` doesn't natively support
 	if err != nil && err.Error() == "extractPlaylistID failed: no playlist detected or invalid playlist ID" {

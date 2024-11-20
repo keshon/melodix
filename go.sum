@@ -35,6 +35,8 @@ github.com/keshon/dca v0.0.0-20241106165959-f1fae4d97d2f h1:4oRP1Nn/pDSYyJZg5nwo
 github.com/keshon/dca v0.0.0-20241106165959-f1fae4d97d2f/go.mod h1:maGlBOOyhUs5nFdugH6qYUX888o7zjUJGzq5prcTiAU=
 github.com/keshon/dca v0.0.0-20241113154212-6bf790cdf754 h1:drSs6o1mBsf2JJ6q0Eb/PgZ+rbb89ZtKllPczod2GYU=
 github.com/keshon/dca v0.0.0-20241113154212-6bf790cdf754/go.mod h1:maGlBOOyhUs5nFdugH6qYUX888o7zjUJGzq5prcTiAU=
+github.com/keshon/dca v0.0.0-20241119062450-6c1ff3cca196 h1:UwqbMmvf1f9rwLlwqZ+MO6gSFqZQ58/sONbntsEuzR0=
+github.com/keshon/dca v0.0.0-20241119062450-6c1ff3cca196/go.mod h1:maGlBOOyhUs5nFdugH6qYUX888o7zjUJGzq5prcTiAU=
 github.com/kkdai/youtube/v2 v2.10.1 h1:jdPho4R7VxWoRi9Wx4ULMq4+hlzSVOXxh4Zh83f2F9M=
 github.com/kkdai/youtube/v2 v2.10.1/go.mod h1:qL8JZv7Q1IoDs4nnaL51o/hmITXEIvyCIXopB0oqgVM=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=

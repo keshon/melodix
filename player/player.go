@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -99,22 +99,44 @@ PLAYBACK_LOOP:
 		}
 
 		options := dca.StdEncodeOptions
-		options.RawOutput = true
+		options.RawOutput = false
 		options.Bitrate = 96
 		options.Application = "lowdelay"
 		options.FrameDuration = 20
-		options.BufferedFrames = 200
+		options.BufferedFrames = 400
 		options.CompressionLevel = 10
 		options.VBR = true
 		options.VolumeFloat = 1.0
 		options.StartTime = startAt
 		options.EncodingLineLog = true
 
-		encoding, err := dca.EncodeFile(p.Song.StreamURL, options)
+		streamPath := p.Song.StreamURL
+
+		if p.Song.YTVideo != nil && p.Song.YTVideo.Duration > 0 && p.Song.YTVideo.Duration.Seconds() > 60 && p.Song.YTVideo.Duration.Seconds() <= 600 && startAt == 0 {
+			stream, _, err := songpkg.KkdaiClient.GetStream(p.Song.YTVideo, &p.Song.YTVideo.Formats.WithAudioChannels()[0])
+			if err != nil {
+				return err
+			}
+			defer stream.Close()
+
+			streamPath, err = p.streamToFile(stream)
+			if err != nil {
+				return err
+			}
+			defer os.Remove(streamPath)
+		}
+
+		encoding, err := dca.EncodeFile(streamPath, options)
 		if err != nil {
 			return err
 		}
-		defer encoding.Cleanup()
+		defer func() {
+			startAt = 0
+			encoding.Stop()
+			encoding.Cleanup()
+			p.Song = nil
+			p.Queue = nil
+		}()
 
 		vc, err := p.joinVoiceChannel(p.Session, p.GuildID, p.ChannelID)
 		if err != nil {
@@ -124,8 +146,6 @@ PLAYBACK_LOOP:
 
 		done := make(chan error)
 		// defer close(done)
-
-		time.Sleep(250 * time.Millisecond) // questionable
 
 		streaming := dca.NewStream(encoding, vc, done)
 		if startAt == 0 {
@@ -206,11 +226,6 @@ PLAYBACK_LOOP:
 					}
 					p.ActionSignals <- ActionStop
 				case ActionStop:
-					startAt = 0
-					encoding.Stop()
-					encoding.Cleanup()
-					p.Song = nil
-					p.Queue = nil
 					return p.leaveVoiceChannel(vc)
 				case ActionSwap:
 					encoding.Stop()
@@ -228,6 +243,25 @@ PLAYBACK_LOOP:
 			}
 		}
 	}
+}
+func (s *Player) streamToFile(stream io.Reader) (string, error) {
+	cacheDir := "./cache"
+	if err := os.MkdirAll(cacheDir, os.ModePerm); err != nil {
+		return "", fmt.Errorf("failed to create cache directory: %v", err)
+	}
+
+	tempFile, err := os.CreateTemp(cacheDir, "*.mp4")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %v", err)
+	}
+	defer tempFile.Close()
+
+	_, err = io.Copy(tempFile, stream)
+	if err != nil {
+		return "", fmt.Errorf("failed to write stream to temp file: %v", err)
+	}
+
+	return tempFile.Name(), nil
 }
 
 func (p *Player) joinVoiceChannel(session *discordgo.Session, guildID, channelID string) (*discordgo.VoiceConnection, error) {
@@ -268,15 +302,7 @@ func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca
 	var err error
 	switch song.Source {
 	case songpkg.SourceYouTube:
-		parsedURL, err := url.Parse(song.StreamURL)
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to parse URL: %v", err)
-		}
-		duration := parsedURL.Query().Get("dur")
-		songDuration, err = p.parseDurationFromString(duration)
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to parse duration: %v", err)
-		}
+		songDuration = song.Duration
 	case songpkg.SourceLocalFile:
 		songDuration, err = p.fetchMP3Duration(song.StreamFilepath)
 		if err != nil {
@@ -292,14 +318,6 @@ func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca
 	fmt.Printf("Encoding started at:\t%s,\tStreaming delay:\t%s\n", encodingStartTime, streamingDelay)
 
 	return songDuration, playbackPos, nil
-}
-
-func (p *Player) parseDurationFromString(durationStr string) (time.Duration, error) {
-	dur, err := strconv.ParseFloat(durationStr, 64)
-	if err != nil {
-		return 0, err
-	}
-	return time.Duration(dur * float64(time.Second)), nil
 }
 
 func (p *Player) fetchMP3Duration(filePath string) (time.Duration, error) {
