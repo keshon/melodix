@@ -112,19 +112,24 @@ PLAYBACK_LOOP:
 
 		streamPath := p.Song.StreamURL
 
-		if p.Song.YTVideo != nil && p.Song.YTVideo.Duration > 0 && p.Song.YTVideo.Duration.Seconds() > 60 && p.Song.YTVideo.Duration.Seconds() <= 600 && startAt == 0 {
-			stream, _, err := songpkg.KkdaiClient.GetStream(p.Song.YTVideo, &p.Song.YTVideo.Formats.WithAudioChannels()[0])
-			if err != nil {
-				return err
-			}
-			defer stream.Close()
+		// // caching
+		// if p.Song.YTVideo != nil && p.Song.YTVideo.Duration > 0 && p.Song.YTVideo.Duration.Seconds() > 60 && p.Song.YTVideo.Duration.Seconds() <= 600 && startAt == 0 {
+		// 	stream, _, err := songpkg.KkdaiClient.GetStream(p.Song.YTVideo, &p.Song.YTVideo.Formats.WithAudioChannels()[0])
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// 	defer stream.Close()
 
-			streamPath, err = p.streamToFile(stream)
-			if err != nil {
-				return err
-			}
-			defer os.Remove(streamPath)
-		}
+		// 	if stream == nil {
+		// 		return fmt.Errorf("stream is nil")
+		// 	}
+
+		// 	streamPath, err = p.streamToFile(stream)
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// 	defer os.Remove(streamPath)
+		// }
 
 		encoding, err := dca.EncodeFile(streamPath, options)
 		if err != nil {
@@ -262,6 +267,51 @@ func (s *Player) streamToFile(stream io.Reader) (string, error) {
 	}
 
 	return tempFile.Name(), nil
+}
+
+func (p *Player) streamToFileWithRetry(streamProvider func() (io.Reader, error), retries int, delay time.Duration) (string, error) {
+	cacheDir := "./cache"
+	if err := os.MkdirAll(cacheDir, os.ModePerm); err != nil {
+		return "", fmt.Errorf("failed to create cache directory: %v", err)
+	}
+
+	var tempFilePath string
+	var err error
+
+	for attempt := 1; attempt <= retries; attempt++ {
+		fmt.Printf("Attempt %d/%d to write stream to file...\n", attempt, retries)
+
+		// Create a new stream for each attempt
+		stream, err := streamProvider()
+		if err != nil {
+			fmt.Printf("Error retrieving stream on attempt %d: %v\n", attempt, err)
+			time.Sleep(delay)
+			continue
+		}
+
+		// Create a temporary file
+		tempFile, err := os.CreateTemp(cacheDir, "*.mp4")
+		if err != nil {
+			return "", fmt.Errorf("failed to create temp file: %v", err)
+		}
+		tempFilePath = tempFile.Name()
+		defer tempFile.Close()
+
+		// Write the stream to the file
+		written, err := io.Copy(tempFile, stream)
+		if err == nil && written > 0 {
+			fmt.Printf("Successfully wrote %d bytes to %s\n", written, tempFilePath)
+			return tempFilePath, nil
+		}
+
+		// Clean up and retry if writing failed
+		fmt.Printf("Error writing stream on attempt %d: %v\n", attempt, err)
+		os.Remove(tempFilePath) // Clean up the failed file
+		time.Sleep(delay)
+		delay *= 2 // Exponential backoff
+	}
+
+	return "", fmt.Errorf("failed to write stream to file after %d attempts: %v", retries, err)
 }
 
 func (p *Player) joinVoiceChannel(session *discordgo.Session, guildID, channelID string) (*discordgo.VoiceConnection, error) {

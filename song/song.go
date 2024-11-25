@@ -17,6 +17,7 @@ import (
 
 	"github.com/keshon/melodix/stream"
 	"github.com/keshon/melodix/youtube"
+	"github.com/keshon/melodix/yt_dlp"
 	kkdai_youtube "github.com/kkdai/youtube/v2"
 )
 
@@ -137,6 +138,11 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 		return nil, err
 	}
 
+	songStreamURL, err := yt_dlp.New().GetStreamURL(url) // a fix due to kkdai is broken atm
+	if err != nil {
+		return nil, err
+	}
+
 	var thumbnail Thumbnail
 	if len(song.Thumbnails) > 0 {
 		thumbnail = Thumbnail(song.Thumbnails[0])
@@ -145,7 +151,7 @@ func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
 	return &Song{
 		Title:      song.Title,
 		PublicLink: url,
-		StreamURL:  song.Formats.WithAudioChannels()[0].URL,
+		StreamURL:  songStreamURL, //song.Formats.WithAudioChannels()[0].URL,
 		Duration:   song.Duration,
 		Thumbnail:  thumbnail,
 		SongID:     song.ID,
