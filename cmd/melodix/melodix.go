@@ -531,22 +531,11 @@ func (b *Bot) fetchSongs(input string) ([]*songpkg.Song, error) {
 	var songs []*songpkg.Song
 	songFetcher := songpkg.New()
 
-	if strings.Contains(input, "http://") || strings.Contains(input, "https://") {
-		urls := strings.Fields(input)
-		for _, url := range urls {
-			song, err := songFetcher.FetchSongs(url)
-			if err != nil {
-				return nil, err
-			}
-			songs = append(songs, song...)
-		}
-	} else {
-		song, err := songFetcher.FetchSongs(input)
-		if err != nil {
-			return nil, err
-		}
-		songs = append(songs, song...)
+	song, err := songFetcher.FetchSongs(input)
+	if err != nil {
+		return nil, err
 	}
+	songs = append(songs, song...)
 
 	if len(songs) == 0 {
 		return nil, fmt.Errorf("no songs found for the provided input")
