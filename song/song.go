@@ -37,15 +37,14 @@ var (
 )
 
 type Song struct {
-	Title          string               // title of the song
-	PublicLink     string               // link to the song page
-	StreamURL      string               // URL for streaming the song
-	StreamFilepath string               // path for streaming the song
-	Thumbnail      Thumbnail            // thumbnail image for the song
-	Duration       time.Duration        // duration of the song
-	SongID         string               // unique ID for the song
-	Source         SongSource           // source type of the song
-	YTVideo        *kkdai_youtube.Video // YouTube video data from `kkdai_youtube`
+	Title          string        // title of the song
+	PublicLink     string        // link to the song page
+	StreamURL      string        // URL for streaming the song
+	StreamFilepath string        // path for streaming the song
+	Thumbnail      Thumbnail     // thumbnail image for the song
+	Duration       time.Duration // duration of the song
+	SongID         string        // unique ID for the song
+	Source         SongSource    // source type of the song
 }
 
 type Thumbnail struct {
@@ -94,7 +93,7 @@ func (s *Song) FetchSongs(URLsOrTitle string) ([]*Song, error) {
 		}
 
 		if len(ytDlpURLs) > 0 {
-			for _, URL := range ytDlpURLs {
+			for _, url := range ytDlpURLs {
 				// if !isYoutubeURL(URL) {
 				// 	song, err := s.fetchYoutubeSong(URL)
 				// 	if err != nil {
@@ -102,7 +101,7 @@ func (s *Song) FetchSongs(URLsOrTitle string) ([]*Song, error) {
 				// 	}
 				// 	songs = append(songs, song)
 				// } else {
-				song, err := s.fetchYtdlpSong(URL) // TODO: write new method for retrieveing song from yt-dlp
+				song, err := s.fetchYtdlpSong(url)
 				if err != nil {
 					return nil, err
 				}
@@ -132,7 +131,10 @@ func (s *Song) FetchSongs(URLsOrTitle string) ([]*Song, error) {
 		}
 		songs = append(songs, song...)
 	}
-
+	fmt.Println(len(songs))
+	for _, song := range songs {
+		fmt.Println(song)
+	}
 	return songs, nil
 }
 func isYoutubeURL(url string) bool {
@@ -368,334 +370,33 @@ func (s *Song) CheckLink(link string) bool {
 }
 
 var ytDlpSupported = []string{
-	"17live",
-	"1news.co.nz",
-	"1tv",
-	"20min",
-	"23video",
-	"247sports",
-	"24tv.ua",
-	"3qsdn",
-	"3sat",
-	"4tube",
-	"56.com",
-	"6play",
-	"7plus",
-	"8tracks",
-	"9c9media",
-	"9gag",
-	"9news",
-	"9now.com.au",
-	"abc.net.au",
-	"abcnews",
-	"abcotvs",
-	"abematv",
-	"academicearth",
-	"acast",
-	"acfunbangumi",
-	"acfunvideo",
-	"animationdigitalnetwork",
-	"adobeconnect",
-	"adobetv",
-	"adultswim",
-	"aenetworks",
-	"aeonco",
-	"airtv",
-	"aitubekzvideo",
-	"aliexpresslive",
-	"aljazeera",
-	"allocine",
-	"allstar",
-	"allstarprofile",
-	"alphaporno",
-	"alsace20tv",
-	"alsace20tvembed",
-	"altcensored",
-	"alura",
-	"aluracourse",
-	"amadeustv",
-	"amara",
-	"amazonminitv",
-	"amazonreviews",
-	"amazonstore",
-	"amcnetworks",
-	"americastestkitchen",
-	"americastestkitchenseason",
-	"amhistorychannel",
-	"anchorfm",
-	"anderetijden",
-	"angel",
-	"animalplanet",
-	"ant1news.gr",
-	"antenna",
-	"anvato",
-	"aol.com",
-	"apa",
-	"aparat",
-	"appleconnect",
-	"appledaily",
-	"applepodcasts",
-	"appletrailers",
-	"archive.org",
-	"arcpublishing",
-	"ard",
-	"ardmediathek",
-	"arkena",
-	"art19",
-	"arte.sky.it",
-	"artetv",
-	"asobichannel",
-	"asobistage",
-	"atresplayer",
-	"atscaleconfevent",
-	"atvat",
-	"audimedia",
-	"audioboom",
-	"audiomack",
-	"audius",
-	"awaan",
-	"axs.tv",
-	"azmedien",
-	"baiduvideo",
-	"banbye",
-	"banbyechannel",
-	"bandaichannel",
-	"bandcamp",
-	"bandlab",
-	"bannedvideo",
-	"bbc.co.uk",
-	"bbvtv",
-	"beacontv",
-	"beatport",
-	"beeg",
-	"behindkink",
-	"bellator",
-	"bellmedia",
-	"berufetv",
-	"bet",
-	"bfi",
-	"bfmtv",
-	"bibeltv",
-	"bigflix",
-	"bigo",
-	"bild",
-	"bilibili",
-	"biliintl",
-	"bililive",
-	"biobiochiletv",
-	"biography",
-	"bitchute",
-	"bitchute",
-	"blackboardcollaborate",
-	"bleacherreport",
-	"blerp",
-	"blogger.com",
-	"bloomberg",
-	"bluesky",
-	"bokecc",
-	"bongacams",
-	"boosty",
-	"bostonglobe",
-	"box",
-	"boxcast",
-	"bpb.de",                    // Bundeszentrale für politische Bildung
-	"br.de",                     // Bayerischer Rundfunk
-	"brainpop.com",              // BrainPOP
-	"bravotv.com",               // BravoTV
-	"breitbart.com",             // BreitBart
-	"brightcove.com",            // Brightcove
-	"classes.brilliantpala.org", // Brilliantpala Classes
-	"elearn.brilliantpala.org",  // Brilliantpala Elearn
-	"bt.no",                     // Bergens Tidende Articles
-	"bundesliga.com",            // Bundesliga
-	"bundestag.de",              // Bundestag
-	"businessinsider.com",       // Business Insider
-	"buzzfeed.com",              // BuzzFeed
-	"byutv.org",                 // BYUtv
-	"caffeine.tv",               // CaffeineTV
-	"callin.com",                // Callin
-	"caltrans.com",              // Caltrans
-	"cam4.com",                  // CAM4
-	"camdemy.com",               // Camdemy
-	"cammodels.com",             // CamModels
-	"camsoda.com",               // Camsoda
-	"camtasia.com",              // CamtasiaEmbed
-	"canal1.com.co",             // Canal1
-	"canalalpha.ch",             // CanalAlpha
-	"canalc2.tv",                // canalc2.tv
-	"mycanal.fr",                // Canalplus
-	"piwiplus.fr",               // Canalplus
-	"caracoltv.com",             // CaracolTvPlay
-	"cartoonnetwork.com",        // Cartoon Network
-	"cbc.ca",                    // CBC
-	"cbssports.com",             // CBS Sports
-	"cbsnews.com",               // CBS News
-	"ccma.cat",                  // CCMA
-	"cctv.com",                  // CCTV
-	"cdapl.com",                 // CDA
-	"ceskatelevize.cz",          // Ceska Televize
-	"cgtn.com",                  // CGTN
-	"chaturbate.com",            // Chaturbate
-	"chilloutzone.net",          // Chilloutzone
-	"charlierose.com",           // Charlie Rose
-	"cielotv.it",                // cielotv.it
-	"cinetecamilano.it",         // CinetecaMilano
-	"cineverse.com",             // Cineverse
-	"ciscolive.com",             // CiscoLive
-	"clubic.com",                // Clubic
-	"cloudflarestream.com",      // CloudflareStream
-	"comedycentral.com",         // Comedy Central
-	"cnn.com",                   // CNN
-	"condenast.com",             // Conde Nast
-	"cp24.com",                  // CP24
-	"cpac.ca",                   // CPAC
-	"crack.com",                 // Cracked
-	"crackle.com",               // Crackle
-	"craftsy.com",               // Craftsy
-	"crunchyroll.com",           // Crunchyroll
-	"cspan.org",                 // C-SPAN
-	"ctv.ca",                    // CTV
-	"cu.ntv.co.jp",              // Nippon Television Network
-	"cultureunplugged.com",      // Culture Unplugged
-	"curiositystream.com",       // CuriosityStream
-	"cw.com",                    // CWTV
-	"cybrary.com",               // Cybrary
-	"dailymail.co.uk",           // Daily Mail
-	"dailymotion.com",           // Dailymotion
-	"dailywire.com",             // DailyWire
-	"dangplay.com",              // Dangalplay
-	"daum.net",                  // Daum
-	"dbtv.com",                  // DBTV
-	"dctptv.com",                // DctpTv
-	"deezer.com",                // Deezer
-	"democracynow.org",          // Democracy Now
-	"detik.com",                 // Detik
-	"disney.com",                // Disney
-	"dlive.tv",                  // DLive
-	"douyin.com",                // Douyin
-	"douyu.com",                 // DouyuTV
-	"dplay.com",                 // DPlay
-	"drtv.dk",                   // drtv
-	"duboku.io",                 // duboku.io
-	"dumpert.nl",                // Dumpert
-	"dw.com",                    // DW
-	"ebaumsworld.com",           // EbaumsWorld
-	"elonet.fi",                 // Elonet
-	"elpais.com",                // El País
-	"eltrecetv.com.ar",          // El Trece TV
-	"embedly.com",               // Embedly
-	"epoch.com",                 // Epoch
-	"eporner.com",               // Eporner
-	"ertflix.gr",                // ERTFLIX
-	"espn.com",                  // ESPN
-	"eurosport.com",             // Eurosport
-	"expressen.se",
+	"soundcloud.com",  // supported
+	"youtube.com",     // supported
+	"56.com",          // supported
+	"bandcamp.com",    // supported
+	"dailymotion.com", // region locked
+	"vimeo.com",
+	"tiktok.com",
 	"facebook.com",
-	"fathom.com",
-	"faz.net",
-	"fc2.com",
-	"fczenit.com",
-	"fifa.com",
-	"filmon.com",
-	"filmweb.pl",
-	"fivethirtyeight.com",
-	"fivetv.com",
-	"flextv.com",
-	"flickr.com",
-	"floatplane.com",
-	"folketinget.dk",
-	"foodnetwork.com",
-	"footyroom.com",
-	"formula1.com",
-	"fox.com",
-	"fox9.com",
-	"fox9news.com",
-	"foxnews.com",
-	"foxnewsvideo.com",
-	"foxsports.com",
-	"fptplay.vn",
-	"franceculture.fr",
-	"franceinter.fr",
-	"francetv.fr",
-	"francetvinfo.fr",
-	"francetvsite.fr",
-	"freesound.org",
-	"freespeech.org",
-	"freetv.com",
-	"freetvmovies.com",
-	"frontendmasters.com",
-	"fujitvfodplus7.com",
-	"funimation.com",
-	"funk.com",
-	"funker530.com",
-	"fux.com",
-	"fuyintv.com",
-	"gab.com",
-	"gabtv.com",
-	"gaia.com",
-	"gamedevtv.com",
-	"gamejolt.com",
-	"gamespot.com",
-	"gamestar.de",
-	"gaskrank.tv",
-	"gazeta.com",
-	"gbnews.uk",
-	"gdcvault.com",
-	"gedidigital.it",
-	"gem.cbc.ca",
-	"genius.com",
-	"germanupa.de",
-	"getcourse.ru",
-	"gettr.com",
-	"giantbomb.com",
-	"glattvisiontv.ch",
-	"glide.me",
-	"globalplayer.com",
-	"globo.com",
-	"glomex.com",
-	"gmanetwork.com",
-	"go.com",
-	"godiscovery.com",
-	"godresource.com",
-	"gofile.io",
-	"golem.de",
-	"goodgame.ru",
-	"google.com",
-	"googledrive.com",
-	"goplay.be",
-	"gopro.com",
-	"goshgay.com",
-	"gotostage.com",
-	"gpu-techconf.com",
-	"graspop.be",
-	"gronkh.tv",
-	"groupon.com",
-	"harpodeon.com",
-	"hbo.com",
-	"hearthis.at",
-	"heise.de",
-	"hellporno.com",
-	"hetklokhuis.nl",
-	"hgtv.com",
-	"hgtv.de",
-	"hidive.com",
-	"historicfilms.com",
-	"history.com",
-	"hitrecord.org",
-	"hketv.com",
-	"hollywoodreporter.com",
-	"holodex.net",
-	"hotnewhiphop.com",
-	"hotstar.com",
-	"hrfernsehen.de",
-	"hrti.hr",
-	"hse.com",
-	"huajiao.com",
-	"huffpost.com",
-	"hungama.com",
-	"huya.com",
+	"instagram.com",
+	"vevo.com",
 	"hypem.com",
-	"hytale.com",
-	"soundcloud.com",
-	"youtube.com",
+	"clyp.it",
+	"audiomack.com", // broken
+	"huya.com",
+	"douyu.com",
+	"chaturbate.com",
+	"pornhub.com",
+	"xvideos.com",
+	"spankbang.com",
+	"cam4.com",
+	"camsoda.com",
+	"datpiff.com",
+	"reverbnation.com",
+	"vocaroo.com",
+	"glomex.com",
+	"peertube.org",
+	"younow.com",
+	"vid.me",
+	"smule.com",
 }

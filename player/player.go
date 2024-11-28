@@ -179,6 +179,11 @@ PLAYBACK_LOOP:
 					return
 				case <-ticker.C:
 					if p.Song != nil { // or it will crash on stop signal
+						fmt.Println(p.GuildID)
+						fmt.Println(p.Song.SongID)
+						fmt.Println(p.Song.Title)
+						fmt.Println(p.Song.Source.String())
+						fmt.Println(p.Song.PublicLink)
 						err := p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink, 2*time.Second)
 						if err != nil {
 							fmt.Printf("Error saving track duration: %v\n", err)
