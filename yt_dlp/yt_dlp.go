@@ -2,9 +2,11 @@ package yt_dlp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/lrstanley/go-ytdlp"
 )
@@ -20,13 +22,11 @@ func New() *Ytdlp {
 func (y *Ytdlp) GetStreamURL(url string) (string, error) {
 	dl := ytdlp.New().GetURL()
 
-	// Run the yt-dlp command and capture the result.
 	result, err := dl.Run(context.TODO(), url)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute yt-dlp: %w", err)
 	}
 
-	// Split the output into lines and extract the last valid URL.
 	lines := strings.Split(result.Stdout, "\n")
 
 	if len(lines) == 0 {
@@ -41,4 +41,29 @@ func (y *Ytdlp) GetStreamURL(url string) (string, error) {
 	}
 
 	return lastLine, nil
+}
+
+type Meta struct {
+	ID         string  `json:"id"`
+	Title      string  `json:"title"`
+	WebPageURL string  `json:"webpage_url"`
+	Duration   float64 `json:"duration"`
+}
+
+func (y *Ytdlp) GetMetaInfo(url string) (Meta, error) {
+	timestamp := time.Now().Format("20060102_150405")
+	dl := ytdlp.New().DumpJSON().SkipDownload().Output(timestamp + ".%(ext)s")
+	result, err := dl.Run(context.TODO(), url)
+	if err != nil {
+		return Meta{}, fmt.Errorf("failed to execute yt-dlp: %w", err)
+	}
+
+	var meta Meta
+	byteResult := []byte(result.Stdout)
+
+	if err := json.Unmarshal(byteResult, &meta); err != nil {
+		return Meta{}, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return meta, nil
 }

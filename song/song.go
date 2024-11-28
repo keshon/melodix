@@ -10,9 +10,7 @@ import (
 	urlstd "net/url"
 	"os/exec"
 	"regexp"
-	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/keshon/melodix/stream"
@@ -97,11 +95,19 @@ func (s *Song) FetchSongs(URLsOrTitle string) ([]*Song, error) {
 
 		if len(ytDlpURLs) > 0 {
 			for _, URL := range ytDlpURLs {
-				song, err := s.fetchYoutubeSong(URL) // TODO: write new method for retrieveing song from yt-dlp
+				// if !isYoutubeURL(URL) {
+				// 	song, err := s.fetchYoutubeSong(URL)
+				// 	if err != nil {
+				// 		return nil, err
+				// 	}
+				// 	songs = append(songs, song)
+				// } else {
+				song, err := s.fetchYtdlpSong(URL) // TODO: write new method for retrieveing song from yt-dlp
 				if err != nil {
 					return nil, err
 				}
 				songs = append(songs, song)
+				// }
 			}
 		}
 
@@ -116,7 +122,11 @@ func (s *Song) FetchSongs(URLsOrTitle string) ([]*Song, error) {
 		}
 
 	} else {
-		song, err := s.FetchSongs(URLsOrTitle)
+		url, err := youtubeClient.FetchVideoURLByTitle(URLsOrTitle)
+		if err != nil {
+			return nil, err
+		}
+		song, err := s.FetchSongs(url)
 		if err != nil {
 			return nil, err
 		}
@@ -134,96 +144,100 @@ func isInternetRadioURL(url string) bool {
 	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") && !isYoutubeURL(url)
 }
 
-func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
+// func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
+// 	yd := yt_dlp.New()
+// 	id, err := s.extractYoutubeID(url)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	id, err := s.extractYoutubeID(url)
-	if err != nil {
-		return nil, err
-	}
+// 	song, err := KkdaiClient.GetVideo(id)
+// 	if err != nil {
+// 		if strings.Contains(err.Error(), "UNPLAYABLE") {
+// 			return nil, fmt.Errorf("YouTube video is unplayable, possibly due to `region restrictions` or other issues.\n\n¯\\_(ツ)_/¯")
+// 		}
+// 		return nil, err
+// 	}
+// 	songMeta, err := yd.GetMetaInfo(url)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	fmt.Println(songMeta)
+// 	songStreamURL, err := yd.GetStreamURL(url) // a fix due to kkdai is broken atm
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	song, err := KkdaiClient.GetVideo(id)
-	if err != nil {
-		if strings.Contains(err.Error(), "UNPLAYABLE") {
-			return nil, fmt.Errorf("YouTube video is unplayable, possibly due to `region restrictions` or other issues.\n\n¯\\_(ツ)_/¯")
-		}
-		return nil, err
-	}
+// 	var thumbnail Thumbnail
+// 	if len(song.Thumbnails) > 0 {
+// 		thumbnail = Thumbnail(song.Thumbnails[0])
+// 	}
 
-	songStreamURL, err := yt_dlp.New().GetStreamURL(url) // a fix due to kkdai is broken atm
-	if err != nil {
-		return nil, err
-	}
+// 	return &Song{
+// 		Title:      song.Title,
+// 		PublicLink: url,
+// 		StreamURL:  songStreamURL, //song.Formats.WithAudioChannels()[0].URL,
+// 		Duration:   song.Duration,
+// 		Thumbnail:  thumbnail,
+// 		SongID:     song.ID,
+// 		Source:     SourceYouTube,
+// 		YTVideo:    song,
+// 	}, nil
+// }
 
-	var thumbnail Thumbnail
-	if len(song.Thumbnails) > 0 {
-		thumbnail = Thumbnail(song.Thumbnails[0])
-	}
+// func (s *Song) fetchYoutubePlaylist(url string) ([]*Song, error) {
+// 	var songs []*Song
+// 	playlist, err := KkdaiClient.GetPlaylist(url)
 
-	return &Song{
-		Title:      song.Title,
-		PublicLink: url,
-		StreamURL:  songStreamURL, //song.Formats.WithAudioChannels()[0].URL,
-		Duration:   song.Duration,
-		Thumbnail:  thumbnail,
-		SongID:     song.ID,
-		Source:     SourceYouTube,
-		YTVideo:    song,
-	}, nil
-}
+// 	// Check if it's a YouTube Mix Playlist that `kkdai_youtube` doesn't natively support
+// 	if err != nil && err.Error() == "extractPlaylistID failed: no playlist detected or invalid playlist ID" {
+// 		urls, mixErr := youtube.New().FetchMixPlaylistVideoURLs(url)
+// 		if mixErr != nil {
+// 			return nil, mixErr
+// 		}
+// 		// Create a synthetic playlist from the fetched URLs
+// 		playlist = &kkdai_youtube.Playlist{
+// 			Videos: make([]*kkdai_youtube.PlaylistEntry, len(urls)),
+// 		}
+// 		for i, id := range urls {
+// 			playlist.Videos[i] = &kkdai_youtube.PlaylistEntry{ID: id}
+// 		}
+// 	} else if err != nil {
+// 		return nil, err
+// 	}
 
-func (s *Song) fetchYoutubePlaylist(url string) ([]*Song, error) {
-	var songs []*Song
-	playlist, err := KkdaiClient.GetPlaylist(url)
+// 	var (
+// 		wg    sync.WaitGroup
+// 		mu    sync.Mutex
+// 		index = make(map[string]int, len(playlist.Videos))
+// 	)
 
-	// Check if it's a YouTube Mix Playlist that `kkdai_youtube` doesn't natively support
-	if err != nil && err.Error() == "extractPlaylistID failed: no playlist detected or invalid playlist ID" {
-		urls, mixErr := youtube.New().FetchMixPlaylistVideoURLs(url)
-		if mixErr != nil {
-			return nil, mixErr
-		}
-		// Create a synthetic playlist from the fetched URLs
-		playlist = &kkdai_youtube.Playlist{
-			Videos: make([]*kkdai_youtube.PlaylistEntry, len(urls)),
-		}
-		for i, id := range urls {
-			playlist.Videos[i] = &kkdai_youtube.PlaylistEntry{ID: id}
-		}
-	} else if err != nil {
-		return nil, err
-	}
+// 	for i, video := range playlist.Videos {
+// 		index[video.ID] = i
+// 		wg.Add(1)
+// 		go func(videoID string) {
+// 			defer wg.Done()
+// 			videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+// 			song, fetchErr := s.fetchYoutubeSong(videoURL)
+// 			if fetchErr != nil {
+// 				fmt.Printf("Error fetching song for video ID %s: %v\n", videoID, fetchErr)
+// 				return
+// 			}
+// 			mu.Lock()
+// 			songs = append(songs, song)
+// 			mu.Unlock()
+// 		}(video.ID)
+// 	}
 
-	var (
-		wg    sync.WaitGroup
-		mu    sync.Mutex
-		index = make(map[string]int, len(playlist.Videos))
-	)
+// 	wg.Wait()
 
-	for i, video := range playlist.Videos {
-		index[video.ID] = i
-		wg.Add(1)
-		go func(videoID string) {
-			defer wg.Done()
-			videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-			song, fetchErr := s.fetchYoutubeSong(videoURL)
-			if fetchErr != nil {
-				fmt.Printf("Error fetching song for video ID %s: %v\n", videoID, fetchErr)
-				return
-			}
-			mu.Lock()
-			songs = append(songs, song)
-			mu.Unlock()
-		}(video.ID)
-	}
+// 	// Stable sort to maintain the order based on the original playlist
+// 	sort.SliceStable(songs, func(i, j int) bool {
+// 		return index[songs[i].SongID] < index[songs[j].SongID]
+// 	})
 
-	wg.Wait()
-
-	// Stable sort to maintain the order based on the original playlist
-	sort.SliceStable(songs, func(i, j int) bool {
-		return index[songs[i].SongID] < index[songs[j].SongID]
-	})
-
-	return songs, nil
-}
+// 	return songs, nil
+// }
 
 func (s *Song) extractYoutubeID(url string) (string, error) {
 	parsedURL, err := urlstd.Parse(url)
@@ -240,6 +254,30 @@ func (s *Song) extractYoutubeID(url string) (string, error) {
 
 	fmt.Println("Video ID not found.")
 	return "", nil
+}
+
+func (s *Song) fetchYtdlpSong(url string) (*Song, error) {
+	meta, err := yt_dlp.New().GetMetaInfo(url)
+	if err != nil {
+		return nil, err
+	}
+
+	streamURL, err := yt_dlp.New().GetStreamURL(url)
+	if err != nil {
+		return nil, err
+	}
+
+	timeDuration := time.Duration(meta.Duration) * time.Second
+
+	return &Song{
+		Title:      meta.Title,
+		PublicLink: meta.WebPageURL,
+		StreamURL:  streamURL,
+		Thumbnail:  Thumbnail{},
+		Duration:   timeDuration,
+		SongID:     meta.ID,
+		Source:     SourceYouTube,
+	}, nil
 }
 
 func (s *Song) fetchInternetRadioSong(url string) (*Song, error) {
@@ -658,4 +696,6 @@ var ytDlpSupported = []string{
 	"huya.com",
 	"hypem.com",
 	"hytale.com",
+	"soundcloud.com",
+	"youtube.com",
 }
