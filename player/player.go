@@ -356,9 +356,9 @@ func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca
 	var songDuration time.Duration
 	var err error
 	switch song.Source {
-	case songpkg.SourceYouTube:
+	case songpkg.SourcePlatform:
 		songDuration = song.Duration
-	case songpkg.SourceLocalFile:
+	case songpkg.SourceFile:
 		songDuration, err = p.fetchMP3Duration(song.StreamFilepath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to parse local file duration: %v", err)

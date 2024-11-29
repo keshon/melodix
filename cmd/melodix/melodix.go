@@ -233,7 +233,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		instance := b.getOrCreatePlayer(m.GuildID)
 		if instance.Song != nil {
 			emb := embed.NewEmbed().SetColor(embedColor)
-			title, source, publicLink, err := instance.Song.GetInfo(instance.Song)
+			title, source, publicLink, err := instance.Song.GetSongInfo(instance.Song)
 			if err != nil {
 				s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
 				return
@@ -392,7 +392,7 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 		case player.StatusPlaying:
 			if instance.Song != nil {
 				emb := embed.NewEmbed().SetColor(embedColor)
-				title, source, publicLink, err := instance.Song.GetInfo(instance.Song)
+				title, source, publicLink, err := instance.Song.GetSongInfo(instance.Song)
 				if err != nil {
 					s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
 					return

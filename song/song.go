@@ -5,35 +5,55 @@ import (
 	"bytes"
 	"fmt"
 	"hash/crc32"
-	"net"
-	"net/http"
 	urlstd "net/url"
 	"os/exec"
-	"regexp"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/keshon/melodix/stream"
-	"github.com/keshon/melodix/youtube"
-	"github.com/keshon/melodix/yt_dlp"
-	kkdai_youtube "github.com/kkdai/youtube/v2"
+	"github.com/keshon/melodix/sources_util"
+	"github.com/keshon/melodix/ytdlp"
 )
 
+type Platform string
+
+const (
+	YouTube      Platform = "YouTube"
+	Soundcloud   Platform = "Soundcloud"
+	Bandcamp     Platform = "Bandcamp"
+	FiftySixCom  Platform = "56.com"
+	DailyMotion  Platform = "DailyMotion"
+	Vimeo        Platform = "Vimeo"
+	TikTok       Platform = "TikTok"
+	Facebook     Platform = "Facebook"
+	Instagram    Platform = "Instagram"
+	Vevo         Platform = "Vevo"
+	AudioMack    Platform = "AudioMack"
+	Chaturbate   Platform = "Chaturbate"
+	Pornhub      Platform = "Pornhub"
+	ReverbNation Platform = "ReverbNation"
+)
+
+var platformURLs = map[Platform][]string{
+	YouTube:      {"youtube.com", "youtu.be"},
+	Soundcloud:   {"soundcloud.com"},
+	Bandcamp:     {"bandcamp.com"},
+	FiftySixCom:  {"56.com"},
+	DailyMotion:  {"dailymotion.com"},
+	Vimeo:        {"vimeo.com"},
+	TikTok:       {"tiktok.com"},
+	Facebook:     {"facebook.com"},
+	Instagram:    {"instagram.com"},
+	Vevo:         {"vevo.com"},
+	AudioMack:    {"audiomack.com"},
+	Chaturbate:   {"chaturbate.com"},
+	Pornhub:      {"pornhub.com"},
+	ReverbNation: {"reverbnation.com"},
+}
+
 var (
-	KkdaiClient = &kkdai_youtube.Client{HTTPClient: &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout: 30 * time.Second,
-			}).DialContext,
-			MaxIdleConns:          10,
-			IdleConnTimeout:       30 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
-		Timeout: 30 * time.Second,
-	}}
-	youtubeClient = *youtube.New()
+	youtubeUtil  = *sources_util.NewYouTubeUtil()
+	interentUtil = *sources_util.New()
 )
 
 type Song struct {
@@ -45,6 +65,7 @@ type Song struct {
 	Duration       time.Duration // duration of the song
 	SongID         string        // unique ID for the song
 	Source         SongSource    // source type of the song
+	Platform       string        // platform of the song
 }
 
 type Thumbnail struct {
@@ -56,16 +77,16 @@ type Thumbnail struct {
 type SongSource int32
 
 const (
-	SourceYouTube SongSource = iota
-	SourceRadioStream
-	SourceLocalFile // reserved, not used
+	SourcePlatform SongSource = iota
+	SourceInternet
+	SourceFile
 )
 
 func (source SongSource) String() string {
 	sources := map[SongSource]string{
-		SourceYouTube:     "YouTube",
-		SourceRadioStream: "RadioStream",
-		SourceLocalFile:   "LocalFile", // reserved, not used
+		SourcePlatform: "Platform",
+		SourceInternet: "Radio",
+		SourceFile:     "File",
 	}
 
 	return sources[source]
@@ -75,75 +96,197 @@ func New() *Song {
 	return &Song{}
 }
 
-func (s *Song) FetchSongs(URLsOrTitle string) ([]*Song, error) {
+func (s *Song) FetchSongs(input string) ([]*Song, error) {
+	if isURL(input) {
+		return s.fetchSongsByURLs(input)
+	}
+	return s.fetchSongsByTitle(input)
+}
+
+func isURL(input string) bool {
+	return strings.Contains(input, "http://") || strings.Contains(input, "https://")
+}
+
+func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
+	urls := strings.Fields(urlsInput)
+	var platformURLs, internetURLs []string
+
+	for _, url := range urls {
+		if platform := s.FindPlatformByURL(url); platform != "" {
+			platformURLs = append(platformURLs, url)
+		} else {
+			internetURLs = append(internetURLs, url)
+		}
+	}
 
 	var songs []*Song
-	var ytDlpURLs []string
-	var intertnetRadioURLs []string
+	results := make(chan *Song, len(urls)) // Buffered channel to collect songs
+	errs := make(chan error, len(urls))    // Buffered channel to collect errors
+	var wg sync.WaitGroup                  // WaitGroup for managing concurrency
+	ytdlp := ytdlp.New()
 
-	if strings.Contains(URLsOrTitle, "http://") || strings.Contains(URLsOrTitle, "https://") {
-		urls := strings.Fields(URLsOrTitle)
-		for _, url := range urls {
-			isYtdlpSupported := s.CheckLink(url)
-			if isYtdlpSupported {
-				ytDlpURLs = append(ytDlpURLs, url)
-			} else {
-				intertnetRadioURLs = append(intertnetRadioURLs, url)
+	for _, url := range platformURLs {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			song, err := s.fetchPlatformSong(ytdlp, url)
+			if err != nil {
+				errs <- fmt.Errorf("error fetching song from yt-dlp URL %q: %w", url, err)
+				return
 			}
-		}
-
-		if len(ytDlpURLs) > 0 {
-			for _, url := range ytDlpURLs {
-				// if !isYoutubeURL(URL) {
-				// 	song, err := s.fetchYoutubeSong(URL)
-				// 	if err != nil {
-				// 		return nil, err
-				// 	}
-				// 	songs = append(songs, song)
-				// } else {
-				song, err := s.fetchYtdlpSong(url)
-				if err != nil {
-					return nil, err
-				}
-				songs = append(songs, song)
-				// }
-			}
-		}
-
-		if len(intertnetRadioURLs) > 0 {
-			for _, URL := range intertnetRadioURLs {
-				song, err := s.fetchInternetRadioSong(URL)
-				if err != nil {
-					return nil, err
-				}
-				songs = append(songs, song)
-			}
-		}
-
-	} else {
-		url, err := youtubeClient.FetchVideoURLByTitle(URLsOrTitle)
-		if err != nil {
-			return nil, err
-		}
-		song, err := s.FetchSongs(url)
-		if err != nil {
-			return nil, err
-		}
-		songs = append(songs, song...)
+			results <- song
+		}(url)
 	}
-	fmt.Println(len(songs))
-	for _, song := range songs {
-		fmt.Println(song)
+
+	for _, url := range internetURLs {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			song, err := s.fetchInternetSong(url)
+			if err != nil {
+				errs <- fmt.Errorf("error fetching song from internet radio URL %q: %w", url, err)
+				return
+			}
+			results <- song
+		}(url)
 	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+		close(errs)
+	}()
+
+	// Collect results and errors
+	for song := range results {
+		songs = append(songs, song)
+	}
+	if len(errs) > 0 {
+		return nil, <-errs // Return the first error encountered
+	}
+
 	return songs, nil
 }
-func isYoutubeURL(url string) bool {
-	youtubeRegex := regexp.MustCompile(`^(https?://)?(www\.)?(m\.)?(music\.)?(youtube\.com|youtu\.be)(/|$)`)
-	return youtubeRegex.MatchString(url)
+
+func (s *Song) fetchSongsByTitle(title string) ([]*Song, error) {
+	url, err := youtubeUtil.FetchVideoURLByTitle(title)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch video URL for title %q: %w", title, err)
+	}
+	return s.FetchSongs(url)
 }
 
-func isInternetRadioURL(url string) bool {
-	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") && !isYoutubeURL(url)
+func (s *Song) fetchPlatformSong(ytdlp *ytdlp.YtdlpWrapper, url string) (*Song, error) {
+	meta, err := ytdlp.GetMetaInfo(url)
+	if err != nil {
+		return nil, fmt.Errorf("error getting metadata from yt-dlp: %w", err)
+	}
+
+	streamURL, err := ytdlp.GetStreamURL(url)
+	if err != nil {
+		return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
+	}
+
+	fmt.Println(streamURL)
+	fmt.Println(meta.Title)
+
+	return &Song{
+		Title:      meta.Title,
+		PublicLink: meta.WebPageURL,
+		StreamURL:  streamURL,
+		Thumbnail:  Thumbnail{},
+		Duration:   time.Duration(meta.Duration) * time.Second,
+		SongID:     meta.ID,
+		Source:     SourcePlatform,
+	}, nil
+}
+
+func (s *Song) fetchInternetSong(url string) (*Song, error) {
+	u, err := urlstd.Parse(url)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL %q: %w", url, err)
+	}
+
+	hash := crc32.ChecksumIEEE([]byte(u.Host))
+
+	contentType, err := interentUtil.GetContentType(u.String())
+	if err != nil {
+		return nil, fmt.Errorf("error determining content type for URL %q: %w", url, err)
+	}
+
+	if !interentUtil.IsValidStreamType(contentType) {
+		return nil, fmt.Errorf("invalid stream type for URL %q: %s", url, contentType)
+	}
+
+	return &Song{
+		Title:      u.Host,
+		PublicLink: url,
+		StreamURL:  u.String(),
+		Thumbnail:  Thumbnail{},
+		Duration:   -1,
+		SongID:     fmt.Sprintf("%d", hash),
+		Source:     SourceInternet,
+	}, nil
+}
+
+func (s *Song) GetSongInfo(song *Song) (string, string, string, error) {
+	switch song.Source {
+	case SourcePlatform:
+		return song.Title, song.Source.String(), song.PublicLink, nil
+	case SourceInternet:
+		return s.getInternetSongMetadata(song.StreamURL)
+	default:
+		return "", "", "", fmt.Errorf("unknown source: %v", song.Source)
+	}
+}
+
+func (s *Song) getInternetSongMetadata(url string) (string, string, string, error) {
+	cmd := exec.Command("ffmpeg", "-i", url, "-f", "ffmetadata", "-")
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	err := cmd.Run()
+	if err != nil {
+		return "", "", "", fmt.Errorf("error running ffmpeg command: %v", err)
+	}
+
+	var streamTitle string
+	var icyName string
+	var icyURL string
+	scanner := bufio.NewScanner(&out)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Println(line)
+		if strings.HasPrefix(line, "StreamTitle=") {
+			streamTitle = strings.TrimPrefix(line, "StreamTitle=")
+		}
+		if strings.HasPrefix(line, "icy-name=") {
+			icyName = strings.TrimPrefix(line, "icy-name=")
+		}
+		if strings.HasPrefix(line, "icy-url=") {
+			icyURL = strings.TrimPrefix(line, "icy-url=")
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", "", "", fmt.Errorf("error reading metadata: %v", err)
+	}
+
+	return streamTitle, icyName, icyURL, nil
+}
+
+func (s *Song) FindPlatformByURL(url string) Platform {
+	for platform, domains := range platformURLs {
+		for _, domain := range domains {
+			if strings.Contains(url, domain) {
+				return platform
+			}
+		}
+	}
+	return ""
 }
 
 // func (s *Song) fetchYoutubeSong(url string) (*Song, error) {
@@ -182,7 +325,7 @@ func isInternetRadioURL(url string) bool {
 // 		Duration:   song.Duration,
 // 		Thumbnail:  thumbnail,
 // 		SongID:     song.ID,
-// 		Source:     SourceYouTube,
+// 		Source:     SourcePlatform,
 // 		YTVideo:    song,
 // 	}, nil
 // }
@@ -240,163 +383,3 @@ func isInternetRadioURL(url string) bool {
 
 // 	return songs, nil
 // }
-
-func (s *Song) extractYoutubeID(url string) (string, error) {
-	parsedURL, err := urlstd.Parse(url)
-	if err != nil {
-		fmt.Println("Error parsing URL:", err)
-		return "", err
-	}
-	queryParams := parsedURL.Query()
-
-	videoID := queryParams.Get("v")
-	if videoID != "" {
-		return videoID, nil
-	}
-
-	fmt.Println("Video ID not found.")
-	return "", nil
-}
-
-func (s *Song) fetchYtdlpSong(url string) (*Song, error) {
-	meta, err := yt_dlp.New().GetMetaInfo(url)
-	if err != nil {
-		return nil, err
-	}
-
-	streamURL, err := yt_dlp.New().GetStreamURL(url)
-	if err != nil {
-		return nil, err
-	}
-
-	timeDuration := time.Duration(meta.Duration) * time.Second
-
-	return &Song{
-		Title:      meta.Title,
-		PublicLink: meta.WebPageURL,
-		StreamURL:  streamURL,
-		Thumbnail:  Thumbnail{},
-		Duration:   timeDuration,
-		SongID:     meta.ID,
-		Source:     SourceYouTube,
-	}, nil
-}
-
-func (s *Song) fetchInternetRadioSong(url string) (*Song, error) {
-	u, err := urlstd.Parse(url)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing url: %v", err)
-	}
-
-	hash := crc32.ChecksumIEEE([]byte(u.Host))
-
-	stream := stream.New()
-
-	contentType, err := stream.GetContentType(u.String())
-	if err != nil {
-		return nil, fmt.Errorf("error getting content-type: %v", err)
-	}
-
-	if stream.IsValidStreamType(contentType) {
-		return &Song{
-			Title:      u.Host,
-			PublicLink: url,
-			StreamURL:  u.String(),
-			Thumbnail:  Thumbnail{},
-			Duration:   -1,
-			SongID:     fmt.Sprintf("%d", hash),
-			Source:     SourceRadioStream,
-		}, nil
-	} else {
-		return nil, fmt.Errorf("not a valid stream due to invalid content-type: %v", contentType)
-	}
-}
-
-func (s *Song) GetInfo(song *Song) (string, string, string, error) {
-	switch song.Source {
-	case SourceYouTube:
-		return song.Title, song.Source.String(), song.PublicLink, nil
-	case SourceRadioStream:
-		return s.getInternetRadioSongMetadata(song.StreamURL)
-	default:
-		return "", "", "", fmt.Errorf("unknown source: %v", song.Source)
-	}
-}
-
-func (s *Song) getInternetRadioSongMetadata(url string) (string, string, string, error) {
-	cmd := exec.Command("ffmpeg", "-i", url, "-f", "ffmetadata", "-")
-
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	err := cmd.Run()
-	if err != nil {
-		return "", "", "", fmt.Errorf("error running ffmpeg command: %v", err)
-	}
-
-	var streamTitle string
-	var icyName string
-	var icyURL string
-	scanner := bufio.NewScanner(&out)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Println(line)
-		if strings.HasPrefix(line, "StreamTitle=") {
-			streamTitle = strings.TrimPrefix(line, "StreamTitle=")
-		}
-		if strings.HasPrefix(line, "icy-name=") {
-			icyName = strings.TrimPrefix(line, "icy-name=")
-		}
-		if strings.HasPrefix(line, "icy-url=") {
-			icyURL = strings.TrimPrefix(line, "icy-url=")
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", "", "", fmt.Errorf("error reading metadata: %v", err)
-	}
-
-	return streamTitle, icyName, icyURL, nil
-}
-
-func (s *Song) CheckLink(link string) bool {
-	for _, service := range ytDlpSupported {
-		if strings.Contains(link, service) {
-			return true
-		}
-	}
-	return false
-}
-
-var ytDlpSupported = []string{
-	"soundcloud.com",  // supported
-	"youtube.com",     // supported
-	"56.com",          // supported
-	"bandcamp.com",    // supported
-	"dailymotion.com", // region locked
-	"vimeo.com",
-	"tiktok.com",
-	"facebook.com",
-	"instagram.com",
-	"vevo.com",
-	"hypem.com",
-	"clyp.it",
-	"audiomack.com", // broken
-	"huya.com",
-	"douyu.com",
-	"chaturbate.com",
-	"pornhub.com",
-	"xvideos.com",
-	"spankbang.com",
-	"cam4.com",
-	"camsoda.com",
-	"datpiff.com",
-	"reverbnation.com",
-	"vocaroo.com",
-	"glomex.com",
-	"peertube.org",
-	"younow.com",
-	"vid.me",
-	"smule.com",
-}

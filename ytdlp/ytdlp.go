@@ -1,4 +1,4 @@
-package yt_dlp
+package ytdlp
 
 import (
 	"context"
@@ -11,15 +11,13 @@ import (
 	"github.com/lrstanley/go-ytdlp"
 )
 
-type Ytdlp struct{}
+type YtdlpWrapper struct{}
 
-// New creates a new instance of the Ytdlp struct.
-func New() *Ytdlp {
-	return &Ytdlp{}
+func New() *YtdlpWrapper {
+	return &YtdlpWrapper{}
 }
 
-// Download processes a URL and returns the last link from the output.
-func (y *Ytdlp) GetStreamURL(url string) (string, error) {
+func (y *YtdlpWrapper) GetStreamURL(url string) (string, error) {
 	dl := ytdlp.New().GetURL()
 
 	result, err := dl.Run(context.TODO(), url)
@@ -50,7 +48,7 @@ type Meta struct {
 	Duration   float64 `json:"duration"`
 }
 
-func (y *Ytdlp) GetMetaInfo(url string) (Meta, error) {
+func (y *YtdlpWrapper) GetMetaInfo(url string) (Meta, error) {
 	timestamp := time.Now().Format("20060102_150405")
 	dl := ytdlp.New().DumpJSON().SkipDownload().Output(timestamp + ".%(ext)s")
 	result, err := dl.Run(context.TODO(), url)
