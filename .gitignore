@@ -3,3 +3,4 @@
 *.exe
 /dist
 /tools
+/cache

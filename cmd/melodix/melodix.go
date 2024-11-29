@@ -43,6 +43,8 @@ var commands = []Command{
 	{"help", []string{"h", "?"}, "Show this help message", "General"},
 }
 
+var pleaseWaitMessage *discordgo.Message
+
 type Command struct {
 	Name        string
 	Aliases     []string
@@ -204,6 +206,9 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("You must be in a voice channel to use this command.").MessageEmbed)
 			return
 		}
+
+		pleaseWaitMessage, _ = s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Please wait...").MessageEmbed)
+
 		songs, err := b.fetchSongs(param)
 		if err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
@@ -402,17 +407,20 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 					emb.SetThumbnail(instance.Song.Thumbnail.URL)
 				}
 				emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
-				s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
+				if pleaseWaitMessage != nil {
+					s.ChannelMessageEditEmbed(m.ChannelID, pleaseWaitMessage.ID, emb.MessageEmbed)
+				} else {
+					s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
+				}
 				return
 			}
-			s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
 		case player.StatusResuming:
-			s.ChannelMessageSend(m.ChannelID, "Disconnect detected. Resuming playback...")
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Oopsie! There was a network issue.\nTrying to resume...").MessageEmbed)
 		case player.StatusAdded:
 			desc := fmt.Sprintf("Song(s) added to queue\n\nUse `%slist` to see the current queue.", b.prefixCache[m.GuildID])
 			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription(desc).MessageEmbed)
 		}
-
 	}()
 }
 
@@ -570,17 +578,19 @@ func loadEnv(path string) {
 }
 
 func main() {
-	loadEnv("./.env") // full path is needed for VStudio Debugging
+	loadEnv("./.env") // Full path is needed for Visual Studio debugging
 
 	token := os.Getenv("DISCORD_TOKEN")
 	if token == "" {
 		log.Fatal("Discord token not found in environment variables")
 	}
 
-	err := os.RemoveAll("./cache")
-	if err != nil {
-		log.Fatal("Failed to remove cache folder:", err)
-	}
+	cacheDir := "./cache"
+	defer func() {
+		if err := os.RemoveAll(cacheDir); err != nil {
+			log.Printf("Failed to remove cache folder: %v", err)
+		}
+	}()
 
 	bot, err := NewBot(token)
 	if err != nil {
