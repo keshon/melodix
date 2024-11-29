@@ -15,6 +15,7 @@ import (
 	"github.com/keshon/dca"
 	songpkg "github.com/keshon/melodix/song"
 	"github.com/keshon/melodix/storage"
+	"github.com/keshon/melodix/ytdlp"
 )
 
 type Player struct {
@@ -80,6 +81,8 @@ func (status StatusSignal) StringEmoji() string {
 	return m[status]
 }
 
+var isCached bool
+
 func (p *Player) Play() error {
 	var startAt time.Duration = 0
 PLAYBACK_LOOP:
@@ -91,6 +94,7 @@ PLAYBACK_LOOP:
 				}
 				p.Song = p.Queue[0]
 				p.Queue = p.Queue[1:]
+				isCached = false
 			}
 		}
 
@@ -111,25 +115,27 @@ PLAYBACK_LOOP:
 		options.EncodingLineLog = true
 
 		streamPath := p.Song.StreamURL
+		cacheReady := make(chan bool)
+		if !isCached {
+			go func() {
+				cacheDir := "./cache"
+				if err := os.MkdirAll(cacheDir, 0755); err != nil {
+					fmt.Printf("Error creating cache directory: %v\n", err)
+					return
+				}
 
-		// // caching
-		// if p.Song.YTVideo != nil && p.Song.YTVideo.Duration > 0 && p.Song.YTVideo.Duration.Seconds() > 60 && p.Song.YTVideo.Duration.Seconds() <= 600 && startAt == 0 {
-		// 	stream, _, err := songpkg.KkdaiClient.GetStream(p.Song.YTVideo, &p.Song.YTVideo.Formats.WithAudioChannels()[0])
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// 	defer stream.Close()
+				path, err := ytdlp.New().GetStream(p.Song.PublicLink)
+				if err != nil {
+					fmt.Printf("Error caching: %v\n", err)
+					return
+				}
 
-		// 	if stream == nil {
-		// 		return fmt.Errorf("stream is nil")
-		// 	}
-
-		// 	streamPath, err = p.streamToFile(stream)
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// 	defer os.Remove(streamPath)
-		// }
+				p.Song.StreamURL = path
+				isCached = true // Mark as cached
+				cacheReady <- true
+				fmt.Println("DOING SWITCH")
+			}()
+		}
 
 		encoding, err := dca.EncodeFile(streamPath, options)
 		if err != nil {
@@ -219,6 +225,13 @@ PLAYBACK_LOOP:
 				// finished
 				fmt.Printf("Finished playback of \"%v\"", p.Song.Title)
 				return nil
+			case <-cacheReady: // Cache is ready
+				fmt.Println("Switching to cached playback")
+				encoding.Stop()
+				encoding.Cleanup()
+				//streamPath = filename
+				continue PLAYBACK_LOOP
+
 			case signal := <-p.ActionSignals:
 				switch signal {
 				case ActionSkip:
@@ -351,9 +364,9 @@ func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca
 	var songDuration time.Duration
 	var err error
 	switch song.Source {
-	case songpkg.SourceYouTube:
+	case songpkg.SourcePlatform:
 		songDuration = song.Duration
-	case songpkg.SourceLocalFile:
+	case songpkg.SourceFile:
 		songDuration, err = p.fetchMP3Duration(song.StreamFilepath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to parse local file duration: %v", err)

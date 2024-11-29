@@ -1,4 +1,4 @@
-package stream
+package sources_util
 
 import (
 	"fmt"

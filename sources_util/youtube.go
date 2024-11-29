@@ -1,4 +1,4 @@
-package youtube
+package sources_util
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ type YouTubeClient struct {
 	Client  *http.Client
 }
 
-func New() *YouTubeClient {
+func NewYouTubeUtil() *YouTubeClient {
 	return &YouTubeClient{
 		BaseURL: "https://www.youtube.com",
 		Client: &http.Client{
