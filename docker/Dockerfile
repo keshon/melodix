@@ -17,10 +17,17 @@ RUN GO_VERSION=$(go version | awk '{print $3}') && \
     rm -rf /usr/share/man
 
 # Second stage: create the final image
-FROM alpine:3.20
+FROM python:3.10-alpine3.20
 
 RUN apk update && \
-    apk add --no-cache ffmpeg
+    apk add --no-cache \
+        ffmpeg \
+        bash \
+        python3 \
+        py3-pip \
+        git && \
+    pip3 install --upgrade git+https://github.com/yt-dlp/yt-dlp.git@release && \
+    pip3 install apprise
 
 COPY --from=build /usr/project /usr/project
 
