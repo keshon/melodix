@@ -68,30 +68,36 @@ func (y *YtdlpWrapper) GetMetaInfo(url string) (Meta, error) {
 	return meta, nil
 }
 
-func (y *YtdlpWrapper) GetStream(url string) (string, error) {
+func (y *YtdlpWrapper) GetStream(url string) (*ytdlp.Result, string, error) {
 	cacheDir := "./cache"
 
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create cache directory: %w", err)
+		return nil, "", fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
 	outputFile := filepath.Join(cacheDir, timestamp+".webm")
 
-	dl := ytdlp.New().Output(outputFile)
+	dl := ytdlp.New().
+		FormatSort("res,ext:webm:webm").
+		NoPart().
+		NoPlaylist().
+		NoOverwrites().
+		Output(outputFile)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	if _, err := dl.Run(ctx, url); err != nil {
+	result, err := dl.Run(ctx, url)
+	if err != nil {
 		_ = os.Remove(outputFile)
-		return "", fmt.Errorf("failed to download stream from URL %q: %w", url, err)
+		return nil, "", fmt.Errorf("failed to download stream from URL %q: %w", url, err)
 	}
 
 	absPath, err := filepath.Abs(outputFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve absolute path for %q: %w", outputFile, err)
+		return nil, "", fmt.Errorf("failed to resolve absolute path for %q: %w", outputFile, err)
 	}
 
-	return absPath, nil
+	return result, absPath, nil
 }
