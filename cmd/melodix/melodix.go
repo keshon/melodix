@@ -43,8 +43,6 @@ var commands = []Command{
 	{"help", []string{"h", "?"}, "Show this help message", "General"},
 }
 
-var pleaseWaitMessage *discordgo.Message
-
 type Command struct {
 	Name        string
 	Aliases     []string
@@ -57,6 +55,7 @@ type Bot struct {
 	storage       *storage.Storage
 	players       map[string]*player.Player
 	prefixCache   map[string]string
+	playMessage   map[string]*discordgo.Message
 	defaultPrefix string
 }
 
@@ -76,6 +75,7 @@ func NewBot(token string) (*Bot, error) {
 		storage:       s,
 		players:       make(map[string]*player.Player),
 		prefixCache:   make(map[string]string),
+		playMessage:   make(map[string]*discordgo.Message),
 		defaultPrefix: "!",
 	}, nil
 }
@@ -207,7 +207,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			return
 		}
 
-		pleaseWaitMessage, _ = s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Please wait...").MessageEmbed)
+		b.playMessage[m.GuildID], _ = s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Please wait...").MessageEmbed)
 
 		songs, err := b.fetchSongs(param)
 		if err != nil {
@@ -407,8 +407,8 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 					emb.SetThumbnail(instance.Song.Thumbnail.URL)
 				}
 				emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
-				if pleaseWaitMessage != nil {
-					s.ChannelMessageEditEmbed(m.ChannelID, pleaseWaitMessage.ID, emb.MessageEmbed)
+				if b.playMessage[m.GuildID] != nil {
+					s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.MessageEmbed)
 				} else {
 					s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
 				}
@@ -416,7 +416,7 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
 		case player.StatusResuming:
-			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Oopsie! There was a network issue.\nTrying to resume...").MessageEmbed)
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Oopsie! There was a network issue.\nTrying to continue playback...").MessageEmbed)
 		case player.StatusAdded:
 			desc := fmt.Sprintf("Song(s) added to queue\n\nUse `%slist` to see the current queue.", b.prefixCache[m.GuildID])
 			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription(desc).MessageEmbed)
