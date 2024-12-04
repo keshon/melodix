@@ -9,10 +9,7 @@ Melodix is my pet project written in Go that plays audio from YouTube and audio 
 ## 🌟 Features Overview
 
 ### 🎧 Playback Support
-- 🎶 Single track added by song name or YouTube link.
-- 🎶 Multiple tracks added via multiple YouTube links (space-separated).
-- 🎶 Tracks from public user YouTube playlists.
-- 🎶 Tracks from YouTube "MIX" playlists.
+- 🎶 Track added by song name or YouTube/Soundcloud link.
 - 📻 Internet radio streaming links (24/7 playback).
 
 ### ⚙️ Additional Features
@@ -89,7 +86,9 @@ This project is written in Go, so ensure your environment is ready. Use the prov
 - `build-release.bat` (or `.sh` for Linux): Build the release version.
 - `build-dist-assemble`: Build the release version and assemble it as a distribution package (Windows only).
 
-Rename `.env.example` to `.env` and store your Discord Bot Token in the `DISCORD_TOKEN` variable. Install [FFMPEG](https://ffmpeg.org/) (only recent versions are supported).
+Rename `.env.example` to `.env` and store your Discord Bot Token in the `DISCORD_TOKEN` variable. 
+Install [FFMPEG](https://ffmpeg.org/) (only recent versions are supported).
+Install yt-dlp and add it to global PATH variable.
 
 ### 🐳 Docker Deployment
 For Docker deployment, refer to `docker/README.md` for specific instructions.
