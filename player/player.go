@@ -206,11 +206,13 @@ PLAYBACK_LOOP:
 				close(done)
 				// stop if there is an error
 				if err != nil && err != io.EOF {
+					p.StatusSignals <- StatusError
 					return err
 				}
 				// restart if there is an interrupt
 				duration, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
 				if err != nil {
+					p.StatusSignals <- StatusError
 					return err
 				}
 				if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
@@ -236,6 +238,7 @@ PLAYBACK_LOOP:
 				fmt.Println("Switching to cached playback")
 				_, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
 				if err != nil {
+					p.StatusSignals <- StatusError
 					return err
 				}
 				isCached = true
@@ -256,6 +259,7 @@ PLAYBACK_LOOP:
 					}
 					p.ActionSignals <- ActionStop
 				case ActionStop:
+					p.StatusSignals <- StatusResting
 					return p.leaveVoiceChannel(vc)
 				case ActionSwap:
 					encoding.Stop()

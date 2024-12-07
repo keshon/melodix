@@ -35,20 +35,12 @@ const (
 )
 
 var platformURLs = map[Platform][]string{
-	YouTube:      {"youtube.com", "youtu.be"},
-	Soundcloud:   {"soundcloud.com"},
-	Bandcamp:     {"bandcamp.com"},
-	FiftySixCom:  {"56.com"},
-	DailyMotion:  {"dailymotion.com"},
-	Vimeo:        {"vimeo.com"},
-	TikTok:       {"tiktok.com"},
-	Facebook:     {"facebook.com"},
-	Instagram:    {"instagram.com"},
-	Vevo:         {"vevo.com"},
-	AudioMack:    {"audiomack.com"},
-	Chaturbate:   {"chaturbate.com"},
-	Pornhub:      {"pornhub.com"},
-	ReverbNation: {"reverbnation.com"},
+	YouTube:     {"youtube.com", "youtu.be"},
+	Soundcloud:  {"soundcloud.com"},
+	Bandcamp:    {"bandcamp.com"},
+	FiftySixCom: {"56.com"},
+	DailyMotion: {"dailymotion.com"},
+	Vimeo:       {"vimeo.com"},
 }
 
 var (
