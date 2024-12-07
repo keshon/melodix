@@ -135,8 +135,12 @@ PLAYBACK_LOOP:
 
 				if output.ExitCode == 0 {
 					time.Sleep(5 * time.Second)
-					p.Song.StreamURL = path
-					cacheReady <- true
+					if p.Song != nil {
+						p.Song.StreamURL = path
+						cacheReady <- true
+					} else {
+						cacheReady <- false
+					}
 				}
 
 				fmt.Println("Caching is done, switching to playback from cache")
@@ -256,8 +260,9 @@ PLAYBACK_LOOP:
 						p.Song = nil
 						isCached = false
 						continue PLAYBACK_LOOP
+					} else {
+						p.ActionSignals <- ActionStop
 					}
-					p.ActionSignals <- ActionStop
 				case ActionStop:
 					p.StatusSignals <- StatusResting
 					return p.leaveVoiceChannel(vc)
