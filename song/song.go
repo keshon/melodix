@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/keshon/melodix/kkdai"
 	"github.com/keshon/melodix/sources_util"
 	"github.com/keshon/melodix/ytdlp"
 )
@@ -18,20 +19,12 @@ import (
 type Platform string
 
 const (
-	YouTube      Platform = "YouTube"
-	Soundcloud   Platform = "Soundcloud"
-	Bandcamp     Platform = "Bandcamp"
-	FiftySixCom  Platform = "56.com"
-	DailyMotion  Platform = "DailyMotion"
-	Vimeo        Platform = "Vimeo"
-	TikTok       Platform = "TikTok"
-	Facebook     Platform = "Facebook"
-	Instagram    Platform = "Instagram"
-	Vevo         Platform = "Vevo"
-	AudioMack    Platform = "AudioMack"
-	Chaturbate   Platform = "Chaturbate"
-	Pornhub      Platform = "Pornhub"
-	ReverbNation Platform = "ReverbNation"
+	YouTube     Platform = "YouTube"
+	Soundcloud  Platform = "Soundcloud"
+	Bandcamp    Platform = "Bandcamp"
+	FiftySixCom Platform = "56.com"
+	DailyMotion Platform = "DailyMotion"
+	Vimeo       Platform = "Vimeo"
 )
 
 var platformURLs = map[Platform][]string{
@@ -116,12 +109,13 @@ func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
 	errs := make(chan error, len(urls))    // Buffered channel to collect errors
 	var wg sync.WaitGroup                  // WaitGroup for managing concurrency
 	ytdlp := ytdlp.New()
+	kkdai := kkdai.New()
 
 	for _, url := range platformURLs {
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			song, err := s.fetchPlatformSong(ytdlp, url)
+			song, err := s.fetchPlatformSong(ytdlp, kkdai, url)
 			if err != nil {
 				errs <- fmt.Errorf("error fetching song from yt-dlp URL %q: %w", url, err)
 				return
@@ -168,7 +162,9 @@ func (s *Song) fetchSongsByTitle(title string) ([]*Song, error) {
 	return s.FetchSongs(url)
 }
 
-func (s *Song) fetchPlatformSong(ytdlp *ytdlp.YtdlpWrapper, url string) (*Song, error) {
+func (s *Song) fetchPlatformSong(ytdlp *ytdlp.YtdlpWrapper, kkdai *kkdai.KkdaiWrapper, url string) (*Song, error) {
+	// TODO: add support for kkdai with fallback to ytdlp
+
 	meta, err := ytdlp.GetMetaInfo(url)
 	if err != nil {
 		return nil, fmt.Errorf("error getting metadata from yt-dlp: %w", err)
