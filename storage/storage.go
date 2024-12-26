@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/keshon/melodix/datastore"
@@ -108,6 +109,8 @@ func (s *Storage) AppendTrackToHistory(guildID string, track TracksHistoryRecord
 	if err != nil {
 		return err
 	}
+
+	track.Title = sanitizeString(track.Title)
 
 	for i, existingTrack := range record.TracksHistoryList {
 		if existingTrack.ID == track.ID {
@@ -237,4 +240,10 @@ func (s *Storage) FetchPrefix(guildID string) (string, error) {
 	}
 
 	return record.PrefPrefix, nil
+}
+
+func sanitizeString(input string) string {
+	// keep only ASCII characters
+	re := regexp.MustCompile(`[^\x20-\x7E]`)
+	return re.ReplaceAllString(input, "")
 }
