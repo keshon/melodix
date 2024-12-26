@@ -415,8 +415,8 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 				return
 			}
 			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
-		case player.StatusResuming:
-			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Oopsie! There was a network issue.\nTrying to continue playback...").MessageEmbed)
+		// case player.StatusResuming:
+		// 	s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Oopsie! There was a network issue.\nTrying to continue playback...").MessageEmbed)
 		case player.StatusError:
 			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Error detected...").MessageEmbed)
 		case player.StatusAdded:
