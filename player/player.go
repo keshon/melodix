@@ -13,9 +13,10 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"github.com/keshon/dca"
+	"github.com/keshon/melodix/env"
+	"github.com/keshon/melodix/parsers"
 	songpkg "github.com/keshon/melodix/song"
 	"github.com/keshon/melodix/storage"
-	"github.com/keshon/melodix/ytdlp"
 )
 
 type Player struct {
@@ -102,17 +103,29 @@ PLAYBACK_LOOP:
 			return fmt.Errorf("song is empty")
 		}
 
-		options := dca.StdEncodeOptions
-		options.RawOutput = true
-		options.Bitrate = 96
-		options.Application = "lowdelay"
-		options.FrameDuration = 20
-		options.BufferedFrames = 400
-		options.CompressionLevel = 10
-		options.VBR = true
-		options.VolumeFloat = 1.0
-		options.StartTime = startAt
-		options.EncodingLineLog = true
+		options := &dca.EncodeOptions{
+			Application:             "lowdelay",
+			StartTime:               startAt,
+			Volume:                  env.GetEnvAsInt("ENCODE_VOLUME", 128),
+			Channels:                env.GetEnvAsInt("ENCODE_CHANNELS", 2),
+			FrameRate:               env.GetEnvAsInt("ENCODE_FRAME_RATE", 48000),
+			FrameDuration:           env.GetEnvAsInt("ENCODE_FRAME_DURATION", 20),
+			Bitrate:                 env.GetEnvAsInt("ENCODE_BITRATE", 96),
+			CompressionLevel:        env.GetEnvAsInt("ENCODE_COMPRESSION_LEVEL", 10),
+			PacketLoss:              env.GetEnvAsInt("ENCODE_PACKET_LOSS", 1),
+			BufferedFrames:          env.GetEnvAsInt("ENCODE_BUFFERED_FRAMES", 400),
+			VBR:                     env.GetEnvAsBool("ENCODE_VBR", true),
+			VolumeFloat:             env.GetEnvAsFloat32("ENCODE_VOLUME_FLOAT", 1.0),
+			ReconnectAtEOF:          env.GetEnvAsInt("ENCODE_RECONNECT_AT_EOF", 1),
+			ReconnectStreamed:       env.GetEnvAsInt("ENCODE_RECONNECT_STREAMED", 1),
+			ReconnectOnNetworkError: env.GetEnvAsInt("ENCODE_RECONNECT_ON_NETWORK_ERROR", 1),
+			ReconnectOnHttpError:    env.GetEnv("ENCODE_RECONNECT_ON_HTTP_ERROR", "4xx,5xx"),
+			ReconnectDelayMax:       env.GetEnvAsInt("ENCODE_RECONNECT_DELAY_MAX", 5),
+			FfmpegBinaryPath:        env.GetEnv("ENCODE_FFMPEG_BINARY_PATH", ""),
+			EncodingLineLog:         env.GetEnvAsBool("ENCODE_ENCODING_LINE_LOG", true),
+			UserAgent:               env.GetEnv("ENCODE_USER_AGENT", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)"),
+			RawOutput:               env.GetEnvAsBool("ENCODE_RAW_OUTPUT", true),
+		}
 
 		streamPath := p.Song.StreamURL
 
@@ -125,7 +138,7 @@ PLAYBACK_LOOP:
 					return
 				}
 
-				output, path, err := ytdlp.New().GetStream(p.Song.PublicLink)
+				output, path, err := parsers.NewYtdlpWrapper().GetStream(p.Song.PublicLink) // we can use kkdai for better speed
 				if err != nil {
 					fmt.Printf("Error caching: %v\n", err)
 					return

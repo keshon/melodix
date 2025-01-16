@@ -218,9 +218,9 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("No song found.").MessageEmbed)
 			return
 		}
-		for _, song := range songs {
-			fmt.Printf("%v - %v (%v)\n", song.Title, song.PublicLink, song.SongID)
-		}
+		// for _, song := range songs {
+		// 	fmt.Printf("%v - %v (%v)\n", song.Title, song.PublicLink, song.SongID)
+		// }
 		instance := b.getOrCreatePlayer(m.GuildID)
 		instance.Queue = append(instance.Queue, songs...)
 		instance.GuildID = m.GuildID

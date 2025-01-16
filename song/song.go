@@ -11,9 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/keshon/melodix/kkdai"
+	"github.com/keshon/melodix/parsers"
 	"github.com/keshon/melodix/sources_util"
-	"github.com/keshon/melodix/ytdlp"
 )
 
 type Platform string
@@ -108,8 +107,8 @@ func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
 	results := make(chan *Song, len(urls)) // Buffered channel to collect songs
 	errs := make(chan error, len(urls))    // Buffered channel to collect errors
 	var wg sync.WaitGroup                  // WaitGroup for managing concurrency
-	ytdlp := ytdlp.New()
-	kkdai := kkdai.New()
+	ytdlp := parsers.NewYtdlpWrapper()
+	kkdai := parsers.NewKkdaiWrapper()
 
 	for _, url := range platformURLs {
 		wg.Add(1)
@@ -162,21 +161,35 @@ func (s *Song) fetchSongsByTitle(title string) ([]*Song, error) {
 	return s.FetchSongs(url)
 }
 
-func (s *Song) fetchPlatformSong(ytdlp *ytdlp.YtdlpWrapper, kkdai *kkdai.KkdaiWrapper, url string) (*Song, error) {
-	// TODO: add support for kkdai with fallback to ytdlp
+func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.KkdaiWrapper, url string) (*Song, error) {
 
-	meta, err := ytdlp.GetMetaInfo(url)
+	var streamURL string
+	var meta parsers.Meta
+	var err error
+
+	// Try kkdai or yt-dlp if it fails
+	streamURL, meta, err = kkdai.GetStreamURL(url)
+	meta.Parser = "kkdai"
 	if err != nil {
-		return nil, fmt.Errorf("error getting metadata from yt-dlp: %w", err)
+		streamURL, err = ytdlp.GetStreamURL(url)
+		if err != nil {
+			return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
+		}
+
+		meta, err = ytdlp.GetMetaInfo(url)
+		if err != nil {
+			return nil, fmt.Errorf("error getting metadata from yt-dlp: %w", err)
+		}
+
+		meta.WebPageURL = url
+		meta.Parser = "yt-dlp"
 	}
 
-	streamURL, err := ytdlp.GetStreamURL(url)
-	if err != nil {
-		return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
-	}
-
-	fmt.Println(streamURL)
-	fmt.Println(meta.Title)
+	fmt.Println("======================================")
+	fmt.Println("URL:\t", streamURL)
+	fmt.Println("Title:\t", meta.Title)
+	fmt.Println("Parser:\t", meta.Parser)
+	fmt.Println("======================================")
 
 	return &Song{
 		Title:      meta.Title,

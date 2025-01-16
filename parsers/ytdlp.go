@@ -1,4 +1,4 @@
-package ytdlp
+package parsers
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 type YtdlpWrapper struct{}
 
-func New() *YtdlpWrapper {
+func NewYtdlpWrapper() *YtdlpWrapper {
 	return &YtdlpWrapper{}
 }
 
@@ -41,13 +41,6 @@ func (y *YtdlpWrapper) GetStreamURL(url string) (string, error) {
 	}
 
 	return lastLine, nil
-}
-
-type Meta struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	WebPageURL string  `json:"webpage_url"`
-	Duration   float64 `json:"duration"`
 }
 
 func (y *YtdlpWrapper) GetMetaInfo(url string) (Meta, error) {
