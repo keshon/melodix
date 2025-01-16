@@ -93,6 +93,37 @@ Install yt-dlp and add it to global PATH variable.
 ### 🐳 Docker Deployment
 For Docker deployment, refer to `docker/README.md` for specific instructions.
 
+## 📝 Environment Variables
+
+You can configure Melodix using environment variables by creating a `.env` file in your project root directory. The following variables should be set in your `.env` file:
+
+```env
+# Discord Bot Token (Required)
+DISCORD_TOKEN=your-discord-bot-token
+
+# Encoding options
+ENCODE_VOLUME=128
+ENCODE_CHANNELS=2
+ENCODE_FRAME_RATE=48000
+ENCODE_FRAME_DURATION=20
+ENCODE_BITRATE=96
+ENCODE_COMPRESSION_LEVEL=10
+ENCODE_PACKET_LOSS=1
+ENCODE_BUFFERED_FRAMES=400
+ENCODE_VBR=true
+ENCODE_START_TIME=0s
+ENCODE_VOLUME_FLOAT=1.0
+ENCODE_RECONNECT_AT_EOF=1
+ENCODE_RECONNECT_STREAMED=1
+ENCODE_RECONNECT_ON_NETWORK_ERROR=1
+ENCODE_RECONNECT_ON_HTTP_ERROR="4xx,5xx"
+ENCODE_RECONNECT_DELAY_MAX=5
+ENCODE_FFMPEG_BINARY_PATH=""
+ENCODE_ENCODING_LINE_LOG=true
+ENCODE_USER_AGENT="Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)"
+ENCODE_RAW_OUTPUT=true
+```
+
 ## 🆘 Support
 For any questions, get support in the [Official Discord server](https://discord.gg/NVtdTka8ZT).
 
