@@ -267,6 +267,8 @@ PLAYBACK_LOOP:
 				if position.Seconds() == 0.0 {
 					fmt.Printf("Playback could not be started: \"%v\"\n", p.Song.Title)
 					p.StatusSignals <- StatusError
+					encoding.Stop()
+					encoding.Cleanup()
 					return fmt.Errorf("playback could not be started: %v", doneError)
 				}
 
