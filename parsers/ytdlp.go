@@ -62,7 +62,7 @@ func (y *YtdlpWrapper) GetMetaInfo(url string) (Meta, error) {
 	return meta, nil
 }
 
-func (y *YtdlpWrapper) GetStream(url string) (*ytdlp.Result, string, error) {
+func (y *YtdlpWrapper) DownloadStream(url string) (*ytdlp.Result, string, error) {
 	cacheDir := "./cache"
 
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
@@ -70,13 +70,15 @@ func (y *YtdlpWrapper) GetStream(url string) (*ytdlp.Result, string, error) {
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
-	outputFile := filepath.Join(cacheDir, timestamp+".webm")
+	outputFile := filepath.Join(cacheDir, timestamp)
 
 	dl := ytdlp.New().
-		FormatSort("res,ext:webm:webm").
+		// FormatSort("acodec:opus").
 		NoPart().
 		NoPlaylist().
 		NoOverwrites().
+		NoKeepVideo().
+		Format("bestaudio").
 		Output(outputFile)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

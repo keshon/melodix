@@ -121,7 +121,8 @@ func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
 	var songs []*Song
 	results := make(chan *Song, len(urls)) // Buffered channel to collect songs
 	errs := make(chan error, len(urls))    // Buffered channel to collect errors
-	var wg sync.WaitGroup                  // WaitGroup for managing concurrency
+	var wg sync.WaitGroup
+
 	ytdlp := parsers.NewYtdlpWrapper()
 	kkdai := parsers.NewKkdaiWrapper()
 
@@ -187,9 +188,12 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 	streamURL, meta, err = kkdai.GetStreamURL(url)
 	parser = ParserKkdai
 	if err != nil || streamURL == "" {
-		fmt.Println("Failed to get stream URL from kkdai, trying yt-dlp...")
-		fmt.Printf("Error: %s\n", err)
-		fmt.Printf("Stream URL: %s\n", streamURL)
+		fmt.Println("Failed to parse URL with kkdai, trying yt-dlp...")
+		if err != nil {
+			fmt.Printf("Error: %s\n", err)
+		} else {
+			fmt.Println("Couldn't get stream URL")
+		}
 
 		streamURL, err = ytdlp.GetStreamURL(url)
 		if err != nil {

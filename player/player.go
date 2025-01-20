@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -143,7 +145,7 @@ PLAYBACK_LOOP:
 						return
 					}
 
-					output, path, err := parsers.NewYtdlpWrapper().GetStream(p.Song.PublicLink) // we can use kkdai for better speed
+					output, path, err := parsers.NewYtdlpWrapper().DownloadStream(p.Song.PublicLink)
 					if err != nil {
 						fmt.Printf("Error caching: %v\n", err)
 						return
@@ -154,7 +156,7 @@ PLAYBACK_LOOP:
 					if output.ExitCode == 0 {
 						time.Sleep(5 * time.Second)
 						if p.Song != nil {
-							p.Song.StreamURL = path + ".mp4" //nasty fix
+							p.Song.StreamURL = path
 							cacheReady <- true
 						} else {
 							cacheReady <- false
@@ -166,6 +168,7 @@ PLAYBACK_LOOP:
 			}
 		}
 
+		time.Sleep(250 * time.Millisecond)
 		encoding, err := dca.EncodeFile(streamPath, options)
 		if err != nil {
 			return err
@@ -195,7 +198,11 @@ PLAYBACK_LOOP:
 		}
 
 		if startAt == 0 {
-			err := p.Storage.AddTrackCountByOne(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink)
+			hostname, err := extractHostname(p.Song.PublicLink)
+			if err != nil {
+				hostname = p.Song.Source.String()
+			}
+			err = p.Storage.AddTrackCountByOne(p.GuildID, p.Song.SongID, p.Song.Title, hostname, p.Song.PublicLink)
 			if err != nil {
 				return err
 			}
@@ -214,7 +221,11 @@ PLAYBACK_LOOP:
 					return
 				case <-ticker.C:
 					if p.Song != nil { // or it will crash on stop signal
-						err := p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, p.Song.Source.String(), p.Song.PublicLink, 2*time.Second)
+						hostname, err := extractHostname(p.Song.PublicLink)
+						if err != nil {
+							hostname = p.Song.Source.String()
+						}
+						err = p.Storage.AddTrackDuration(p.GuildID, p.Song.SongID, p.Song.Title, hostname, p.Song.PublicLink, 2*time.Second)
 						if err != nil {
 							fmt.Printf("Error saving track duration: %v\n", err)
 						}
@@ -225,17 +236,19 @@ PLAYBACK_LOOP:
 
 		for {
 			select {
-			case err := <-done:
+			case doneError := <-done:
 				close(done)
+
 				fmt.Println("Playback got done signal")
+
 				// stop if there is an error
-				if err != nil && err != io.EOF {
+				if doneError != nil && doneError != io.EOF {
 					p.StatusSignals <- StatusError
-					return err
+					return doneError
 				}
 				// restart if there is an interrupt
-				duration, position, errPlaybackDuration := p.getPlaybackDuration(encoding, streaming, p.Song)
-				if errPlaybackDuration != nil {
+				duration, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
+				if err != nil {
 					p.StatusSignals <- StatusError
 					return err
 				}
@@ -250,11 +263,13 @@ PLAYBACK_LOOP:
 					startAt = position
 					continue PLAYBACK_LOOP
 				}
+
 				if position.Seconds() == 0.0 {
 					fmt.Printf("Playback could not be started: \"%v\"\n", p.Song.Title)
 					p.StatusSignals <- StatusError
-					return fmt.Errorf("playback could not be started: %v", err)
+					return fmt.Errorf("playback could not be started: %v", doneError)
 				}
+
 				// skip to the next song
 				if len(p.Queue) > 0 {
 					startAt = 0
@@ -264,18 +279,20 @@ PLAYBACK_LOOP:
 					isCached = false
 					continue PLAYBACK_LOOP
 				}
+
 				// finished
 				fmt.Printf("Finished playback of \"%v\"", p.Song.Title)
 				return nil
-			case <-cacheReady: // Cache is ready
+			case <-cacheReady:
 				fmt.Println("Switching to cached playback")
+
 				_, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
 				if err != nil {
 					p.StatusSignals <- StatusError
 					return err
 				}
+
 				isCached = true
-				//encoding.Stop()
 				encoding.Cleanup()
 				startAt = position
 				continue PLAYBACK_LOOP
@@ -397,4 +414,18 @@ func (p *Player) fetchMP3Duration(filePath string) (time.Duration, error) {
 	totalDuration := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
 
 	return totalDuration, nil
+}
+
+func extractHostname(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	hostname := parsedURL.Hostname()
+
+	// Remove 'www.' prefix if present
+	hostname = strings.TrimPrefix(hostname, "www.")
+
+	return hostname, nil
 }

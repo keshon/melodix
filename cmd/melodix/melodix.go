@@ -306,9 +306,14 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			return
 		}
 		for index, song := range songs {
+			hostname, err := extractHostname(song.PublicLink)
+			if err != nil {
+				hostname = song.Source.String()
+			}
+
 			emb.Fields = append(emb.Fields, &discordgo.MessageEmbedField{
 				Name:   fmt.Sprintf("%d. %s", index+1, song.Title),
-				Value:  fmt.Sprintf("[%s](%s)", song.Source, song.PublicLink),
+				Value:  fmt.Sprintf("[%s](%s)", hostname, song.PublicLink),
 				Inline: false,
 			})
 		}
@@ -417,6 +422,8 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	go func() {
+		time.Sleep(250 * time.Millisecond)
+
 		var currentChannelID string
 		if b.playChannelID[m.GuildID] != "" {
 			currentChannelID = b.playChannelID[m.GuildID]
