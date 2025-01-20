@@ -37,6 +37,7 @@ var commands = []Command{
 	{"log", []string{"history", "time", "t"}, "Display recent playback history", "Information"},
 
 	{"ping", nil, "Check if the bot is responsive", "Utility"},
+	{"cache", nil, "Enable/disable caching during playback (`cache on/off`)", "Utility"},
 	{"set-prefix", nil, "Set a custom command prefix", "Utility"},
 	{"melodix-reset-prefix", nil, "Reset the command prefix to the default `!`", "Utility"},
 
@@ -161,6 +162,16 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	switch cmd.Name {
 	case "ping":
 		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Pong!").MessageEmbed)
+	case "cache":
+		if param == "on" {
+			b.storage.EnableCache(m.GuildID)
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Cache enabled").MessageEmbed)
+		} else if param == "off" {
+			b.storage.DisableCache(m.GuildID)
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Cache disabled").MessageEmbed)
+		} else {
+			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Invalid parameter, use `cache on` or `cache off`").MessageEmbed)
+		}
 	case "about":
 		buildDate := "unknown"
 		if version.BuildDate != "" {
@@ -446,7 +457,9 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 			s.ChannelMessageSendEmbed(currentChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
 		case player.StatusResuming:
-			s.ChannelMessageSendEmbed(currentChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Interuption detected, resuming...").MessageEmbed)
+			fmt.Println("Interuption detected, resuming...")
+		case player.StatusError:
+			fmt.Println("Error:", signal)
 		case player.StatusAdded:
 			desc := fmt.Sprintf("Song(s) added to queue\n\nUse `%slist` to see the current queue.", b.prefixCache[m.GuildID])
 			if b.playMessage[m.GuildID] != nil {

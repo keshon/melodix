@@ -129,35 +129,41 @@ PLAYBACK_LOOP:
 
 		streamPath := p.Song.StreamURL
 
+		cachedIsEnabled, err := p.Storage.IsCacheEnabled(p.GuildID)
+		if err != nil {
+			return err
+		}
 		cacheReady := make(chan bool)
-		if !isCached {
-			go func() {
-				cacheDir := "./cache"
-				if err := os.MkdirAll(cacheDir, 0755); err != nil {
-					fmt.Printf("Error creating cache directory: %v\n", err)
-					return
-				}
-
-				output, path, err := parsers.NewYtdlpWrapper().GetStream(p.Song.PublicLink) // we can use kkdai for better speed
-				if err != nil {
-					fmt.Printf("Error caching: %v\n", err)
-					return
-				}
-
-				fmt.Println(output)
-
-				if output.ExitCode == 0 {
-					time.Sleep(5 * time.Second)
-					if p.Song != nil {
-						p.Song.StreamURL = path
-						cacheReady <- true
-					} else {
-						cacheReady <- false
+		if cachedIsEnabled {
+			if !isCached {
+				go func() {
+					cacheDir := "./cache"
+					if err := os.MkdirAll(cacheDir, 0755); err != nil {
+						fmt.Printf("Error creating cache directory: %v\n", err)
+						return
 					}
-				}
 
-				fmt.Println("Caching is done, switching to playback from cache")
-			}()
+					output, path, err := parsers.NewYtdlpWrapper().GetStream(p.Song.PublicLink) // we can use kkdai for better speed
+					if err != nil {
+						fmt.Printf("Error caching: %v\n", err)
+						return
+					}
+
+					fmt.Println(output)
+
+					if output.ExitCode == 0 {
+						time.Sleep(5 * time.Second)
+						if p.Song != nil {
+							p.Song.StreamURL = path + ".mp4" //nasty fix
+							cacheReady <- true
+						} else {
+							cacheReady <- false
+						}
+					}
+
+					fmt.Println("Caching is done, switching to playback from cache")
+				}()
+			}
 		}
 
 		encoding, err := dca.EncodeFile(streamPath, options)
@@ -221,6 +227,7 @@ PLAYBACK_LOOP:
 			select {
 			case err := <-done:
 				close(done)
+				fmt.Println("Playback got done signal")
 				// stop if there is an error
 				if err != nil && err != io.EOF {
 					p.StatusSignals <- StatusError
@@ -232,6 +239,10 @@ PLAYBACK_LOOP:
 					p.StatusSignals <- StatusError
 					return err
 				}
+
+				fmt.Printf("Duration: %v, Position: %v\n", duration, position)
+				fmt.Printf("Encoding (sec): %v, Position (sec): %v\n", encoding.Stats().Duration.Seconds(), position.Seconds())
+
 				if encoding.Stats().Duration.Seconds() > 0 && position.Seconds() > 0 && position < duration {
 					fmt.Printf("Playback interrupted, restarting: \"%v\" from %vs\n", p.Song.Title, position.Seconds())
 					encoding.Stop()
@@ -283,7 +294,7 @@ PLAYBACK_LOOP:
 					}
 				case ActionStop:
 					p.StatusSignals <- StatusResting
-					return p.leaveVoiceChannel(vc)
+					return nil //p.leaveVoiceChannel(vc)
 				case ActionSwap:
 					encoding.Stop()
 					encoding.Cleanup()

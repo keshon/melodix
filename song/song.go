@@ -187,6 +187,10 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 	streamURL, meta, err = kkdai.GetStreamURL(url)
 	parser = ParserKkdai
 	if err != nil || streamURL == "" {
+		fmt.Println("Failed to get stream URL from kkdai, trying yt-dlp...")
+		fmt.Printf("Error: %s\n", err)
+		fmt.Printf("Stream URL: %s\n", streamURL)
+
 		streamURL, err = ytdlp.GetStreamURL(url)
 		if err != nil {
 			return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
@@ -256,8 +260,8 @@ func (s *Song) GetSongInfo(song *Song) (string, string, string, string, error) {
 	case SourcePlatform:
 		return song.Title, song.Source.String(), song.PublicLink, song.Parser, nil
 	case SourceInternet:
-		title, source, publicLink, err := s.getInternetSongMetadata(song.StreamURL)
-		return title, source, publicLink, song.Parser, err
+		title, source, _, err := s.getInternetSongMetadata(song.StreamURL)
+		return title, source, song.StreamURL, song.Parser, err
 	default:
 		return "", "", "", "", fmt.Errorf("unknown source: %v", song.Source)
 	}

@@ -41,6 +41,7 @@ type TracksHistoryRecord struct {
 
 type Record struct {
 	PrefPrefix          string                 `json:"pref_prefix"`
+	UseCache            bool                   `json:"use_cache"`
 	CommandsHistoryList []CommandHistoryRecord `json:"commands_history"`
 	TracksHistoryList   []TracksHistoryRecord  `json:"tracks_history"`
 }
@@ -59,6 +60,7 @@ func (s *Storage) getOrCreateGuildRecord(guildID string) (*Record, error) {
 	if !exists {
 		newRecord := &Record{
 			PrefPrefix:          "",
+			UseCache:            false,
 			CommandsHistoryList: []CommandHistoryRecord{},
 			TracksHistoryList:   []TracksHistoryRecord{},
 		}
@@ -246,4 +248,35 @@ func sanitizeString(input string) string {
 	// keep only ASCII characters
 	re := regexp.MustCompile(`[^\x20-\x7E]`)
 	return re.ReplaceAllString(input, "")
+}
+
+func (s *Storage) EnableCache(guildID string) error {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return err
+	}
+
+	record.UseCache = true
+	s.ds.Add(guildID, record)
+	return nil
+}
+
+func (s *Storage) DisableCache(guildID string) error {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return err
+	}
+
+	record.UseCache = false
+	s.ds.Add(guildID, record)
+	return nil
+}
+
+func (s *Storage) IsCacheEnabled(guildID string) (bool, error) {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return false, err
+	}
+
+	return record.UseCache, nil
 }
