@@ -227,8 +227,8 @@ PLAYBACK_LOOP:
 					return err
 				}
 				// restart if there is an interrupt
-				duration, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
-				if err != nil {
+				duration, position, errPlaybackDuration := p.getPlaybackDuration(encoding, streaming, p.Song)
+				if errPlaybackDuration != nil {
 					p.StatusSignals <- StatusError
 					return err
 				}
@@ -238,6 +238,11 @@ PLAYBACK_LOOP:
 					encoding.Cleanup()
 					startAt = position
 					continue PLAYBACK_LOOP
+				}
+				if position.Seconds() == 0.0 {
+					fmt.Printf("Playback could not be started: \"%v\"\n", p.Song.Title)
+					p.StatusSignals <- StatusError
+					return fmt.Errorf("playback could not be started: %v", err)
 				}
 				// skip to the next song
 				if len(p.Queue) > 0 {

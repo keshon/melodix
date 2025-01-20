@@ -58,6 +58,7 @@ func (y *YtdlpWrapper) GetMetaInfo(url string) (Meta, error) {
 		return Meta{}, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
+	meta.Parser = "yt-dlp"
 	return meta, nil
 }
 

@@ -16,22 +16,22 @@ type KkdaiWrapper struct {
 }
 
 func NewKkdaiWrapper() *KkdaiWrapper {
-	client := &kkdai_youtube.Client{HTTPClient: &http.Client{
+	client := kkdai_youtube.Client{HTTPClient: &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
 				Timeout: 30 * time.Second,
 			}).DialContext,
-			MaxIdleConns:          10,
+			MaxIdleConns:          5,
 			IdleConnTimeout:       30 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+			TLSHandshakeTimeout:   15 * time.Second,
+			ExpectContinueTimeout: 15 * time.Second,
 		},
 		Timeout: 30 * time.Second,
 	}}
 
 	return &KkdaiWrapper{
-		client: client,
+		client: &client,
 	}
 }
 
@@ -54,6 +54,7 @@ func (k *KkdaiWrapper) GetStreamURL(url string) (string, Meta, error) {
 		Title:      song.Title,
 		WebPageURL: url,
 		Duration:   song.Duration.Seconds(),
+		Parser:     "kkdai",
 	}
 
 	if len(song.Formats) == 0 {

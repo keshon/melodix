@@ -17,9 +17,9 @@ require (
 	github.com/dop251/goja v0.0.0-20250114131315-46d383d606d3 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
-	github.com/ianlancetaylor/demangle v0.0.0-20240312041847-bd984b5ce465 // indirect
+	github.com/ianlancetaylor/demangle v0.0.0-20240912202439-0a2b6291aafd // indirect
 	github.com/jonas747/ogg v0.0.0-20161220051205-b4f6f4cf3757 // indirect
-	github.com/lrstanley/go-ytdlp v0.0.0-20250116004251-d0186a137077 // indirect
+	github.com/lrstanley/go-ytdlp v0.0.0-20250117070427-21edbe635681 // indirect
 	golang.org/x/text v0.21.0 // indirect
 )
 

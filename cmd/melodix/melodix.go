@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -56,6 +57,7 @@ type Bot struct {
 	players       map[string]*player.Player
 	prefixCache   map[string]string
 	playMessage   map[string]*discordgo.Message
+	playChannelID map[string]string
 	defaultPrefix string
 }
 
@@ -76,6 +78,7 @@ func NewBot(token string) (*Bot, error) {
 		players:       make(map[string]*player.Player),
 		prefixCache:   make(map[string]string),
 		playMessage:   make(map[string]*discordgo.Message),
+		playChannelID: make(map[string]string),
 		defaultPrefix: "!",
 	}, nil
 }
@@ -200,6 +203,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error saving command info: %v", err))
 			return
 		}
+
 		voiceState, err := b.findUserVoiceState(m.GuildID, m.Author.ID)
 		emb := embed.NewEmbed().SetColor(embedColor)
 		if err != nil || voiceState.ChannelID == "" {
@@ -208,19 +212,18 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 
 		b.playMessage[m.GuildID], _ = s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("Please wait...").MessageEmbed)
+		b.playChannelID[m.GuildID] = m.ChannelID
 
 		songs, err := b.fetchSongs(param)
 		if err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
+			s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
 			return
 		}
 		if len(songs) == 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription("No song found.").MessageEmbed)
+			s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.SetDescription("No song found.").MessageEmbed)
 			return
 		}
-		// for _, song := range songs {
-		// 	fmt.Printf("%v - %v (%v)\n", song.Title, song.PublicLink, song.SongID)
-		// }
+
 		instance := b.getOrCreatePlayer(m.GuildID)
 		instance.Queue = append(instance.Queue, songs...)
 		instance.GuildID = m.GuildID
@@ -229,21 +232,32 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			instance.StatusSignals <- player.StatusAdded
 			return
 		}
+
 		err = instance.Play()
 		if err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error playing this song(s)\n\n%v", err)).MessageEmbed)
+			s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.SetDescription(fmt.Sprintf("Error playing this song(s)\n\n%v", err)).MessageEmbed)
+			b.playMessage[m.GuildID] = nil
+			b.playChannelID[m.GuildID] = ""
 			return
 		}
 	case "now":
 		instance := b.getOrCreatePlayer(m.GuildID)
 		if instance.Song != nil {
 			emb := embed.NewEmbed().SetColor(embedColor)
-			title, source, publicLink, err := instance.Song.GetSongInfo(instance.Song)
+			title, source, publicLink, parser, err := instance.Song.GetSongInfo(instance.Song)
 			if err != nil {
-				s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
+				s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
 				return
 			}
-			emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), title, source, publicLink))
+			hostname, err := extractHostname(instance.Song.PublicLink)
+			if err != nil {
+				hostname = source
+			}
+			ffmpeg := "`ffmpeg`"
+			if parser != "" {
+				parser = fmt.Sprintf("`%s`", parser)
+			}
+			emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)\n\n%s %s", player.StatusPlaying.StringEmoji(), title, hostname, publicLink, ffmpeg, parser))
 			if len(instance.Song.Thumbnail.URL) > 0 {
 				emb.SetThumbnail(instance.Song.Thumbnail.URL)
 			}
@@ -390,38 +404,57 @@ func (b *Bot) onPlayback(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
+
 	go func() {
+		var currentChannelID string
+		if b.playChannelID[m.GuildID] != "" {
+			currentChannelID = b.playChannelID[m.GuildID]
+		} else {
+			currentChannelID = m.ChannelID
+		}
+
 		instance := b.getOrCreatePlayer(m.GuildID)
 		signal := <-instance.StatusSignals
 		switch signal {
 		case player.StatusPlaying:
 			if instance.Song != nil {
 				emb := embed.NewEmbed().SetColor(embedColor)
-				title, source, publicLink, err := instance.Song.GetSongInfo(instance.Song)
+				title, source, publicLink, parser, err := instance.Song.GetSongInfo(instance.Song)
 				if err != nil {
-					s.ChannelMessageSendEmbed(m.ChannelID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
+					s.ChannelMessageEditEmbed(currentChannelID, b.playMessage[m.GuildID].ID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
 					return
 				}
-				emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)", player.StatusPlaying.StringEmoji(), title, source, publicLink))
+				hostname, err := extractHostname(instance.Song.PublicLink)
+				if err != nil {
+					hostname = source
+				}
+				ffmpeg := "`ffmpeg`"
+				if parser != "" {
+					parser = fmt.Sprintf("`%s`", parser)
+				}
+				emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)\n\n%s %s", player.StatusPlaying.StringEmoji(), title, hostname, publicLink, ffmpeg, parser))
 				if len(instance.Song.Thumbnail.URL) > 0 {
 					emb.SetThumbnail(instance.Song.Thumbnail.URL)
 				}
 				emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
 				if b.playMessage[m.GuildID] != nil {
-					s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.MessageEmbed)
+					s.ChannelMessageEditEmbed(currentChannelID, b.playMessage[m.GuildID].ID, emb.MessageEmbed)
 				} else {
-					s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
+					s.ChannelMessageSendEmbed(currentChannelID, emb.MessageEmbed)
 				}
 				return
 			}
-			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
-		// case player.StatusResuming:
-		// 	s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Oopsie! There was a network issue.\nTrying to continue playback...").MessageEmbed)
-		case player.StatusError:
-			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Error detected...").MessageEmbed)
+			s.ChannelMessageSendEmbed(currentChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
+		case player.StatusResuming:
+			s.ChannelMessageSendEmbed(currentChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Interuption detected, resuming...").MessageEmbed)
 		case player.StatusAdded:
 			desc := fmt.Sprintf("Song(s) added to queue\n\nUse `%slist` to see the current queue.", b.prefixCache[m.GuildID])
-			s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription(desc).MessageEmbed)
+			if b.playMessage[m.GuildID] != nil {
+				s.ChannelMessageEditEmbed(currentChannelID, b.playMessage[m.GuildID].ID, embed.NewEmbed().SetColor(embedColor).SetDescription(desc).MessageEmbed)
+			} else {
+				s.ChannelMessageSendEmbed(currentChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription(desc).MessageEmbed)
+			}
+
 		}
 	}()
 }
@@ -568,7 +601,7 @@ func (b *Bot) truncatListWithNewlines(content string) string {
 	return content
 }
 
-// Global Functions
+// Functions
 func loadEnv(path string) {
 	if err := godotenv.Load(path); err != nil {
 		log.Println("Error loading .env file")
@@ -577,6 +610,20 @@ func loadEnv(path string) {
 	if os.Getenv("DISCORD_TOKEN") == "" {
 		log.Fatal("DISCORD_TOKEN is missing in environment variables")
 	}
+}
+
+func extractHostname(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	hostname := parsedURL.Hostname()
+
+	// Remove 'www.' prefix if present
+	hostname = strings.TrimPrefix(hostname, "www.")
+
+	return hostname, nil
 }
 
 func main() {

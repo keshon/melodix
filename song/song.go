@@ -35,6 +35,21 @@ var platformURLs = map[Platform][]string{
 	Vimeo:       {"vimeo.com"},
 }
 
+type Parser string
+
+const (
+	ParserKkdai Parser = "kkdai"
+	ParserYtdlp Parser = "yt-dlp"
+)
+
+func (p Parser) String() string {
+	if p == "" {
+		return "unknown"
+	}
+	return string(p)
+
+}
+
 var (
 	youtubeUtil  = *sources_util.NewYouTubeUtil()
 	interentUtil = *sources_util.New()
@@ -49,7 +64,7 @@ type Song struct {
 	Duration       time.Duration // duration of the song
 	SongID         string        // unique ID for the song
 	Source         SongSource    // source type of the song
-	Platform       string        // platform of the song
+	Parser         string
 }
 
 type Thumbnail struct {
@@ -116,7 +131,7 @@ func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
 			defer wg.Done()
 			song, err := s.fetchPlatformSong(ytdlp, kkdai, url)
 			if err != nil {
-				errs <- fmt.Errorf("error fetching song from yt-dlp URL %q: %w", url, err)
+				errs <- fmt.Errorf("error fetching song from platform URL %q: %w", url, err)
 				return
 			}
 			results <- song
@@ -165,12 +180,13 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 
 	var streamURL string
 	var meta parsers.Meta
+	var parser Parser
 	var err error
 
 	// Try kkdai or yt-dlp if it fails
 	streamURL, meta, err = kkdai.GetStreamURL(url)
-	meta.Parser = "kkdai"
-	if err != nil {
+	parser = ParserKkdai
+	if err != nil || streamURL == "" {
 		streamURL, err = ytdlp.GetStreamURL(url)
 		if err != nil {
 			return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
@@ -182,7 +198,11 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 		}
 
 		meta.WebPageURL = url
-		meta.Parser = "yt-dlp"
+		parser = ParserYtdlp
+	}
+
+	if streamURL == "" {
+		return nil, fmt.Errorf("stream URL is empty")
 	}
 
 	fmt.Println("======================================")
@@ -199,6 +219,7 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 		Duration:   time.Duration(meta.Duration) * time.Second,
 		SongID:     meta.ID,
 		Source:     SourcePlatform,
+		Parser:     parser.String(),
 	}, nil
 }
 
@@ -230,14 +251,15 @@ func (s *Song) fetchInternetSong(url string) (*Song, error) {
 	}, nil
 }
 
-func (s *Song) GetSongInfo(song *Song) (string, string, string, error) {
+func (s *Song) GetSongInfo(song *Song) (string, string, string, string, error) {
 	switch song.Source {
 	case SourcePlatform:
-		return song.Title, song.Source.String(), song.PublicLink, nil
+		return song.Title, song.Source.String(), song.PublicLink, song.Parser, nil
 	case SourceInternet:
-		return s.getInternetSongMetadata(song.StreamURL)
+		title, source, publicLink, err := s.getInternetSongMetadata(song.StreamURL)
+		return title, source, publicLink, song.Parser, err
 	default:
-		return "", "", "", fmt.Errorf("unknown source: %v", song.Source)
+		return "", "", "", "", fmt.Errorf("unknown source: %v", song.Source)
 	}
 }
 
