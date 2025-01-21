@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -182,8 +183,11 @@ PLAYBACK_LOOP:
 		}()
 
 		log := encoding.FFMPEGMessages()
-		fmt.Println("FFMPEG messages:")
-		fmt.Println(log)
+		if len(log) > 0 {
+			fmt.Println("FFMPEG messages:")
+			fmt.Println(log)
+			return errors.New(log)
+		}
 
 		vc, err := p.joinVoiceChannel(p.Session, p.GuildID, p.ChannelID)
 		if err != nil {
