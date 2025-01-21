@@ -38,8 +38,8 @@ var platformURLs = map[Platform][]string{
 type Parser string
 
 const (
-	ParserKkdai Parser = "kkdai"
-	ParserYtdlp Parser = "yt-dlp"
+	ParserKkdai Parser = "fast"
+	ParserYtdlp Parser = "slow"
 )
 
 func (p Parser) String() string {
@@ -95,18 +95,18 @@ func New() *Song {
 	return &Song{}
 }
 
-func (s *Song) FetchSongs(input string) ([]*Song, error) {
+func (s *Song) FetchSongs(input string, parser Parser) ([]*Song, error) {
 	if isURL(input) {
-		return s.fetchSongsByURLs(input)
+		return s.fetchSongsByURLs(input, parser)
 	}
-	return s.fetchSongsByTitle(input)
+	return s.fetchSongsByTitle(input, parser)
 }
 
 func isURL(input string) bool {
 	return strings.Contains(input, "http://") || strings.Contains(input, "https://")
 }
 
-func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
+func (s *Song) fetchSongsByURLs(urlsInput string, parser Parser) ([]*Song, error) {
 	urls := strings.Fields(urlsInput)
 	var platformURLs, internetURLs []string
 
@@ -130,7 +130,7 @@ func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			song, err := s.fetchPlatformSong(ytdlp, kkdai, url)
+			song, err := s.fetchPlatformSong(ytdlp, kkdai, url, parser)
 			if err != nil {
 				errs <- fmt.Errorf("error fetching song from platform URL %q: %w", url, err)
 				return
@@ -169,54 +169,75 @@ func (s *Song) fetchSongsByURLs(urlsInput string) ([]*Song, error) {
 	return songs, nil
 }
 
-func (s *Song) fetchSongsByTitle(title string) ([]*Song, error) {
+func (s *Song) fetchSongsByTitle(title string, parser Parser) ([]*Song, error) {
 	url, err := youtubeUtil.FetchVideoURLByTitle(title)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch video URL for title %q: %w", title, err)
 	}
-	return s.FetchSongs(url)
+	return s.FetchSongs(url, parser)
 }
 
-func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.KkdaiWrapper, url string) (*Song, error) {
+func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.KkdaiWrapper, url string, parser Parser) (*Song, error) {
+	var (
+		streamURL string
+		meta      parsers.Meta
+		err       error
+	)
 
-	var streamURL string
-	var meta parsers.Meta
-	var parser Parser
-	var err error
-
-	// Try kkdai or yt-dlp if it fails
-	streamURL, meta, err = kkdai.GetStreamURL(url)
-	parser = ParserKkdai
-	if err != nil || streamURL == "" {
-		fmt.Println("Failed to parse URL with kkdai, trying yt-dlp...")
+	fmt.Println("======================================")
+	switch parser {
+	case ParserKkdai:
+		fmt.Println("Parsing URL with kkdai parser...")
+		streamURL, meta, err = kkdai.GetStreamURL(url)
 		if err != nil {
-			fmt.Printf("Error: %s\n", err)
-		} else {
-			fmt.Println("Couldn't get stream URL")
+			return nil, fmt.Errorf("error getting stream URL from kkdai: %w", err)
 		}
+		parser = ParserKkdai
 
+	case ParserYtdlp:
+		fmt.Println("Parsing URL with yt-dlp parser...")
 		streamURL, err = ytdlp.GetStreamURL(url)
 		if err != nil {
 			return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
 		}
-
 		meta, err = ytdlp.GetMetaInfo(url)
 		if err != nil {
 			return nil, fmt.Errorf("error getting metadata from yt-dlp: %w", err)
 		}
-
 		meta.WebPageURL = url
 		parser = ParserYtdlp
+
+	default:
+		fmt.Println("Parsing URL with kkdai parser first, then yt-dlp parser if necessary...")
+		// Try kkdai first
+		streamURL, meta, err = kkdai.GetStreamURL(url)
+		if err != nil || streamURL == "" {
+			fmt.Printf("Failed with kkdai. Error: %v\n", err)
+			// Fallback to yt-dlp
+			streamURL, err = ytdlp.GetStreamURL(url)
+			if err != nil {
+				return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
+			}
+			meta, err = ytdlp.GetMetaInfo(url)
+			if err != nil {
+				return nil, fmt.Errorf("error getting metadata from yt-dlp: %w", err)
+			}
+			meta.WebPageURL = url
+			parser = ParserYtdlp
+		} else {
+			parser = ParserKkdai
+		}
 	}
 
 	if streamURL == "" {
 		return nil, fmt.Errorf("stream URL is empty")
 	}
 
+	// Log details
 	fmt.Println("======================================")
-	fmt.Println("URL:\t", streamURL)
-	fmt.Println("Title:\t", meta.Title)
-	fmt.Println("Parser:\t", meta.Parser)
+	fmt.Printf("URL:\t%s\n", streamURL)
+	fmt.Printf("Title:\t%s\n", meta.Title)
+	fmt.Printf("Parser:\t%s\n", parser.String())
 	fmt.Println("======================================")
 
 	return &Song{

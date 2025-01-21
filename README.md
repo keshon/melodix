@@ -18,10 +18,11 @@ Melodix is my pet project written in Go that plays audio from YouTube and audio 
 - 🔄 Playback auto-resume support for connection interruptions.
 
 ### ⚠️ Current Limitations
-- 🚫 The bot cannot play YouTube live streams or region-locked videos.
-- ⏸️ Playback auto-resume support may cause noticeable pauses at times.
+- ⏸️ Playback auto-resume feature may cause noticeable pauses at times.
 - ⏩ Playback speed may sometimes slightly vary.
-- 🐞 It's not bug-free.
+- 🚫 The bot cannot play YouTube live streams or region-locked videos.
+- 🚫 Not every radio streams are supported.
+- 🐞 Can hang or become unresponsive. It's not bug-free.
 
 ## 🚀 Try Melodix
 
@@ -34,6 +35,8 @@ You can test out Melodix in two ways:
 
 ### ▶️ Playback Commands
 - `!play [title|url]` — Parameters: song name, YouTube URL, audio streaming URL.
+- `!play fast [title|url] ` — Manually select faster parser (YouTube only).
+- `!play slow [title|url] ` — Manually select slower parser (YouTube and SoundCloud).
 - `!skip` — Skip to the next track in the queue.
 - `!stop` — Stop playback, clear the queue, and leave the voice channel.
 
@@ -47,6 +50,7 @@ You can test out Melodix in two ways:
 - `!log` — Show recent `play` commands by users.
 
 ### ⚙️ Utility Commands
+- `!cache [on|off]` — Enable/disable caching during playback (⚠️ experimental).
 - `!set-prefx [new_prefix]` — Set a custom prefix for a guild to avoid collisions with other bots.
 - `melodix-reset-prefix` — Revert to the default prefix `!`.
 
@@ -61,10 +65,23 @@ To use the `play` command, provide a YouTube video title or URL:
 !play https://www.youtube.com/watch?v=dQw4w9WgXcQ
 !play http://stream-uk1.radioparadise.com/aac-320
 ```
-Play multiple tracks (the second link will be added to the queue):
+Play multiple tracks, the second track will be added to the queue (works only with links):
 ```
 !play https://www.youtube.com/watch?v=dQw4w9WgXcQ https://www.youtube.com/watch?v=OorZcOzNcgE
 ```
+Play a track with a predefinied parsing mode:
+```
+!play fast https://www.youtube.com/watch?v=dQw4w9WgXcQ
+!play slow https://www.youtube.com/watch?v=dQw4w9WgXcQ
+```
+### ⚡Fast and 🐢 Slow Parsing Modes
+
+Melodix uses two different parser packages to retrieve streaming links from YouTube and SoundCloud:
+
+- **Fast Mode**: [youtube by Kkdai](https://github.com/kkdai/youtube). This parser is very fast but can sometimes be unreliable and works only for YouTube.  
+- **Slow Mode**: [go-ytdlp by lrstanley](https://github.com/lrstanley/go-ytdlp). This is a Go wrapper library for the well-known [yt-dlp](https://github.com/yt-dlp/yt-dlp), a powerful command-line audio/video downloader. It is more reliable but noticeably slower.
+
+By default, Melodix tries to use the fast parser first. If it fails, it falls back to the slower one.
 
 ## 🔧 How to Set Up the Bot
 
@@ -87,7 +104,7 @@ This project is written in Go, so ensure your environment is ready. Use the prov
 - `build-dist-assemble`: Build the release version and assemble it as a distribution package (Windows only).
 
 Rename `.env.example` to `.env` and store your Discord Bot Token in the `DISCORD_TOKEN` variable. 
-Install [FFMPEG](https://ffmpeg.org/) (only recent versions are supported).
+Install [FFMPEG](https://ffmpeg.org/) and add it to global PATH variable.
 Install yt-dlp and add it to global PATH variable.
 
 ### 🐳 Docker Deployment

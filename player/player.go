@@ -181,6 +181,10 @@ PLAYBACK_LOOP:
 			p.Queue = nil
 		}()
 
+		log := encoding.FFMPEGMessages()
+		fmt.Println("FFMPEG messages:")
+		fmt.Println(log)
+
 		vc, err := p.joinVoiceChannel(p.Session, p.GuildID, p.ChannelID)
 		if err != nil {
 			return err
@@ -267,8 +271,8 @@ PLAYBACK_LOOP:
 				if position.Seconds() == 0.0 {
 					fmt.Printf("Playback could not be started: \"%v\"\n", p.Song.Title)
 					p.StatusSignals <- StatusError
-					encoding.Stop()
-					encoding.Cleanup()
+					// encoding.Stop()
+					// encoding.Cleanup()
 					return fmt.Errorf("playback could not be started: %v", doneError)
 				}
 
