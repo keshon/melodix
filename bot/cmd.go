@@ -14,7 +14,7 @@ type Command struct {
 }
 
 var commands = []Command{
-	{"play", []string{"p", ">"}, "Play a song or add it to the queue. Use `play kkdai ...` or `play ytdlp ...` to manually select a parser", "Playback"},
+	{"play", []string{"p", ">"}, "Play a song or add it to the queue. Use `play fast ...` or `play slow ...` to manually select a parser", "Playback"},
 	{"skip", []string{"next", "ff", ">>"}, "Skip the current song", "Playback"},
 	{"stop", []string{"s", "x"}, "Stop the music and clear the queue", "Playback"},
 
