@@ -75,7 +75,7 @@ func playCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, comma
 			signal := <-instance.StatusSignals
 			switch signal {
 			case player.StatusPlaying:
-				playbackStatus(s, m, b)
+				nowCommand(s, m, b, "", "edit") // use the "!now" command to show playback info
 			case player.StatusResuming:
 				fmt.Println("Interuption detected, resuming...")
 			case player.StatusError:
@@ -110,37 +110,4 @@ func skipCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, comma
 func stopCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, command, param string) {
 	instance := b.getOrCreatePlayer(m.GuildID)
 	instance.ActionSignals <- player.ActionStop
-}
-
-func playbackStatus(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot) {
-	instance := b.getOrCreatePlayer(m.GuildID)
-
-	if instance.Song == nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
-		return
-	}
-
-	emb := embed.NewEmbed().SetColor(embedColor)
-	title, source, publicLink, parser, err := instance.Song.GetSongInfo(instance.Song)
-	if err != nil {
-		s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
-	}
-	hostname, err := extractHostname(instance.Song.PublicLink)
-	if err != nil {
-		hostname = source
-	}
-	ffmpeg := "`ffmpeg`"
-	if parser != "" {
-		if parser == songpkg.ParserKkdai.String() {
-			parser = fmt.Sprintf("`%s`", "kkdai")
-		} else if parser == songpkg.ParserYtdlp.String() {
-			parser = fmt.Sprintf("`%s`", "ytdlp")
-		}
-	}
-	emb.SetDescription(fmt.Sprintf("%s Now playing\n\n**%s**\n[%s](%s)\n\n%s %s", player.StatusPlaying.StringEmoji(), title, hostname, publicLink, ffmpeg, parser))
-	if len(instance.Song.Thumbnail.URL) > 0 {
-		emb.SetThumbnail(instance.Song.Thumbnail.URL)
-	}
-	emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
-	s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.MessageEmbed)
 }

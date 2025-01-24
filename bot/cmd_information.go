@@ -44,10 +44,19 @@ func nowCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, comman
 			emb.SetThumbnail(instance.Song.Thumbnail.URL)
 		}
 		emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
-		s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
+		// "edit" is a special case to trigger editing the message
+		if param == "edit" {
+			s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.MessageEmbed)
+		} else {
+			s.ChannelMessageSendEmbed(m.ChannelID, emb.MessageEmbed)
+		}
 		return
 	}
-	s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
+	if param == "edit" {
+		s.ChannelMessageSendEmbed(b.playChannelID[m.GuildID], embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
+	} else {
+		s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
+	}
 }
 
 func statsCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, command, param string) {
