@@ -116,14 +116,14 @@ func playbackStatus(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot) {
 	instance := b.getOrCreatePlayer(m.GuildID)
 
 	if instance.Song == nil {
-		s.ChannelMessageSendEmbed(b.playChannelID[m.GuildID], embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
+		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("No song is currently playing.").MessageEmbed)
 		return
 	}
 
 	emb := embed.NewEmbed().SetColor(embedColor)
 	title, source, publicLink, parser, err := instance.Song.GetSongInfo(instance.Song)
 	if err != nil {
-		s.ChannelMessageEditEmbed(b.playChannelID[m.GuildID], b.playMessage[m.GuildID].ID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
+		s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.SetDescription(fmt.Sprintf("Error getting this song(s)\n\n%v", err)).MessageEmbed)
 	}
 	hostname, err := extractHostname(instance.Song.PublicLink)
 	if err != nil {
@@ -142,9 +142,5 @@ func playbackStatus(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot) {
 		emb.SetThumbnail(instance.Song.Thumbnail.URL)
 	}
 	emb.SetFooter(fmt.Sprintf("Use %shelp for a list of commands.", b.prefixCache[m.GuildID]))
-	if b.playMessage[m.GuildID] != nil {
-		s.ChannelMessageEditEmbed(b.playChannelID[m.GuildID], b.playMessage[m.GuildID].ID, emb.MessageEmbed)
-	} else {
-		s.ChannelMessageSendEmbed(b.playChannelID[m.GuildID], emb.MessageEmbed)
-	}
+	s.ChannelMessageEditEmbed(m.ChannelID, b.playMessage[m.GuildID].ID, emb.MessageEmbed)
 }
