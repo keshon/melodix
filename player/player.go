@@ -174,13 +174,6 @@ PLAYBACK_LOOP:
 		if err != nil {
 			return err
 		}
-		defer func() {
-			startAt = 0
-			encoding.Stop()
-			encoding.Cleanup()
-			p.Song = nil
-			p.Queue = nil
-		}()
 
 		log := encoding.FFMPEGMessages()
 		if len(log) > 0 {
@@ -242,8 +235,33 @@ PLAYBACK_LOOP:
 			}
 		}()
 
+		restartChan := make(chan struct{}, 1)
+		healthCtx, healthCancel := context.WithCancel(context.Background())
+		defer healthCancel()
+
+		go p.monitorEncodingHealth(healthCtx, encoding, restartChan)
+
+		defer func() {
+			healthCancel()
+			startAt = 0
+			encoding.Stop()
+			encoding.Cleanup()
+			p.Song = nil
+			p.Queue = nil
+		}()
+
 		for {
 			select {
+			case <-restartChan:
+				fmt.Println("Restarting encoding due to health check")
+				_, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
+				if err == nil {
+					startAt = position
+				}
+				encoding.Stop()
+				encoding.Cleanup()
+				healthCancel()
+				continue PLAYBACK_LOOP
 			case doneError := <-done:
 				close(done)
 
@@ -337,6 +355,7 @@ PLAYBACK_LOOP:
 				}
 			}
 		}
+
 	}
 }
 
@@ -438,4 +457,44 @@ func extractHostname(rawURL string) (string, error) {
 	hostname = strings.TrimPrefix(hostname, "www.")
 
 	return hostname, nil
+}
+
+func (p *Player) monitorEncodingHealth(ctx context.Context, encoding *dca.EncodeSession, restartChan chan<- struct{}) {
+	lastPosition := time.Duration(0)
+	unchangedCount := 0
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			stats := encoding.Stats()
+			currentPos := stats.Duration
+
+			// Check if position is changing
+			if currentPos == lastPosition {
+				unchangedCount++
+				if unchangedCount > 3 { // 15 seconds without progress
+					fmt.Println("Encoding appears stuck, triggering restart")
+					restartChan <- struct{}{}
+					return
+				}
+			} else {
+				unchangedCount = 0
+				lastPosition = currentPos
+			}
+
+			// Check FFmpeg output for errors
+			messages := encoding.FFMPEGMessages()
+			if strings.Contains(messages, "Connection timed out") ||
+				strings.Contains(messages, "Network error") {
+				fmt.Println("Detected network error in FFmpeg output")
+				restartChan <- struct{}{}
+				return
+			}
+		}
+	}
 }
