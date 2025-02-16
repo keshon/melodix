@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/keshon/dca"
 	"github.com/keshon/melodix/env"
-	"github.com/keshon/melodix/parsers"
 	songpkg "github.com/keshon/melodix/song"
 	"github.com/keshon/melodix/storage"
 )
@@ -85,8 +83,6 @@ func (status StatusSignal) StringEmoji() string {
 	return m[status]
 }
 
-var isCached bool
-
 func (p *Player) Play() error {
 	var startAt time.Duration = 0
 PLAYBACK_LOOP:
@@ -98,7 +94,7 @@ PLAYBACK_LOOP:
 				}
 				p.Song = p.Queue[0]
 				p.Queue = p.Queue[1:]
-				isCached = false
+
 			}
 		}
 
@@ -131,43 +127,6 @@ PLAYBACK_LOOP:
 		}
 
 		streamPath := p.Song.StreamURL
-
-		cachedIsEnabled, err := p.Storage.IsCacheEnabled(p.GuildID)
-		if err != nil {
-			return err
-		}
-		cacheReady := make(chan bool)
-		if cachedIsEnabled {
-			if !isCached {
-				go func() {
-					cacheDir := "./cache"
-					if err := os.MkdirAll(cacheDir, 0755); err != nil {
-						fmt.Printf("Error creating cache directory: %v\n", err)
-						return
-					}
-
-					output, path, err := parsers.NewYtdlpWrapper().DownloadStream(p.Song.PublicLink)
-					if err != nil {
-						fmt.Printf("Error caching: %v\n", err)
-						return
-					}
-
-					fmt.Println(output)
-
-					if output.ExitCode == 0 {
-						time.Sleep(5 * time.Second)
-						if p.Song != nil {
-							p.Song.StreamURL = path
-							cacheReady <- true
-						} else {
-							cacheReady <- false
-						}
-					}
-
-					fmt.Println("Caching is done, switching to playback from cache")
-				}()
-			}
-		}
 
 		time.Sleep(250 * time.Millisecond)
 		encoding, err := dca.EncodeFile(streamPath, options)
@@ -286,26 +245,12 @@ PLAYBACK_LOOP:
 					encoding.Stop()
 					encoding.Cleanup()
 					p.Song = nil
-					isCached = false
 					continue PLAYBACK_LOOP
 				}
 
 				// finished
 				fmt.Printf("Finished playback of \"%v\"", p.Song.Title)
 				return nil
-			case <-cacheReady:
-				fmt.Println("Switching to cached playback")
-
-				_, position, err := p.getPlaybackDuration(encoding, streaming, p.Song)
-				if err != nil {
-					p.StatusSignals <- StatusError
-					return err
-				}
-
-				isCached = true
-				encoding.Cleanup()
-				startAt = position
-				continue PLAYBACK_LOOP
 			case signal := <-p.ActionSignals:
 				switch signal {
 				case ActionSkip:
@@ -314,7 +259,6 @@ PLAYBACK_LOOP:
 						encoding.Stop()
 						encoding.Cleanup()
 						p.Song = nil
-						isCached = false
 						continue PLAYBACK_LOOP
 					} else {
 						p.ActionSignals <- ActionStop

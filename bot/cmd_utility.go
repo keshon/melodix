@@ -7,25 +7,11 @@ import (
 
 func init() {
 	registerCommand("ping", pingCommand)
-	registerCommand("cache", cacheCommand)
 	registerCommand("set-prefix", setPrefixCommand)
-
 }
 
 func pingCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, command, param string) {
 	s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Pong!").MessageEmbed)
-}
-
-func cacheCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, command, param string) {
-	if param == "on" {
-		b.storage.EnableCache(m.GuildID)
-		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Cache enabled").MessageEmbed)
-	} else if param == "off" {
-		b.storage.DisableCache(m.GuildID)
-		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Cache disabled").MessageEmbed)
-	} else {
-		s.ChannelMessageSendEmbed(m.ChannelID, embed.NewEmbed().SetColor(embedColor).SetDescription("Invalid parameter, use `cache on` or `cache off`").MessageEmbed)
-	}
 }
 
 func setPrefixCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, command, param string) {
