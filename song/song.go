@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"hash/crc32"
+	"net/http"
 	urlstd "net/url"
 	"os/exec"
 	"strings"
@@ -24,6 +25,7 @@ const (
 	FiftySixCom Platform = "56.com"
 	DailyMotion Platform = "DailyMotion"
 	Vimeo       Platform = "Vimeo"
+	LastFM      Platform = "LastFM"
 )
 
 var platformURLs = map[Platform][]string{
@@ -33,13 +35,15 @@ var platformURLs = map[Platform][]string{
 	FiftySixCom: {"56.com"},
 	DailyMotion: {"dailymotion.com"},
 	Vimeo:       {"vimeo.com"},
+	LastFM:      {"last.fm"},
 }
 
 type Parser string
 
 const (
-	ParserKkdai Parser = "fast"
-	ParserYtdlp Parser = "slow"
+	ParserDefault Parser = ""
+	ParserKkdai   Parser = "fast"
+	ParserYtdlp   Parser = "slow"
 )
 
 func (p Parser) String() string {
@@ -130,7 +134,7 @@ func (s *Song) fetchSongsByURLs(urlsInput string, parser Parser) ([]*Song, error
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			song, err := s.fetchPlatformSong(ytdlp, kkdai, url, parser)
+			song, err := s.fetchPlatformSong(ytdlp, kkdai, url, parser, false)
 			if err != nil {
 				errs <- fmt.Errorf("error fetching song from platform URL %q: %w", url, err)
 				return
@@ -177,7 +181,7 @@ func (s *Song) fetchSongsByTitle(title string, parser Parser) ([]*Song, error) {
 	return s.FetchSongs(url, parser)
 }
 
-func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.KkdaiWrapper, url string, parser Parser) (*Song, error) {
+func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.KkdaiWrapper, url string, parser Parser, retry bool) (*Song, error) {
 	var (
 		streamURL string
 		meta      parsers.Meta
@@ -186,11 +190,19 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 
 	fmt.Println("======================================")
 	switch parser {
+	case ParserDefault:
+		parser = ParserKkdai
+		fallthrough
 	case ParserKkdai:
 		fmt.Println("Parsing URL with kkdai parser...")
 		streamURL, meta, err = kkdai.GetStreamURL(url)
 		if err != nil {
-			return nil, fmt.Errorf("error getting stream URL from kkdai: %w", err)
+			// return nil, fmt.Errorf("error getting stream URL from kkdai: %w", err)
+			return s.fetchPlatformSong(ytdlp, kkdai, url, ParserYtdlp, true)
+		}
+		if is40xError(streamURL) && !retry {
+			fmt.Println("Received 40x error, falling back to yt-dlp...")
+			return s.fetchPlatformSong(ytdlp, kkdai, url, ParserYtdlp, true)
 		}
 		parser = ParserKkdai
 
@@ -206,38 +218,16 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 		}
 		meta.WebPageURL = url
 		parser = ParserYtdlp
-
-	default:
-		fmt.Println("Parsing URL with kkdai parser first, then yt-dlp parser if necessary...")
-		// Try kkdai first
-		streamURL, meta, err = kkdai.GetStreamURL(url)
-		if err != nil || streamURL == "" {
-			fmt.Printf("Failed with kkdai. Error: %v\n", err)
-			// Fallback to yt-dlp
-			streamURL, err = ytdlp.GetStreamURL(url)
-			if err != nil {
-				return nil, fmt.Errorf("error getting stream URL from yt-dlp: %w", err)
-			}
-			meta, err = ytdlp.GetMetaInfo(url)
-			if err != nil {
-				return nil, fmt.Errorf("error getting metadata from yt-dlp: %w", err)
-			}
-			meta.WebPageURL = url
-			parser = ParserYtdlp
-		} else {
-			parser = ParserKkdai
-		}
 	}
 
 	if streamURL == "" {
 		return nil, fmt.Errorf("stream URL is empty")
 	}
 
-	// Log details
 	fmt.Println("======================================")
-	fmt.Printf("URL:\t%s\n", streamURL)
-	fmt.Printf("Title:\t%s\n", meta.Title)
-	fmt.Printf("Parser:\t%s\n", parser.String())
+	fmt.Printf("URL:	%s\n", streamURL)
+	fmt.Printf("Title:	%s\n", meta.Title)
+	fmt.Printf("Parser:	%s\n", parser.String())
 	fmt.Println("======================================")
 
 	return &Song{
@@ -250,6 +240,15 @@ func (s *Song) fetchPlatformSong(ytdlp *parsers.YtdlpWrapper, kkdai *parsers.Kkd
 		Source:     SourcePlatform,
 		Parser:     parser.String(),
 	}, nil
+}
+
+// is40xError is a placeholder function that should check if the URL returns a 40x error
+func is40xError(url string) bool {
+	resp, err := http.Head(url)
+	if err != nil {
+		return false
+	}
+	return resp.StatusCode >= 400 && resp.StatusCode < 500
 }
 
 func (s *Song) fetchInternetSong(url string) (*Song, error) {

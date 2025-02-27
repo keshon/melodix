@@ -35,7 +35,7 @@ func playCommand(s *discordgo.Session, m *discordgo.MessageCreate, b *Bot, comma
 	b.playChannelID[m.GuildID] = m.ChannelID
 
 	// extract "kkdai " or "ytdlp " from the beginning of the param
-	var parser songpkg.Parser
+	parser := songpkg.ParserDefault
 	if strings.HasPrefix(param, songpkg.ParserKkdai.String()+" ") {
 		parser = songpkg.ParserKkdai
 		param = param[len(songpkg.ParserKkdai)+1:]

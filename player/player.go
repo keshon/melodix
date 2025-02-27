@@ -380,7 +380,7 @@ func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca
 	case songpkg.SourcePlatform:
 		songDuration = song.Duration
 	case songpkg.SourceFile:
-		songDuration, err = p.fetchMP3Duration(song.StreamFilepath)
+		songDuration, err = fetchMP3Duration(song.StreamFilepath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to parse local file duration: %v", err)
 		}
@@ -396,7 +396,7 @@ func (p *Player) getPlaybackDuration(encoding *dca.EncodeSession, streaming *dca
 	return songDuration, playbackPos, nil
 }
 
-func (p *Player) fetchMP3Duration(filePath string) (time.Duration, error) {
+func fetchMP3Duration(filePath string) (time.Duration, error) {
 	cmd := exec.Command("ffmpeg", "-i", filePath, "-f", "null", "-")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
