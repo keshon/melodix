@@ -1,0 +1,57 @@
+# Professional GitHub Actions workflow for Go multi-platform builds (production-ready)
+#
+# - Builds and uploads binaries for every commit/PR on main branch
+# - Cross-compiles for major OS/arch targets
+# - Uses Go build cache for faster builds
+# - Artifacts retained for 14 days
+# - Fail-fast and matrix optimizations
+
+name: Build (Multi-Platform)
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: darwin
+            goarch: arm64 # Enable if you want darwin/arm64 (Apple Silicon)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags="-s -w" -o dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/melodix
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: melodix-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 14
