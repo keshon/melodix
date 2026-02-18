@@ -33,5 +33,5 @@ docker-compose -f docker-compose.yml up -d
 For easy deployment and updates, you can use the `build-and-deploy.sh` script. This script reads the environment variables from the `.env` file and automates the build and deployment process. Run it as follows:
 
 ```bash
-./build-and-deploy.sh
+./build-n-deploy.sh
 ```

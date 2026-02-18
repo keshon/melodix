@@ -1,7 +1,12 @@
-/datastore.json
 .env
 *.exe
 /dist
 /tools
-*.webm
-*.mp4
+/.VSCodeCounter
+datastore.json*
+*.txt
+*private*
+datastore_dump.json
+*.json
+*.exe~
+dump.bat

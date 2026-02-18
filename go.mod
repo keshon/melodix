@@ -1,31 +1,27 @@
 module github.com/keshon/melodix
 
-go 1.23.0
+go 1.24.0
+
+require github.com/keshon/datastore v0.1.0
 
 require (
-	github.com/bwmarrin/discordgo v0.28.1
-	github.com/keshon/dca v0.0.0-20241119062450-6c1ff3cca196
-	github.com/kkdai/youtube/v2 v2.10.2
-)
-
-require (
-	github.com/ProtonMail/go-crypto v1.1.5 // indirect
+	github.com/bdandy/go-errors v1.2.2 // indirect
+	github.com/bdandy/go-socks4 v1.2.3
 	github.com/bitly/go-simplejson v0.5.1 // indirect
-	github.com/chzyer/readline v1.5.1 // indirect
-	github.com/cloudflare/circl v1.5.0 // indirect
-	github.com/dlclark/regexp2 v1.11.4 // indirect
-	github.com/dop251/goja v0.0.0-20250114131315-46d383d606d3 // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
+	github.com/dop251/goja v0.0.0-20260106131823-651366fbe6e3 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
-	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
-	github.com/ianlancetaylor/demangle v0.0.0-20240912202439-0a2b6291aafd // indirect
-	github.com/jonas747/ogg v0.0.0-20161220051205-b4f6f4cf3757 // indirect
-	github.com/lrstanley/go-ytdlp v0.0.0-20250117070427-21edbe635681 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	github.com/google/pprof v0.0.0-20260202012954-cb029daf43ef // indirect
+	golang.org/x/text v0.33.0 // indirect
+	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
 require (
+	github.com/bwmarrin/discordgo v0.29.1-0.20251229154532-54ae40de5723
+	github.com/caarlos0/env/v11 v11.3.1
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/joho/godotenv v1.5.1
-	golang.org/x/crypto v0.32.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	github.com/kkdai/youtube/v2 v2.10.5
+	golang.org/x/net v0.49.0
+	golang.org/x/time v0.14.0
 )

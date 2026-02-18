@@ -3,28 +3,32 @@ services:
     container_name: ${ALIAS}
     restart: always
     image: '${ALIAS}-image'
-    volumes:
-      - ./data/datastore.json:/usr/project/datastore.json
-      - ./data/cache:/usr/project/cache
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - ENCODE_VOLUME=${ENCODE_VOLUME}
-      - ENCODE_CHANNELS=${ENCODE_CHANNELS}
-      - ENCODE_FRAME_RATE=${ENCODE_FRAME_RATE}
-      - ENCODE_FRAME_DURATION=${ENCODE_FRAME_DURATION}
-      - ENCODE_BITRATE=${ENCODE_BITRATE}
-      - ENCODE_COMPRESSION_LEVEL=${ENCODE_COMPRESSION_LEVEL}
-      - ENCODE_PACKET_LOSS=${ENCODE_PACKET_LOSS}
-      - ENCODE_BUFFERED_FRAMES=${ENCODE_BUFFERED_FRAMES}
-      - ENCODE_VBR=${ENCODE_VBR}
-      - ENCODE_VOLUME_FLOAT=${ENCODE_VOLUME_FLOAT}
-      - ENCODE_RECONNECT_AT_EOF=${ENCODE_RECONNECT_AT_EOF}
-      - ENCODE_RECONNECT_STREAMED=${ENCODE_RECONNECT_STREAMED}
-      - ENCODE_RECONNECT_ON_NETWORK_ERROR=${ENCODE_RECONNECT_ON_NETWORK_ERROR}
-      - ENCODE_RECONNECT_ON_HTTP_ERROR=${ENCODE_RECONNECT_ON_HTTP_ERROR}
-      - ENCODE_RECONNECT_DELAY_MAX=${ENCODE_RECONNECT_DELAY_MAX}
-      - ENCODE_FFMPEG_BINARY_PATH=${ENCODE_FFMPEG_BINARY_PATH}
-      - ENCODE_ENCODING_LINE_LOG=${ENCODE_ENCODING_LINE_LOG}
-      - ENCODE_USER_AGENT=${ENCODE_USER_AGENT}
-      - ENCODE_RAW_OUTPUT=${ENCODE_RAW_OUTPUT}
+      - DISCORD_GUILD_BLACKLIST=${DISCORD_GUILD_BLACKLIST}
+      - STORAGE_PATH=${STORAGE_PATH}
+      - INIT_SLASH_COMMANDS=${INIT_SLASH_COMMANDS}
     entrypoint: /usr/project/app
+    networks:
+      - proxy
+    ports:
+      - 8787
+    labels:
+      # HTTP to HTTPS redirection and middleware assignment
+      - traefik.enable=true
+      - traefik.http.routers.${ALIAS}-http.entrypoints=http
+      - traefik.http.routers.${ALIAS}-http.rule=Host(`${HOST}`)
+      - traefik.http.routers.${ALIAS}-http.middlewares=${ALIAS}-to-https,${ALIAS}-headers
+
+      # HTTPS routing and TLS configuration
+      - traefik.http.routers.${ALIAS}.entrypoints=https
+      - traefik.http.routers.${ALIAS}.rule=Host(`${HOST}`)
+      - traefik.http.routers.${ALIAS}.tls=true
+      - traefik.http.routers.${ALIAS}.tls.certresolver=letsencrypt
+
+      # Middleware for redirecting HTTP to HTTPS
+      - traefik.http.middlewares.${ALIAS}-to-https.redirectscheme.scheme=https
+
+networks:
+  proxy:
+    external: true      

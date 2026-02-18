@@ -14,7 +14,6 @@ Melodix is my pet project written in Go that plays audio from YouTube and audio 
 
 ### ⚙️ Additional Features
 - 🌐 Operation across multiple Discord servers.
-- 📜 Access to recent track statistics and history of `play` commands.
 - 🔄 Playback auto-resume support for connection interruptions.
 
 ### ⚠️ Current Limitations
@@ -33,55 +32,28 @@ You can test out Melodix in two ways:
 
 ## 📝 Available Discord Commands
 
-### ▶️ Playback Commands
-- `!play [title|url]` — Parameters: song name, YouTube URL, audio streaming URL.
-- `!play fast [title|url] ` — Manually select faster parser (YouTube only).
-- `!play slow [title|url] ` — Manually select slower parser (YouTube and SoundCloud).
-- `!skip` — Skip to the next track in the queue.
-- `!stop` — Stop playback, clear the queue, and leave the voice channel.
+### 🕯️ Information
 
-### 📋 Advanced Playback Commands
-- `!list` — Show the current song queue.
-- `!pause`, `!resume` — Pause/resume current playback.
+- **/about** — Discover the origin of this bot
+- **/help** — Get a list of available commands
 
-### 📊 Information Commands
-- `!now` — Show the currently playing song. Convenient for radio streaming.
-- `!stats` — Show track statistics with total playback duration and count.
-- `!log` — Show recent `play` commands by users.
+### 🎵 Music
 
-### ⚙️ Utility Commands
-- `!cache [on|off]` — Enable/disable caching during playback (⚠️ experimental).
-- `!set-prefx [new_prefix]` — Set a custom prefix for a guild to avoid collisions with other bots.
-- `melodix-reset-prefix` — Revert to the default prefix `!`.
+- **/music** — Control music playback
 
-### ℹ️ General Commands
-- `!about` — Show bot information.
-- `!help` — Show a help cheatsheet.
+### ⚙️ Settings
+
+- **/commands** — Manage or inspect commands
+- **/maintenance** — Bot maintenance commands
+
 
 ### 💡 Usage Examples
 To use the `play` command, provide a YouTube video title or URL:
 ```
-!play Never Gonna Give You Up
-!play https://www.youtube.com/watch?v=dQw4w9WgXcQ
-!play http://stream-uk1.radioparadise.com/aac-320
+/music play Never Gonna Give You Up
+/music play https://www.youtube.com/watch?v=dQw4w9WgXcQ
+/music play http://stream-uk1.radioparadise.com/aac-320
 ```
-Play multiple tracks, the second track will be added to the queue (works only with links):
-```
-!play https://www.youtube.com/watch?v=dQw4w9WgXcQ https://www.youtube.com/watch?v=OorZcOzNcgE
-```
-Play a track with a predefinied parsing mode:
-```
-!play fast https://www.youtube.com/watch?v=dQw4w9WgXcQ
-!play slow https://www.youtube.com/watch?v=dQw4w9WgXcQ
-```
-### ⚡Fast and 🐢 Slow Parsing Modes
-
-Melodix uses two different parser packages to retrieve streaming links from YouTube and SoundCloud:
-
-- **Fast Mode**: [youtube by Kkdai](https://github.com/kkdai/youtube). This parser is very fast but can sometimes be unreliable and works only for YouTube.  
-- **Slow Mode**: [go-ytdlp by lrstanley](https://github.com/lrstanley/go-ytdlp). This is a Go wrapper library for the well-known [yt-dlp](https://github.com/yt-dlp/yt-dlp), a powerful command-line audio/video downloader. It is more reliable but noticeably slower.
-
-By default, Melodix tries to use the fast parser first. If it fails, it falls back to the slower one.
 
 ## 🔧 How to Set Up the Bot
 
@@ -90,7 +62,7 @@ To add Melodix to a Discord server, follow these steps:
 
 1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications) and obtain the `APPLICATION_ID` (in the General section).
 2. In the Bot section, enable `PRESENCE INTENT`, `SERVER MEMBERS INTENT`, and `MESSAGE CONTENT INTENT`.
-3. Use the following link to authorize the bot: `discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&permissions=36727824`
+3. Use the following link to authorize the bot: `discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&permissions=2150714368`
    - Replace `YOUR_APPLICATION_ID` with your Bot's Application ID from step 1.
 4. Select a server and click "Authorize".
 5. Grant the necessary permissions for Melodix to function correctly (access to text and voice channels).
@@ -99,9 +71,7 @@ After adding the bot, build it from source or download [compiled binaries](https
 
 ### 🛠️ Building Melodix from Sources
 This project is written in Go, so ensure your environment is ready. Use the provided scripts to build Melodix from source:
-- `bash-and-run.bat` (or `.sh` for Linux): Build the debug version and execute.
-- `build-release.bat` (or `.sh` for Linux): Build the release version.
-- `build-dist-assemble`: Build the release version and assemble it as a distribution package (Windows only).
+- `bash-and-run.bat`: Build the debug version and execute.
 
 Rename `.env.example` to `.env` and store your Discord Bot Token in the `DISCORD_TOKEN` variable. 
 Install [FFMPEG](https://ffmpeg.org/) and add it to global PATH variable.
@@ -117,28 +87,6 @@ You can configure Melodix using environment variables by creating a `.env` file 
 ```env
 # Discord Bot Token (Required)
 DISCORD_TOKEN=your-discord-bot-token
-
-# Encoding options
-ENCODE_VOLUME=128
-ENCODE_CHANNELS=2
-ENCODE_FRAME_RATE=48000
-ENCODE_FRAME_DURATION=20
-ENCODE_BITRATE=96
-ENCODE_COMPRESSION_LEVEL=10
-ENCODE_PACKET_LOSS=1
-ENCODE_BUFFERED_FRAMES=400
-ENCODE_VBR=true
-ENCODE_START_TIME=0s
-ENCODE_VOLUME_FLOAT=1.0
-ENCODE_RECONNECT_AT_EOF=1
-ENCODE_RECONNECT_STREAMED=1
-ENCODE_RECONNECT_ON_NETWORK_ERROR=1
-ENCODE_RECONNECT_ON_HTTP_ERROR="4xx,5xx"
-ENCODE_RECONNECT_DELAY_MAX=5
-ENCODE_FFMPEG_BINARY_PATH=""
-ENCODE_ENCODING_LINE_LOG=true
-ENCODE_USER_AGENT="Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)"
-ENCODE_RAW_OUTPUT=true
 ```
 
 ## 🆘 Support

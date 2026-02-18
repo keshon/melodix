@@ -11,4 +11,4 @@ rem Get the build date
 for /f "tokens=*" %%a in ('powershell -command "Get-Date -UFormat '%%Y-%%m-%%dT%%H:%%M:%%SZ'"') do set BUILD_DATE=%%a
 
 rem Build command
-go run -ldflags "-X github.com/keshon/melodix/internal/version.BuildDate=%BUILD_DATE% -X github.com/keshon/melodix/internal/version.GoVersion=%GO_VERSION%" cmd\melodix\melodix.go
+go build -o melodix-discord.exe -ldflags "-X github.com/keshon/melodix/internal/version.BuildDate=%BUILD_DATE% -X github.com/keshon/melodix/internal/version.GoVersion=%GO_VERSION%" cmd\discord\main.go && melodix-discord.exe

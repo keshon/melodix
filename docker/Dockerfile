@@ -1,36 +1,50 @@
-# First stage: build the Go application
-FROM golang:1.23.0-alpine3.20 AS build
+# Stage 1 — Builder
+FROM golang:1.24.0-alpine3.20 AS builder
 
-RUN apk add --no-cache build-base
-ADD src /usr/project
-WORKDIR /usr/project
+RUN apk add --no-cache \
+        build-base \
+        git \
+        opus-dev
 
-# Combine commands for better layer caching
+WORKDIR /build
+
+# Кеширование зависимостей
+COPY src/go.mod src/go.sum ./
+RUN go mod download
+
+# Копируем исходники
+COPY src .
+
+# Сборка с CGO
 RUN GO_VERSION=$(go version | awk '{print $3}') && \
     BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
-    CGO_ENABLED=1 && \
-    rm -f .env && \
-    go build -o app -ldflags "-X 'github.com/keshon/melodix/internal/version.BuildDate=${BUILD_DATE}' -X 'github.com/keshon/melodix/internal/version.GoVersion=${GO_VERSION}'" cmd/melodix/melodix.go && \
-    touch datastore.json && \
-    apk del build-base && \
-    rm -rf /var/cache/apk/* && \
-    rm -rf /usr/share/man
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+        -o app \
+        -ldflags="-s -w \
+        -X 'server-domme/internal/version.BuildDate=${BUILD_DATE}' \
+        -X 'server-domme/internal/version.GoVersion=${GO_VERSION}'" \
+        cmd/discord/main.go
 
-# Second stage: create the final image
-FROM python:3.10-alpine3.20
 
-RUN apk update && \
-    apk add --no-cache \
+# Stage 2 — Runtime
+FROM alpine:3.20
+
+# Только runtime-зависимости
+RUN apk add --no-cache \
         ffmpeg \
-        bash \
         python3 \
         py3-pip \
-        git && \
-    pip3 install --upgrade git+https://github.com/yt-dlp/yt-dlp.git@release && \
-    pip3 install apprise
-
-COPY --from=build /usr/project /usr/project
+        opus \
+        libstdc++ \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /usr/project
 
-ENTRYPOINT ["/usr/project/app"]
+# Копируем только бинарник
+COPY --from=builder /build/app ./app
+
+# Данные
+RUN mkdir -p data && touch data/datastore.json
+
+ENTRYPOINT ["./app"]
