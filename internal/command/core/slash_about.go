@@ -4,14 +4,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"strings"
-	"time"
-
 	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
-	"github.com/keshon/melodix/internal/version"
 )
 
 type AboutCommand struct{}
@@ -40,21 +37,7 @@ func (c *AboutCommand) Run(ctx interface{}) error {
 	session := context.Session
 	event := context.Event
 
-	// Format build date
-	buildDate := "unknown"
-	if version.BuildDate != "" {
-		if t, err := time.Parse(time.RFC3339, version.BuildDate); err == nil {
-			buildDate = t.Format("2006-01-02")
-		} else {
-			buildDate = "invalid date"
-		}
-	}
-
-	// Get Go version
-	goVer := strings.TrimPrefix(version.GoVersion, "go")
-	if goVer == "" {
-		goVer = "unknown"
-	}
+	info := buildinfo.Get()
 
 	// Info fields for embed
 	fields := []*discordgo.MessageEmbedField{
@@ -64,18 +47,18 @@ func (c *AboutCommand) Run(ctx interface{}) error {
 		},
 		{
 			Name:  "Repository",
-			Value: "https://github.com/keshon/melodix",
+			Value: "https://github.com/keshon/melodix\nCommit: " + info.Commit,
 		},
 		{
 			Name:  "Release",
-			Value: buildDate + " (Go " + goVer + ")",
+			Value: info.BuildTime + " (" + info.GoVersion + ")",
 		},
 	}
 
 	// Create embed
 	embed := &discordgo.MessageEmbed{
-		Title:       "ℹ️ About " + version.AppName,
-		Description: version.AppDescription,
+		Title:       "ℹ️ About " + info.Project,
+		Description: info.Description,
 		Color:       discord.EmbedColor,
 		Fields:      fields,
 	}

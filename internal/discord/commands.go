@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/pkg/commandkit"
 )
 
 // commandHashLocks serializes read-modify-write of the command hash cache per guild.

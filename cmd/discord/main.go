@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/keshon/buildinfo"
 	_ "github.com/keshon/melodix/internal/command/core"
 
 	"github.com/keshon/melodix/internal/command"
@@ -17,11 +18,12 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/storage"
-	v "github.com/keshon/melodix/internal/version"
 )
 
 func main() {
-	log.Printf("[INFO] Starting %v bot...", v.AppName)
+	info := buildinfo.Get()
+
+	log.Printf("[INFO] Starting %v bot...", info.Project)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

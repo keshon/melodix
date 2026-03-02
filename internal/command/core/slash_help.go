@@ -6,12 +6,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/keshon/buildinfo"
+	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
-	"github.com/keshon/melodix/internal/version"
-	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -81,8 +81,9 @@ func (c *HelpUnifiedCommand) Run(ctx interface{}) error {
 		output = buildHelpByCategory()
 	}
 
+	info := buildinfo.Get()
 	embed := &discordgo.MessageEmbed{
-		Title:       version.AppName + " Help",
+		Title:       info.Project + " Help",
 		Description: output,
 		Color:       discord.EmbedColor,
 	}
@@ -122,11 +123,11 @@ func buildHelpByCategory() string {
 
 	var sb strings.Builder
 	for _, cat := range sortedCats {
-		sb.WriteString(fmt.Sprintf("**%s**\n", cat.Name))
+		fmt.Fprintf(&sb, "**%s**\n", cat.Name)
 		cmds := categoryMap[cat.Name]
 		sort.Slice(cmds, func(i, j int) bool { return cmds[i].Name() < cmds[j].Name() })
 		for _, c := range cmds {
-			sb.WriteString(fmt.Sprintf("`%s` - %s\n", c.Name(), c.Description()))
+			fmt.Fprintf(&sb, "`%s` - %s\n", c.Name(), c.Description())
 		}
 		sb.WriteString("\n")
 	}

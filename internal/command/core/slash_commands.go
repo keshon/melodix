@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )

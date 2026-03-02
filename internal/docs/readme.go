@@ -9,8 +9,8 @@ import (
 	"sort"
 	"text/template"
 
+	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
