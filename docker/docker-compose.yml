@@ -11,23 +11,6 @@ services:
     entrypoint: /usr/project/app
     networks:
       - proxy
-    ports:
-      - 8787
-    labels:
-      # HTTP to HTTPS redirection and middleware assignment
-      - traefik.enable=true
-      - traefik.http.routers.${ALIAS}-http.entrypoints=http
-      - traefik.http.routers.${ALIAS}-http.rule=Host(`${HOST}`)
-      - traefik.http.routers.${ALIAS}-http.middlewares=${ALIAS}-to-https,${ALIAS}-headers
-
-      # HTTPS routing and TLS configuration
-      - traefik.http.routers.${ALIAS}.entrypoints=https
-      - traefik.http.routers.${ALIAS}.rule=Host(`${HOST}`)
-      - traefik.http.routers.${ALIAS}.tls=true
-      - traefik.http.routers.${ALIAS}.tls.certresolver=letsencrypt
-
-      # Middleware for redirecting HTTP to HTTPS
-      - traefik.http.middlewares.${ALIAS}-to-https.redirectscheme.scheme=https
 
 networks:
   proxy:

@@ -1,35 +1,40 @@
-# Stage 1 — Builder
-FROM golang:1.24.0-alpine3.20 AS builder
+# ---- Stage 1: Builder ----
+FROM golang:1.24.0-alpine3.21 AS builder
 
+ENV GOPROXY=https://proxy.golang.org,direct
+
+# CGO is required for layeh.com/gopus (libopus C bindings)
 RUN apk add --no-cache \
         build-base \
         git \
         opus-dev
 
-WORKDIR /build
+WORKDIR /usr/project
 
-# Кеширование зависимостей
+# Cache dependencies as a separate layer
 COPY src/go.mod src/go.sum ./
 RUN go mod download
 
-# Копируем исходники
+# Copy source code
 COPY src .
 
-# Сборка с CGO
-RUN GO_VERSION=$(go version | awk '{print $3}') && \
-    BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
+# Build with embedded metadata
+RUN BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ") && \
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none") && \
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
         -o app \
         -ldflags="-s -w \
-        -X 'server-domme/internal/version.BuildDate=${BUILD_DATE}' \
-        -X 'server-domme/internal/version.GoVersion=${GO_VERSION}'" \
-        cmd/discord/main.go
+            -X github.com/keshon/buildinfo.Version=dev \
+            -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
+            -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
+            -X github.com/keshon/buildinfo.Project=Melodix \
+            -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
+        ./cmd/discord/
 
+# ---- Stage 2: Runtime ----
+FROM alpine:3.21
 
-# Stage 2 — Runtime
-FROM alpine:3.20
-
-# Только runtime-зависимости
+# Runtime dependencies: media processing + opus for voice + yt-dlp for streaming
 RUN apk add --no-cache \
         ffmpeg \
         python3 \
@@ -41,10 +46,8 @@ RUN apk add --no-cache \
 
 WORKDIR /usr/project
 
-# Копируем только бинарник
-COPY --from=builder /build/app ./app
+COPY --from=builder /usr/project/app ./app
 
-# Данные
 RUN mkdir -p data && touch data/datastore.json
 
-ENTRYPOINT ["./app"]
+ENTRYPOINT ["/usr/project/app"]
