@@ -66,9 +66,43 @@ jobs:
             ./cmd/discord/
           ls -la dist/
 
+      - name: Prepare build bundle
+        run: |
+          set -x
+          PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir -p "${PKG_ROOT}"
+
+          # Binary (renamed to melodix / melodix.exe inside the package)
+          BIN_SRC="dist/${{ steps.bin.outputs.name }}"
+          BIN_DST="melodix"
+          if [ "${{ matrix.goos }}" = "windows" ]; then BIN_DST="melodix.exe"; fi
+          cp "${BIN_SRC}" "${PKG_ROOT}/${BIN_DST}"
+
+          # README and LICENSE
+          cp README.md LICENSE "${PKG_ROOT}/"
+
+          # .env from example
+          if [ -f .env.example ]; then
+            cp .env.example "${PKG_ROOT}/.env"
+          fi
+
+          # data directory (empty, datastore.json will be created on first run)
+          mkdir -p "${PKG_ROOT}/data"
+
+          # assets directory (optional, only if present in the repo)
+          if [ -d assets ]; then
+            cp -R assets "${PKG_ROOT}/"
+          fi
+
+          # Create zip archive with everything needed to run the bot
+          mkdir -p dist
+          zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
+          ls -R "${PKG_ROOT}"
+          ls -la dist/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.bin.outputs.name }}
-          path: dist/${{ steps.bin.outputs.name }}
+          name: melodix-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }}.zip
           retention-days: 14
