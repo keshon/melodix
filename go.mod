@@ -8,6 +8,8 @@ require (
 	github.com/keshon/datastore v0.1.0
 )
 
+require github.com/tetratelabs/wazero v1.9.0 // indirect
+
 require (
 	github.com/bdandy/go-errors v1.2.2 // indirect
 	github.com/bdandy/go-socks4 v1.2.3
@@ -15,9 +17,9 @@ require (
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dop251/goja v0.0.0-20260226184354-913bd86fb70c // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
+	github.com/godeps/opus v1.0.3
 	github.com/google/pprof v0.0.0-20260302011040-a15ffb7f9dcc // indirect
 	golang.org/x/text v0.34.0 // indirect
-	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
 require (

@@ -6,20 +6,22 @@ import (
 	"io"
 
 	"github.com/bwmarrin/discordgo"
-	"layeh.com/gopus"
+	"github.com/godeps/opus"
 )
 
 // StreamToDiscord streams audio from a reader to a voice connection
 func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.VoiceConnection) error {
 	defer stream.Close()
 
-	encoder, err := gopus.NewEncoder(SampleRate, Channels, gopus.Audio)
+	encoder, err := opus.NewEncoder(SampleRate, Channels, opus.AppAudio)
 	if err != nil {
 		return fmt.Errorf("encoder error: %w", err)
 	}
+	defer encoder.Reset()
 
 	pcmBuf := make([]byte, FrameSize*Channels*2)
 	intBuf := make([]int16, FrameSize*Channels)
+	opusBuf := make([]byte, 4096)
 
 	for {
 		select {
@@ -38,15 +40,16 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 				intBuf[i] = int16(binary.LittleEndian.Uint16(pcmBuf[i*2 : i*2+2]))
 			}
 
-			opus, err := encoder.Encode(intBuf, FrameSize, len(pcmBuf))
+			n, err := encoder.Encode(intBuf, opusBuf)
 			if err != nil {
 				return fmt.Errorf("encode error: %w", err)
 			}
 
+			packet := append([]byte(nil), opusBuf[:n]...)
 			select {
 			case <-stop:
 				return nil
-			case vc.OpusSend <- opus:
+			case vc.OpusSend <- packet:
 				// sent
 			}
 		}

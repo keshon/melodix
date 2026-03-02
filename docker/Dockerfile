@@ -3,11 +3,8 @@ FROM golang:1.24.0-alpine3.21 AS builder
 
 ENV GOPROXY=https://proxy.golang.org,direct
 
-# CGO is required for layeh.com/gopus (libopus C bindings)
 RUN apk add --no-cache \
-        build-base \
-        git \
-        opus-dev
+        git
 
 WORKDIR /usr/project
 
@@ -21,7 +18,7 @@ COPY src .
 # Build with embedded metadata
 RUN BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none") && \
-    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
         -o app \
         -ldflags="-s -w \
             -X github.com/keshon/buildinfo.Version=dev \
@@ -34,12 +31,11 @@ RUN BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ") && \
 # ---- Stage 2: Runtime ----
 FROM alpine:3.21
 
-# Runtime dependencies: media processing + opus for voice + yt-dlp for streaming
+# Runtime dependencies: media processing + yt-dlp for streaming
 RUN apk add --no-cache \
         ffmpeg \
         python3 \
         py3-pip \
-        opus \
         libstdc++ \
     && pip3 install --no-cache-dir --break-system-packages yt-dlp \
     && rm -rf /var/cache/apk/*
