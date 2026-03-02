@@ -230,9 +230,13 @@ func (c *MusicCommand) runStop(s *discordgo.Session, e *discordgo.InteractionCre
 	if err := player.Stop(true); err != nil {
 		log.Printf("[WARN] Stop error: %v", err)
 	}
-	discord.FollowupEmbed(s, e, &discordgo.MessageEmbed{
-		Description: "⏹️ Playback stopped. Queue cleared.",
-	})
+	stopMsg := "Playback stopped. Queue cleared."
+	if err := discord.FollowupEmbed(s, e, &discordgo.MessageEmbed{
+		Description: "⏹️ " + stopMsg,
+	}); err != nil {
+		log.Printf("[WARN] FollowupEmbed failed for /music stop: %v", err)
+		_ = discord.EditResponse(s, e, "⏹️ "+stopMsg)
+	}
 	return nil
 }
 

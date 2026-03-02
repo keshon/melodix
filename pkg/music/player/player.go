@@ -49,8 +49,8 @@ func (status PlayerStatus) StringEmoji() string {
 }
 
 var (
-	ErrNoTrackPlaying   = errors.New("no track is currently playing")
-	ErrNoTracksInQueue  = errors.New("no tracks in queue")
+	ErrNoTrackPlaying    = errors.New("no track is currently playing")
+	ErrNoTracksInQueue   = errors.New("no tracks in queue")
 	ErrNoParsersForTrack = errors.New("track has no available parsers")
 )
 
@@ -67,8 +67,8 @@ type Player struct {
 	dg       *discordgo.Session
 
 	guildID         string
-	channelID      string
-	vc             *discordgo.VoiceConnection
+	channelID       string
+	vc              *discordgo.VoiceConnection
 	voiceReadyDelay time.Duration // delay after join before sending opus (discordgo op 4 race)
 
 	// playback lifecycle channels and sync
@@ -79,14 +79,14 @@ type Player struct {
 }
 
 // New creates a new Player instance. voiceReadyDelay is the wait after joining VC before sending opus (0 = default 500ms).
-func New(dg *discordgo.Session, guildID string, store *storage.Storage, resolver *source_resolver.SourceResolver, voiceReadyDelay time.Duration) *Player {
+func New(dg *discordgo.Session, guildID string, resolver *source_resolver.SourceResolver, voiceReadyDelay time.Duration) *Player {
 	if voiceReadyDelay <= 0 {
 		voiceReadyDelay = 500 * time.Millisecond
 	}
 	return &Player{
-		dg:              dg,
-		guildID:         guildID,
-		store:           store,
+		dg:      dg,
+		guildID: guildID,
+
 		resolver:        resolver,
 		voiceReadyDelay: voiceReadyDelay,
 		queue:           make([]parsers.TrackParse, 0),
@@ -202,15 +202,19 @@ func (p *Player) Stop(exitVc bool) error {
 
 	log.Printf("[Player] Stop called | exitVc=%v", exitVc)
 
-	// ensure stopPlayback is closed once
+	// Capture doneCh and close stop under lock so startTrack cannot replace them in between.
+	// We must wait on this exact doneCh so we unblock when the run we're stopping exits.
+	var doneCh chan struct{}
+	p.mu.Lock()
+	doneCh = p.playbackDone
 	p.stopOnce.Do(func() {
-		// safe: close existing stopPlayback only once
 		close(p.stopPlayback)
 	})
+	p.mu.Unlock()
 
-	// wait only if something is playing
-	if p.IsPlaying() {
-		<-p.playbackDone
+	// wait only if something is playing (doneCh is the channel that run will close)
+	if p.IsPlaying() && doneCh != nil {
+		<-doneCh
 		log.Printf("[Player] Playback goroutine finished")
 	}
 
@@ -331,9 +335,14 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	p.currTrack = track
 	p.playing = true
 
+	// Capture channels for this run so runPlayback always closes the one Stop() is waiting on,
+	// even if startTrack runs again (e.g. user hits play while first stop is still in progress).
+	stopCh := p.stopPlayback
+	doneCh := p.playbackDone
+
 	go func() {
-		// runPlayback will close p.playbackDone (the channel set above) exactly once.
-		if err := p.runPlayback(rs); err != nil {
+		// runPlayback closes doneCh on exit so Stop() unblocks on the correct channel.
+		if err := p.runPlayback(rs, stopCh, doneCh); err != nil {
 			log.Printf("[Player] Playback error for track %q: %v", track.Title, err)
 		}
 
@@ -347,21 +356,12 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	return nil
 }
 
-// runPlayback handles actual streaming
-func (p *Player) runPlayback(rs io.ReadCloser) error {
+// runPlayback handles actual streaming. stopCh and doneCh are the channels for this run;
+// closing doneCh on exit unblocks Stop() even if the player's channels were replaced by a new startTrack.
+func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) error {
 	// Ensure we close stream and signal done exactly once.
 	defer rs.Close()
-
-	// close the playbackDone channel for the run under lock, but only if it still matches.
-	defer func() {
-		p.mu.Lock()
-		// close if non-nil and not already closed; setting to nil prevents future close attempts
-		if p.playbackDone != nil {
-			close(p.playbackDone)
-			p.playbackDone = nil
-		}
-		p.mu.Unlock()
-	}()
+	defer close(doneCh)
 
 	var err error
 	// Guard access to currTrack safely for logging
@@ -391,7 +391,7 @@ func (p *Player) runPlayback(rs io.ReadCloser) error {
 			// before op 4 causes nil pointer panic in opusSender.
 			time.Sleep(p.voiceReadyDelay)
 			log.Printf("[Player] Streaming to Discord VC: ready=%v guild=%s", p.vc.Ready, p.guildID)
-			if streamErr := stream.StreamToDiscord(rs, p.stopPlayback, vc); streamErr != nil {
+			if streamErr := stream.StreamToDiscord(rs, stopCh, vc); streamErr != nil {
 				err = streamErr
 				log.Printf("[Player] StreamToDiscord error: %v", streamErr)
 			}

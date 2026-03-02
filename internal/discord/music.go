@@ -40,7 +40,7 @@ func (b *Bot) GetOrCreatePlayer(guildID string) *player.Player {
 	if voiceDelay <= 0 {
 		voiceDelay = 500 * time.Millisecond
 	}
-	p := player.New(b.dg, guildID, b.storage, b.sourceResolver, voiceDelay)
+	p := player.New(b.dg, guildID, b.sourceResolver, voiceDelay)
 	b.players[guildID] = p
 	return p
 }
