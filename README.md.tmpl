@@ -2,82 +2,105 @@
 
 [![GoDoc](https://godoc.org/github.com/keshon/melodix?status.svg)](https://godoc.org/github.com/keshon/melodix) [![Go report](https://goreportcard.com/badge/keshon/melodix)](https://goreportcard.com/report/github.com/keshon/melodix)
 
-# 🎵 Melodix — Self-hosted Discord music bot
+# Melodix — Self-hosted Discord music bot
 
-Melodix is my pet project written in Go that plays audio from YouTube and audio streaming links to Discord voice channels. It's a continuation of my original buggy [prototype](https://github.com/keshon/melodix-player).
+Melodix is a Discord bot that plays music in voice channels. You can add it to your own server and run it yourself, or try it on the official server. It is written in Go and supports YouTube, SoundCloud, and internet radio streams.
 
-## 🌟 Features Overview
+---
 
-### 🎧 Playback Support
-- 🎶 Track added by song name or YouTube/Soundcloud link.
-- 📻 Internet radio streaming links (24/7 playback).
+## What Melodix does
 
-### ⚙️ Additional Features
-- 🌐 Operation across multiple Discord servers.
-- 🔄 Playback auto-resume support for connection interruptions.
+- **Plays audio in voice channels** — Join a voice channel, use the music commands, and the bot streams audio from the given link or search.
+- **Multiple sources** — YouTube (by link or search), SoundCloud, and direct radio/stream URLs.
+- **Queue and controls** — Play, skip to the next track, or stop and clear the queue.
+- **Multiple servers** — One bot instance can serve many Discord servers.
+- **Slash commands** — All features are available via Discord slash commands (e.g. `/music play`, `/help`).
 
-### ⚠️ Current Limitations
-- ⏸️ Playback auto-resume feature may cause noticeable pauses at times.
-- ⏩ Playback speed may sometimes slightly vary.
-- 🚫 The bot cannot play YouTube live streams or region-locked videos.
-- 🚫 Not every radio streams are supported.
-- 🐞 Can hang or become unresponsive. It's not bug-free.
+**Limitations:** The bot cannot play YouTube live streams or region-locked videos. Not every radio stream format is supported. Playback may occasionally pause or vary slightly when the bot retries with a different stream method.
 
-## 🚀 Try Melodix
+---
 
-You can test out Melodix in two ways:
-- 🖥️ Download [compiled binaries](https://github.com/keshon/melodix/releases) (available only for Windows). Ensure [FFMPEG](https://www.ffmpeg.org/) is installed on your system and added to the global PATH variable. Follow the "Create bot in Discord Developer Portal" section to set up the bot in Discord.
+## Try Melodix without installing
 
-- 🎙️ Join the [Official Discord server](https://discord.gg/NVtdTka8ZT) and use the voice and `#bot-spam` channels.
+- **Official Discord server** — Join the [Melodix Discord server](https://discord.gg/NVtdTka8ZT), go to a voice channel and the `#bot-spam` (or similar) text channel, and use the slash commands there.
+- **Pre-built binaries** — Download a [release](https://github.com/keshon/melodix/releases) (Windows), then follow the setup steps below to create a bot in the Developer Portal and run the binary.
 
-## 📝 Available Discord Commands
+---
+
+## Commands
 
 {{ .CommandSections }}
 
-### 💡 Usage Examples
-To use the `play` command, provide a YouTube video title or URL:
+**Music examples:** Play by search query or by link. You must be in a voice channel to use `/music play`.
+
 ```
 /music play Never Gonna Give You Up
 /music play https://www.youtube.com/watch?v=dQw4w9WgXcQ
 /music play http://stream-uk1.radioparadise.com/aac-320
 ```
 
-## 🔧 How to Set Up the Bot
+---
 
-### 🔗 Create a Bot in the Discord Developer Portal
-To add Melodix to a Discord server, follow these steps:
+## Running Melodix yourself
 
-1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications) and obtain the `APPLICATION_ID` (in the General section).
-2. In the Bot section, enable `PRESENCE INTENT`, `SERVER MEMBERS INTENT`, and `MESSAGE CONTENT INTENT`.
-3. Use the following link to authorize the bot: `discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&permissions=36727824`
-   - Replace `YOUR_APPLICATION_ID` with your Bot's Application ID from step 1.
-4. Select a server and click "Authorize".
-5. Grant the necessary permissions for Melodix to function correctly (access to text and voice channels).
+This section is for anyone who wants to host the bot on their own machine or server.
 
-After adding the bot, build it from source or download [compiled binaries](https://github.com/keshon/melodix-player/releases). Docker deployment instructions are available in `docker/README.md`.
+### What you need
 
-### 🛠️ Building Melodix from Sources
-This project is written in Go, so ensure your environment is ready. Use the provided scripts to build Melodix from source:
-- `bash-and-run.bat`: Build the debug version and execute.
+- A **Discord bot token** (from the Discord Developer Portal).
+- **FFmpeg** installed and on your system PATH (used for some audio streams).
+- **yt-dlp** (optional but recommended) on your PATH for better YouTube support. Without it, the bot falls back to other methods.
 
-Rename `.env.example` to `.env` and store your Discord Bot Token in the `DISCORD_TOKEN` variable. 
-Install [FFMPEG](https://ffmpeg.org/) and add it to global PATH variable.
-Install yt-dlp and add it to global PATH variable.
+### Step 1 — Create the bot in Discord
 
-### 🐳 Docker Deployment
-For Docker deployment, refer to `docker/README.md` for specific instructions.
+1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and create a new application. Note the **Application ID** (in the “General Information” section).
+2. Go to the **Bot** section and create a bot. Copy the **token** (you will use it as `DISCORD_TOKEN`).
+3. Under **Privileged Gateway Intents**, enable:
+   - Presence Intent  
+   - Server Members Intent  
+   - Message Content Intent  
+4. Invite the bot to your server using this URL (replace `YOUR_APPLICATION_ID` with your Application ID from step 1):
 
-## 📝 Environment Variables
+   `https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&permissions={{ .BotPermissions }}`
 
-You can configure Melodix using environment variables by creating a `.env` file in your project root directory. The following variables should be set in your `.env` file:
+   This link only requests the permissions the bot needs: {{ .BotPermissionsList }}.
+
+5. Open the URL in your browser, choose your server, and authorize. Grant the requested permissions when asked.
+
+### Step 2 — Configure and run
+
+Create a `.env` file in the folder where you run the bot (or set the same variables in your environment):
 
 ```env
-# Discord Bot Token (Required)
+# Required: your bot token from the Developer Portal
 DISCORD_TOKEN=your-discord-bot-token
 ```
 
-## 🆘 Support
-For any questions, get support in the [Official Discord server](https://discord.gg/NVtdTka8ZT).
+Optional variables (you can add these to `.env` if needed):
 
-## 📜 License
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `STORAGE_PATH` | Path for bot data (e.g. command state). | `./data/datastore.json` |
+| `INIT_SLASH_COMMANDS` | Set to `true` to register slash commands on every startup. | `false` |
+| `DEVELOPER_ID` | Your Discord user ID for developer-only commands. | (none) |
+| `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave. | (none) |
+
+**Run the bot:**
+
+- **From source (Go):** Clone the repo, run `go build ./cmd/discord`, then run the produced binary. Ensure `DISCORD_TOKEN` is set (e.g. in `.env`).
+- **From a release:** Download the Windows binary from [releases](https://github.com/keshon/melodix/releases), put it in a folder with your `.env` (or set `DISCORD_TOKEN`), and run it.
+- **With Docker:** See [docker/README.md](docker/README.md) for Docker and Docker Compose instructions.
+
+After the bot is running and invited to your server, use slash commands in any channel where the bot can read and send messages. For music, be in a voice channel and use `/music play` with a link or search term.
+
+---
+
+## Support
+
+For help or questions, use the [Melodix Discord server](https://discord.gg/NVtdTka8ZT).
+
+---
+
+## License
+
 Melodix is licensed under the [MIT License](https://opensource.org/licenses/MIT).

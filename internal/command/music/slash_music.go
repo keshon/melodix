@@ -1,12 +1,14 @@
 package music
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/music/player"
-	"github.com/keshon/melodix/internal/music/source_resolver"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -146,8 +148,7 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 		return nil
 	}
 
-	resolver := source_resolver.New()
-	tracks, err := resolver.Resolve(input, src, parser)
+	tracks, err := c.Bot.Resolve(guildID, input, src, parser)
 	if err != nil || len(tracks) == 0 {
 		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
@@ -157,7 +158,7 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 	}
 
 	player := c.Bot.GetOrCreatePlayer(guildID)
-	err = player.Enqueue(tracks[0].URL, src, parser)
+	err = player.EnqueueTrackInfo(tracks[0])
 	if err != nil {
 		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Queue Error",
@@ -170,7 +171,7 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 		player.PlayNext(voiceState.ChannelID)
 	}
 
-	listenPlayerStatusSlash(s, e, player)
+	listenPlayerStatusSlash(s, e, player, c.Bot, guildID)
 	return nil
 }
 
@@ -212,7 +213,7 @@ func (c *MusicCommand) runNext(s *discordgo.Session, e *discordgo.InteractionCre
 		return nil
 	}
 
-	listenPlayerStatusSlash(s, e, player)
+	listenPlayerStatusSlash(s, e, player, c.Bot, guildID)
 	return nil
 }
 
@@ -226,54 +227,73 @@ func (c *MusicCommand) runStop(s *discordgo.Session, e *discordgo.InteractionCre
 	}
 
 	player := c.Bot.GetOrCreatePlayer(guildID)
-	go func() { player.Stop(true) }()
-
+	if err := player.Stop(true); err != nil {
+		log.Printf("[WARN] Stop error: %v", err)
+	}
 	discord.FollowupEmbed(s, e, &discordgo.MessageEmbed{
 		Description: "⏹️ Playback stopped. Queue cleared.",
 	})
 	return nil
 }
 
-func listenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player) {
+// statusListenTimeout limits how long we listen for status so the goroutine does not leak.
+// Updates after the first use the guild's stored message (edit), so they work beyond token expiry.
+const statusListenTimeout = 15 * time.Minute
+
+func listenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.BotVoice, guildID string) {
 	go func() {
-		for signal := range p.PlayerStatus {
-			switch signal {
-			case player.StatusPlaying:
-				track := p.CurrentTrack()
-				if track == nil {
-					discord.FollowupEmbed(session, event, &discordgo.MessageEmbed{
-						Title:       "⚠️ Error",
-						Description: "Failed to get current track",
-					})
+		ctx, cancel := context.WithTimeout(context.Background(), statusListenTimeout)
+		defer cancel()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case signal, ok := <-p.PlayerStatus:
+				if !ok {
 					return
 				}
+				switch signal {
+				case player.StatusPlaying:
+					track := p.CurrentTrack()
+					if track == nil {
+						_ = bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
+							Title:       "⚠️ Error",
+							Description: "Failed to get current track",
+						})
+						return
+					}
 
-				var desc string
-				if track.Title != "" && track.URL != "" {
-					desc = fmt.Sprintf("🎶 [%s](%s)", track.Title, track.URL)
-				} else if track.Title != "" {
-					desc = "🎶 " + track.Title
-				} else if track.URL != "" {
-					desc = "🎶 " + track.URL
-				} else {
-					desc = "🎶 Unknown track"
+					var desc string
+					if track.Title != "" && track.URL != "" {
+						desc = fmt.Sprintf("🎶 [%s](%s)", track.Title, track.URL)
+					} else if track.Title != "" {
+						desc = "🎶 " + track.Title
+					} else if track.URL != "" {
+						desc = "🎶 " + track.URL
+					} else {
+						desc = "🎶 Unknown track"
+					}
+
+					if err := bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
+						Title:       player.StatusPlaying.StringEmoji() + " Now Playing",
+						Description: desc,
+						Color:       discord.EmbedColor,
+					}); err != nil {
+						log.Printf("[WARN] UpdateGuildMusicStatus: %v", err)
+					}
+					return
+
+				case player.StatusAdded:
+					if err := bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
+						Title:       player.StatusAdded.StringEmoji() + " Track(s) Added",
+						Description: "Added to queue",
+						Color:       discord.EmbedColor,
+					}); err != nil {
+						log.Printf("[WARN] UpdateGuildMusicStatus: %v", err)
+					}
+					return
 				}
-
-				discord.FollowupEmbed(session, event, &discordgo.MessageEmbed{
-					Title:       player.StatusPlaying.StringEmoji() + " Now Playing",
-					Description: desc,
-					Color:       discord.EmbedColor,
-				})
-				return
-
-			case player.StatusAdded:
-				discord.FollowupEmbed(session, event, &discordgo.MessageEmbed{
-					Title:       player.StatusAdded.StringEmoji() + " Track(s) Added",
-					Description: "Added to queue",
-					Color:       discord.EmbedColor,
-				})
-				return
-
 			}
 		}
 	}()

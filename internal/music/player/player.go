@@ -7,9 +7,11 @@ import (
 	"log"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/keshon/melodix/internal/music/parsers"
 	"github.com/keshon/melodix/internal/music/source_resolver"
+	"github.com/keshon/melodix/internal/music/sources"
 	"github.com/keshon/melodix/internal/music/stream"
 	"github.com/keshon/melodix/internal/storage"
 
@@ -47,8 +49,9 @@ func (status PlayerStatus) StringEmoji() string {
 }
 
 var (
-	ErrNoTrackPlaying  = errors.New("no track is currently playing")
-	ErrNoTracksInQueue = errors.New("no tracks in queue")
+	ErrNoTrackPlaying   = errors.New("no track is currently playing")
+	ErrNoTracksInQueue  = errors.New("no tracks in queue")
+	ErrNoParsersForTrack = errors.New("track has no available parsers")
 )
 
 type Player struct {
@@ -63,9 +66,10 @@ type Player struct {
 	store    *storage.Storage
 	dg       *discordgo.Session
 
-	guildID   string
-	channelID string
-	vc        *discordgo.VoiceConnection
+	guildID         string
+	channelID      string
+	vc             *discordgo.VoiceConnection
+	voiceReadyDelay time.Duration // delay after join before sending opus (discordgo op 4 race)
 
 	// playback lifecycle channels and sync
 	stopOnce     sync.Once
@@ -74,18 +78,22 @@ type Player struct {
 	PlayerStatus chan PlayerStatus
 }
 
-// New creates a new Player instance
-func New(dg *discordgo.Session, guildID string, store *storage.Storage, resolver *source_resolver.SourceResolver) *Player {
+// New creates a new Player instance. voiceReadyDelay is the wait after joining VC before sending opus (0 = default 500ms).
+func New(dg *discordgo.Session, guildID string, store *storage.Storage, resolver *source_resolver.SourceResolver, voiceReadyDelay time.Duration) *Player {
+	if voiceReadyDelay <= 0 {
+		voiceReadyDelay = 500 * time.Millisecond
+	}
 	return &Player{
-		dg:           dg,
-		guildID:      guildID,
-		store:        store,
-		resolver:     resolver,
-		queue:        make([]parsers.TrackParse, 0),
-		history:      make([]parsers.TrackParse, 0),
-		stopPlayback: make(chan struct{}),
-		playbackDone: make(chan struct{}),
-		PlayerStatus: make(chan PlayerStatus, 10), // buffered to reduce drops
+		dg:              dg,
+		guildID:         guildID,
+		store:           store,
+		resolver:        resolver,
+		voiceReadyDelay: voiceReadyDelay,
+		queue:           make([]parsers.TrackParse, 0),
+		history:         make([]parsers.TrackParse, 0),
+		stopPlayback:    make(chan struct{}),
+		playbackDone:    make(chan struct{}),
+		PlayerStatus:    make(chan PlayerStatus, 10), // buffered to reduce drops
 	}
 }
 
@@ -102,18 +110,47 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	tracksParse := make([]parsers.TrackParse, len(tracksInfo))
-	for i, trackInfo := range tracksInfo {
-		tracksParse[i] = parsers.TrackParse{
+	tracksParse := make([]parsers.TrackParse, 0, len(tracksInfo))
+	for _, trackInfo := range tracksInfo {
+		if len(trackInfo.AvailableParsers) == 0 {
+			log.Printf("[Player] Skipping track with no available parsers: %q", trackInfo.Title)
+			continue
+		}
+		tracksParse = append(tracksParse, parsers.TrackParse{
 			URL:           trackInfo.URL,
 			Title:         trackInfo.Title,
 			CurrentParser: trackInfo.AvailableParsers[0],
 			SourceInfo:    trackInfo,
-		}
+		})
+	}
+	if len(tracksParse) == 0 {
+		p.emitStatus(StatusError)
+		return ErrNoParsersForTrack
 	}
 
 	p.queue = append(p.queue, tracksParse...)
 	log.Printf("[Player] Added %d track(s) to queue | QueueLen=%d", len(tracksParse), len(p.queue))
+	if p.currTrack != nil {
+		p.emitStatus(StatusAdded)
+	}
+	return nil
+}
+
+// EnqueueTrackInfo enqueues a single pre-resolved track (avoids double resolve when caller already has TrackInfo).
+func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
+	if len(trackInfo.AvailableParsers) == 0 {
+		p.emitStatus(StatusError)
+		return ErrNoParsersForTrack
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.queue = append(p.queue, parsers.TrackParse{
+		URL:           trackInfo.URL,
+		Title:         trackInfo.Title,
+		CurrentParser: trackInfo.AvailableParsers[0],
+		SourceInfo:    trackInfo,
+	})
+	log.Printf("[Player] Added 1 track(s) to queue | QueueLen=%d", len(p.queue))
 	if p.currTrack != nil {
 		p.emitStatus(StatusAdded)
 	}
@@ -206,7 +243,9 @@ func (p *Player) Stop(exitVc bool) error {
 	return nil
 }
 
-// Pause pauses playback
+// Pause pauses playback. Note: Not wired to actual streaming — only sets playing=false and emits StatusPaused.
+// StreamToDiscord continues sending; audio does not stop. Resume() would start a second stream. Not exposed in slash commands.
+// If you add a pause command later, reimplement by closing stopPlayback and waiting for playbackDone; Resume by opening a new stream from current position.
 func (p *Player) Pause() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -219,7 +258,7 @@ func (p *Player) Pause() error {
 	return nil
 }
 
-// Resume resumes playback
+// Resume resumes playback. Starts a new playback goroutine; do not use while the previous runPlayback is still active (see Pause comment).
 func (p *Player) Resume() error {
 	p.mu.Lock()
 	if p.currTrack == nil {
@@ -347,6 +386,10 @@ func (p *Player) runPlayback(rs io.ReadCloser) error {
 			log.Printf("[Player] Failed to get/create voice connection: %v", vErr)
 		} else {
 			p.vc = vc
+			// Wait for voice encryption (op 4) to be applied before sending opus.
+			// discordgo starts opusSender on op 2 but aead is set on op 4; sending
+			// before op 4 causes nil pointer panic in opusSender.
+			time.Sleep(p.voiceReadyDelay)
 			log.Printf("[Player] Streaming to Discord VC: ready=%v guild=%s", p.vc.Ready, p.guildID)
 			if streamErr := stream.StreamToDiscord(rs, p.stopPlayback, vc); streamErr != nil {
 				err = streamErr

@@ -43,7 +43,12 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 				return fmt.Errorf("encode error: %w", err)
 			}
 
-			vc.OpusSend <- opus
+			select {
+			case <-stop:
+				return nil
+			case vc.OpusSend <- opus:
+				// sent
+			}
 		}
 	}
 }

@@ -7,12 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/version"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 type AboutCommand struct{}

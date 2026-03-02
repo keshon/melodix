@@ -26,7 +26,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cfg := config.New()
+	cfg, err := config.New()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
 
 	store, err := storage.New(cfg.StoragePath)
 	if err != nil {
@@ -66,5 +69,7 @@ func main() {
 	case <-ctx.Done():
 	}
 
+	// Wait for the bot goroutine to exit so defer dg.Close() and cleanup run before process exit.
+	<-errCh
 	log.Println("[INFO] Discord bot exited cleanly")
 }
