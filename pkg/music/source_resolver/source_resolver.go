@@ -3,10 +3,10 @@ package source_resolver
 import (
 	"errors"
 
-	"github.com/keshon/melodix/internal/music/sources"
-	"github.com/keshon/melodix/internal/music/sources/radio"
-	"github.com/keshon/melodix/internal/music/sources/soundcloud"
-	"github.com/keshon/melodix/internal/music/sources/youtube"
+	"github.com/keshon/melodix/pkg/music/sources"
+	"github.com/keshon/melodix/pkg/music/sources/radio"
+	"github.com/keshon/melodix/pkg/music/sources/soundcloud"
+	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
 type SourceResolver struct {

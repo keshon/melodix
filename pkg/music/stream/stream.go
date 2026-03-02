@@ -5,10 +5,10 @@ import (
 	"io"
 	"log"
 
-	"github.com/keshon/melodix/internal/music/parsers"
-	"github.com/keshon/melodix/internal/music/parsers/ffmpeg"
-	"github.com/keshon/melodix/internal/music/parsers/kkdai"
-	"github.com/keshon/melodix/internal/music/parsers/ytdlp"
+	"github.com/keshon/melodix/pkg/music/parsers"
+	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
+	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
+	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
 )
 
 const (

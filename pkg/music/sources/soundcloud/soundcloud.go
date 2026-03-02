@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	source "github.com/keshon/melodix/internal/music/sources"
+	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
 const SourceSoundCloud string = "soundcloud"

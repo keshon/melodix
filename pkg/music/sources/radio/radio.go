@@ -4,7 +4,7 @@ import (
 	"errors"
 	"slices"
 
-	source "github.com/keshon/melodix/internal/music/sources"
+	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
 const SourceRadio = "radio"

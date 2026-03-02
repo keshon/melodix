@@ -7,7 +7,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/keshon/melodix/internal/music/parsers"
+	"github.com/keshon/melodix/pkg/music/parsers"
 
 	"github.com/kkdai/youtube/v2"
 )

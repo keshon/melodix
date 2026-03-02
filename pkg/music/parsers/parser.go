@@ -3,7 +3,7 @@ package parsers
 import (
 	"time"
 
-	"github.com/keshon/melodix/internal/music/sources"
+	"github.com/keshon/melodix/pkg/music/sources"
 )
 
 type TrackParse struct {

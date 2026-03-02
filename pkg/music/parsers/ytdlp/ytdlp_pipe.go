@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/keshon/melodix/internal/music/parsers"
+	"github.com/keshon/melodix/pkg/music/parsers"
 )
 
 func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {

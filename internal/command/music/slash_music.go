@@ -8,7 +8,7 @@ import (
 
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/music/player"
+	"github.com/keshon/melodix/pkg/music/player"
 
 	"github.com/bwmarrin/discordgo"
 )

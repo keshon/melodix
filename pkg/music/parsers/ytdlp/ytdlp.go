@@ -3,7 +3,7 @@ package ytdlp
 import (
 	"io"
 
-	"github.com/keshon/melodix/internal/music/parsers"
+	"github.com/keshon/melodix/pkg/music/parsers"
 )
 
 const (

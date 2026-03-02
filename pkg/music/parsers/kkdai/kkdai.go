@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/keshon/melodix/internal/music/parsers"
+	"github.com/keshon/melodix/pkg/music/parsers"
 
 	_ "github.com/bdandy/go-socks4"
 	youtube "github.com/kkdai/youtube/v2"

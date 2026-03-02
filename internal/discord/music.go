@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/music/player"
-	"github.com/keshon/melodix/internal/music/source_resolver"
-	"github.com/keshon/melodix/internal/music/sources"
+	"github.com/keshon/melodix/pkg/music/player"
+	"github.com/keshon/melodix/pkg/music/source_resolver"
+	"github.com/keshon/melodix/pkg/music/sources"
 )
 
 // BotVoice is the interface the Discord bot exposes for voice/music commands.

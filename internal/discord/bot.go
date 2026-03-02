@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/keshon/melodix/internal/music/player"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/pkg/music/player"
 
 	"slices"
 	"sync"
@@ -16,8 +16,8 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/docs"
-	"github.com/keshon/melodix/internal/music/source_resolver"
 	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/music/source_resolver"
 )
 
 // guildMusicStatus holds the channel and message ID for a guild's "now playing" message,

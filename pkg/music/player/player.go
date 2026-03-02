@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/keshon/melodix/internal/music/parsers"
-	"github.com/keshon/melodix/internal/music/source_resolver"
-	"github.com/keshon/melodix/internal/music/sources"
-	"github.com/keshon/melodix/internal/music/stream"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/pkg/music/parsers"
+	"github.com/keshon/melodix/pkg/music/source_resolver"
+	"github.com/keshon/melodix/pkg/music/sources"
+	"github.com/keshon/melodix/pkg/music/stream"
 
 	"github.com/bwmarrin/discordgo"
 )
