@@ -1,4 +1,3 @@
-Readme хорошо написан — структура чёткая, примеры на месте. Вот что я бы поменял:
 # commandkit
 
 A transport-agnostic command execution core for Go.
