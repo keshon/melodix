@@ -35,7 +35,7 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
-          cache-dependency-path: src/go.sum
+          cache-dependency-path: go.sum
 
       - name: Set binary name
         id: bin
@@ -45,7 +45,6 @@ jobs:
           echo "name=${NAME}" >> $GITHUB_OUTPUT
 
       - name: Build
-        working-directory: src
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
