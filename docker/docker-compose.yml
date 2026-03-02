@@ -3,6 +3,8 @@ services:
     container_name: ${ALIAS}
     restart: always
     image: '${ALIAS}-image'
+    volumes:
+      - ./data:/usr/project/data    
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_GUILD_BLACKLIST=${DISCORD_GUILD_BLACKLIST}

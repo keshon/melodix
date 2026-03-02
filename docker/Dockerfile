@@ -1,5 +1,5 @@
 # ---- Stage 1: Builder ----
-FROM golang:1.24.0-alpine3.21 AS builder
+FROM golang:1.24.10-alpine3.21 AS builder
 
 ENV GOPROXY=https://proxy.golang.org,direct
 
