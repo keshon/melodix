@@ -4,13 +4,13 @@ import (
 	"context"
 
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 )
 
 // WithGuildOnly wraps a command to enforce guild-only access
-func WithGuildOnly() cmd.Middleware {
-	return func(c cmd.Command) cmd.Command {
-		return cmd.Wrap(c, func(ctx context.Context, inv *cmd.Invocation) error {
+func WithGuildOnly() commandkit.Middleware {
+	return func(c commandkit.Command) commandkit.Command {
+		return commandkit.Wrap(c, func(ctx context.Context, inv *commandkit.Invocation) error {
 			if v, ok := inv.Data.(*command.SlashInteractionContext); ok && v.Event.GuildID == "" {
 				return nil
 			}

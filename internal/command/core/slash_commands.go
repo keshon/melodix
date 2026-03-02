@@ -10,7 +10,7 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -276,8 +276,8 @@ func (c *CommandsCommand) runCmdUpdate(s *discordgo.Session, e *discordgo.Intera
 
 func getUniqueGroups() []string {
 	set := map[string]struct{}{}
-	for _, c := range cmd.DefaultRegistry.GetAll() {
-		meta, _ := cmd.Root(c).(command.DiscordMeta)
+	for _, c := range commandkit.DefaultRegistry.GetAll() {
+		meta, _ := commandkit.Root(c).(command.DiscordMeta)
 		group := ""
 		if meta != nil {
 			group = meta.Group()

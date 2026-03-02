@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/pkg/commandkit"
 	"github.com/keshon/melodix/pkg/music/player"
 
 	"slices"
@@ -16,7 +17,7 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/docs"
-	"github.com/keshon/melodix/pkg/cmd"
+
 	"github.com/keshon/melodix/pkg/music/source_resolver"
 )
 
@@ -29,14 +30,14 @@ type guildMusicStatus struct {
 
 // Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired in run.
 type Bot struct {
-	dg               *discordgo.Session
-	storage          *storage.Storage
-	slashCmds        map[string][]*discordgo.ApplicationCommand
-	cfg              *config.Config
-	mu               sync.RWMutex
-	players          map[string]*player.Player
-	sourceResolver   *source_resolver.SourceResolver
-	guildMusicStatus map[string]guildMusicStatus
+	dg                 *discordgo.Session
+	storage            *storage.Storage
+	slashCmds          map[string][]*discordgo.ApplicationCommand
+	cfg                *config.Config
+	mu                 sync.RWMutex
+	players            map[string]*player.Player
+	sourceResolver     *source_resolver.SourceResolver
+	guildMusicStatus   map[string]guildMusicStatus
 	guildMusicStatusMu sync.RWMutex
 
 	// once ensures one-time background services (purge, shortlink) are not
@@ -47,11 +48,11 @@ type Bot struct {
 // NewBot creates a Bot. Register any bot-dependent commands before calling Run.
 func NewBot(cfg *config.Config, storage *storage.Storage) *Bot {
 	return &Bot{
-		cfg:               cfg,
-		storage:           storage,
-		slashCmds:         make(map[string][]*discordgo.ApplicationCommand),
-		players:           make(map[string]*player.Player),
-		guildMusicStatus:  make(map[string]guildMusicStatus),
+		cfg:              cfg,
+		storage:          storage,
+		slashCmds:        make(map[string][]*discordgo.ApplicationCommand),
+		players:          make(map[string]*player.Player),
+		guildMusicStatus: make(map[string]guildMusicStatus),
 	}
 }
 
@@ -241,7 +242,7 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 	// Background services start once across all reconnects.
 	b.once.Do(func() {
 		log.Println("[INFO] Starting background services...")
-		if err := docs.UpdateReadme(cmd.DefaultRegistry, config.CategoryWeights); err != nil {
+		if err := docs.UpdateReadme(commandkit.DefaultRegistry, config.CategoryWeights); err != nil {
 			log.Println("[ERR] Failed to update README:", err)
 		}
 	})
@@ -280,8 +281,8 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	inv := &cmd.Invocation{Data: &command.MessageContext{Session: s, Event: m, Storage: b.storage, Config: b.cfg}}
-	for _, c := range cmd.DefaultRegistry.GetAll() {
+	inv := &commandkit.Invocation{Data: &command.MessageContext{Session: s, Event: m, Storage: b.storage, Config: b.cfg}}
+	for _, c := range commandkit.DefaultRegistry.GetAll() {
 		if err := c.Run(context.Background(), inv); err != nil {
 			log.Println("[ERR] Error running message command:", err)
 			MessageEmbed(s, m.ChannelID, &discordgo.MessageEmbed{
@@ -293,11 +294,11 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 // onMessageReactionAdd handles reaction events for commands that use reactions.
 func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-	inv := &cmd.Invocation{Data: &command.MessageReactionContext{
+	inv := &commandkit.Invocation{Data: &command.MessageReactionContext{
 		Session: s, Event: r, Storage: b.storage, Config: b.cfg, Logger: DefaultLogger,
 	}}
-	for _, c := range cmd.DefaultRegistry.GetAll() {
-		if _, ok := cmd.Root(c).(command.ReactionProvider); !ok {
+	for _, c := range commandkit.DefaultRegistry.GetAll() {
+		if _, ok := commandkit.Root(c).(command.ReactionProvider); !ok {
 			continue
 		}
 		if err := c.Run(context.Background(), inv); err != nil {
@@ -323,21 +324,21 @@ func (b *Bot) onInteractionCreate(s *discordgo.Session, i *discordgo.Interaction
 
 func (b *Bot) handleApplicationCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	name := i.ApplicationCommandData().Name
-	c := cmd.DefaultRegistry.Get(name)
+	c := commandkit.DefaultRegistry.Get(name)
 	if c == nil {
 		log.Printf("[WARN] Unknown command: %s", name)
 		return
 	}
 
-	var inv *cmd.Invocation
+	var inv *commandkit.Invocation
 	switch i.ApplicationCommandData().CommandType {
 	case discordgo.MessageApplicationCommand:
-		inv = &cmd.Invocation{Data: &command.MessageApplicationCommandContext{
+		inv = &commandkit.Invocation{Data: &command.MessageApplicationCommandContext{
 			Session: s, Event: i, Storage: b.storage, Target: i.Message,
 			Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
 		}}
 	case discordgo.ChatApplicationCommand:
-		inv = &cmd.Invocation{Data: &command.SlashInteractionContext{
+		inv = &commandkit.Invocation{Data: &command.SlashInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
 			Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
 		}}
@@ -357,8 +358,8 @@ func (b *Bot) handleComponentInteraction(s *discordgo.Session, i *discordgo.Inte
 	customID := i.MessageComponentData().CustomID
 	log.Printf("[DEBUG] Component interaction: %s", customID)
 
-	var matched cmd.Command
-	for _, c := range cmd.DefaultRegistry.GetAll() {
+	var matched commandkit.Command
+	for _, c := range commandkit.DefaultRegistry.GetAll() {
 		if matchesComponentID(customID, c.Name()) {
 			matched = c
 			break
@@ -369,7 +370,7 @@ func (b *Bot) handleComponentInteraction(s *discordgo.Session, i *discordgo.Inte
 		return
 	}
 
-	handler, ok := cmd.Root(matched).(command.ComponentInteractionHandler)
+	handler, ok := commandkit.Root(matched).(command.ComponentInteractionHandler)
 	if !ok {
 		log.Printf("[WARN] Command %s does not implement ComponentInteractionHandler", matched.Name())
 		return

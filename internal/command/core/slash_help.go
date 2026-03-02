@@ -11,7 +11,7 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/version"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -91,13 +91,13 @@ func (c *HelpUnifiedCommand) Run(ctx interface{}) error {
 }
 
 func buildHelpByCategory() string {
-	all := cmd.DefaultRegistry.GetAll()
+	all := commandkit.DefaultRegistry.GetAll()
 
-	categoryMap := make(map[string][]cmd.Command)
+	categoryMap := make(map[string][]commandkit.Command)
 	categorySort := make(map[string]int)
 
 	for _, c := range all {
-		meta, _ := cmd.Root(c).(command.DiscordMeta)
+		meta, _ := commandkit.Root(c).(command.DiscordMeta)
 		cat := ""
 		if meta != nil {
 			cat = meta.Category()
@@ -135,11 +135,11 @@ func buildHelpByCategory() string {
 }
 
 func buildHelpByGroup() string {
-	all := cmd.DefaultRegistry.GetAll()
+	all := commandkit.DefaultRegistry.GetAll()
 
-	groupMap := make(map[string][]cmd.Command)
+	groupMap := make(map[string][]commandkit.Command)
 	for _, c := range all {
-		meta, _ := cmd.Root(c).(command.DiscordMeta)
+		meta, _ := commandkit.Root(c).(command.DiscordMeta)
 		group := ""
 		if meta != nil {
 			group = meta.Group()
@@ -168,7 +168,7 @@ func buildHelpByGroup() string {
 }
 
 func buildHelpFlat() string {
-	all := cmd.DefaultRegistry.GetAll()
+	all := commandkit.DefaultRegistry.GetAll()
 	sort.Slice(all, func(i, j int) bool { return all[i].Name() < all[j].Name() })
 
 	var sb strings.Builder

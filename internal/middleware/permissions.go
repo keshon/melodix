@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -63,9 +63,9 @@ var PermissionNames = map[int64]string{
 	discordgo.PermissionModerateMembers:                  "Moderate Members",
 }
 
-func WithUserPermissionCheck() cmd.Middleware {
-	return func(c cmd.Command) cmd.Command {
-		return cmd.Wrap(c, func(ctx context.Context, inv *cmd.Invocation) error {
+func WithUserPermissionCheck() commandkit.Middleware {
+	return func(c commandkit.Command) commandkit.Command {
+		return commandkit.Wrap(c, func(ctx context.Context, inv *commandkit.Invocation) error {
 			var s *discordgo.Session
 			var m *discordgo.Member
 			var guildID, channelID string
@@ -98,7 +98,7 @@ func WithUserPermissionCheck() cmd.Middleware {
 				return c.Run(ctx, inv)
 			}
 
-			meta, ok := cmd.Root(c).(command.DiscordMeta)
+			meta, ok := commandkit.Root(c).(command.DiscordMeta)
 			if !ok {
 				return c.Run(ctx, inv)
 			}

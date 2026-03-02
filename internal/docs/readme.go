@@ -10,7 +10,7 @@ import (
 	"text/template"
 
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -39,11 +39,11 @@ var RecommendedBotPermissionsList = []string{
 
 // UpdateReadme generates README.md from the command registry and category ordering.
 // categoryWeights maps category name to sort order (lower first).
-func UpdateReadme(registry *cmd.Registry, categoryWeights map[string]int) error {
+func UpdateReadme(registry *commandkit.Registry, categoryWeights map[string]int) error {
 	commands := registry.GetAll()
 	sort.Slice(commands, func(i, j int) bool {
-		metaI, _ := cmd.Root(commands[i]).(command.DiscordMeta)
-		metaJ, _ := cmd.Root(commands[j]).(command.DiscordMeta)
+		metaI, _ := commandkit.Root(commands[i]).(command.DiscordMeta)
+		metaJ, _ := commandkit.Root(commands[j]).(command.DiscordMeta)
 		catI, catJ := "", ""
 		if metaI != nil {
 			catI = metaI.Category()
@@ -62,7 +62,7 @@ func UpdateReadme(registry *cmd.Registry, categoryWeights map[string]int) error 
 	var buf bytes.Buffer
 	currentCategory := ""
 	for _, c := range commands {
-		meta, _ := cmd.Root(c).(command.DiscordMeta)
+		meta, _ := commandkit.Root(c).(command.DiscordMeta)
 		cat := ""
 		if meta != nil {
 			cat = meta.Category()
@@ -100,8 +100,8 @@ func UpdateReadme(registry *cmd.Registry, categoryWeights map[string]int) error 
 	}
 
 	data := struct {
-		CommandSections   string
-		BotPermissions    int64
+		CommandSections    string
+		BotPermissions     int64
 		BotPermissionsList string
 	}{
 		CommandSections:    buf.String(),

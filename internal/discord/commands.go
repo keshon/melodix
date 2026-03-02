@@ -14,7 +14,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 )
 
 // commandHashLocks serializes read-modify-write of the command hash cache per guild.
@@ -55,7 +55,7 @@ func (b *Bot) registerCommands(guildID string) error {
 // buildCommandDefinitions returns ApplicationCommand definitions for all registered commands.
 func buildCommandDefinitions() []*discordgo.ApplicationCommand {
 	var defs []*discordgo.ApplicationCommand
-	for _, c := range cmd.DefaultRegistry.GetAll() {
+	for _, c := range commandkit.DefaultRegistry.GetAll() {
 		if def := commandDefinition(c); def != nil {
 			defs = append(defs, def)
 		}
@@ -165,8 +165,8 @@ func (b *Bot) refreshGroup(appID, guildID, group string) {
 		existingByName[c.Name] = c
 	}
 
-	for _, c := range cmd.DefaultRegistry.GetAll() {
-		meta, ok := cmd.Root(c).(command.DiscordMeta)
+	for _, c := range commandkit.DefaultRegistry.GetAll() {
+		meta, ok := commandkit.Root(c).(command.DiscordMeta)
 		if !ok || meta.Group() != group {
 			continue
 		}
@@ -184,7 +184,7 @@ func (b *Bot) refreshGroup(appID, guildID, group string) {
 }
 
 func (b *Bot) refreshSingle(appID, guildID, name string) {
-	for _, c := range cmd.DefaultRegistry.GetAll() {
+	for _, c := range commandkit.DefaultRegistry.GetAll() {
 		if strings.EqualFold(c.Name(), name) {
 			if def := commandDefinition(c); def != nil {
 				_, _ = b.dg.ApplicationCommandCreate(appID, guildID, def)
@@ -196,9 +196,9 @@ func (b *Bot) refreshSingle(appID, guildID, name string) {
 }
 
 // commandDefinition extracts the ApplicationCommand definition from a registered command,
-// walking through middleware wrappers via cmd.Root.
-func commandDefinition(c cmd.Command) *discordgo.ApplicationCommand {
-	root := cmd.Root(c)
+// walking through middleware wrappers via commandkit.Root.
+func commandDefinition(c commandkit.Command) *discordgo.ApplicationCommand {
+	root := commandkit.Root(c)
 	if slash, ok := root.(command.SlashProvider); ok {
 		if def := slash.SlashDefinition(); def != nil {
 			if def.Type == 0 {

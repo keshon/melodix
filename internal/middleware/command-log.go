@@ -6,15 +6,15 @@ import (
 
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 // WithCommandLogger wraps a command to log its execution
-func WithCommandLogger() cmd.Middleware {
-	return func(c cmd.Command) cmd.Command {
-		return cmd.Wrap(c, func(ctx context.Context, inv *cmd.Invocation) error {
+func WithCommandLogger() commandkit.Middleware {
+	return func(c commandkit.Command) commandkit.Command {
+		return commandkit.Wrap(c, func(ctx context.Context, inv *commandkit.Invocation) error {
 			err := c.Run(ctx, inv)
 
 			logCmd := func(s *discordgo.Session, stor *storage.Storage, guildID, channelID, userID, username, cmdName string) {

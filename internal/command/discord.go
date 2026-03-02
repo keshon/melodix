@@ -5,7 +5,7 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/cmd"
+	"github.com/keshon/melodix/pkg/commandkit"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -106,20 +106,20 @@ type DiscordCommand interface {
 	Run(ctx interface{}) error
 }
 
-// DiscordAdapter adapts a DiscordCommand to cmd.Command so it can live in the universal registry.
+// DiscordAdapter adapts a DiscordCommand to commandkit.Command so it can live in the universal registry.
 // It also implements SlashProvider, ContextMenuProvider, ReactionProvider, ComponentInteractionHandler,
 // and DiscordMeta by delegating to the inner command.
 type DiscordAdapter struct {
 	Cmd DiscordCommand
 }
 
-func (a *DiscordAdapter) Name() string        { return a.Cmd.Name() }
-func (a *DiscordAdapter) Description() string  { return a.Cmd.Description() }
-func (a *DiscordAdapter) Group() string        { return a.Cmd.Group() }
-func (a *DiscordAdapter) Category() string    { return a.Cmd.Category() }
+func (a *DiscordAdapter) Name() string             { return a.Cmd.Name() }
+func (a *DiscordAdapter) Description() string      { return a.Cmd.Description() }
+func (a *DiscordAdapter) Group() string            { return a.Cmd.Group() }
+func (a *DiscordAdapter) Category() string         { return a.Cmd.Category() }
 func (a *DiscordAdapter) UserPermissions() []int64 { return a.Cmd.UserPermissions() }
 
-func (a *DiscordAdapter) Run(ctx context.Context, inv *cmd.Invocation) error {
+func (a *DiscordAdapter) Run(ctx context.Context, inv *commandkit.Invocation) error {
 	return a.Cmd.Run(inv.Data)
 }
 
@@ -152,7 +152,7 @@ func (a *DiscordAdapter) Component(ctx *ComponentInteractionContext) error {
 }
 
 // ConfigFromInvocation returns the injected Config from inv.Data if it is a Discord context.
-func ConfigFromInvocation(inv *cmd.Invocation) *config.Config {
+func ConfigFromInvocation(inv *commandkit.Invocation) *config.Config {
 	if inv == nil || inv.Data == nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func ConfigFromInvocation(inv *cmd.Invocation) *config.Config {
 }
 
 // RegisterCommand registers a Discord command with the universal registry and applies middlewares.
-func RegisterCommand(discordCmd DiscordCommand, mws ...cmd.Middleware) {
-	c := cmd.Apply(&DiscordAdapter{Cmd: discordCmd}, mws...)
-	cmd.DefaultRegistry.Register(c)
+func RegisterCommand(discordCmd DiscordCommand, mws ...commandkit.Middleware) {
+	c := commandkit.Apply(&DiscordAdapter{Cmd: discordCmd}, mws...)
+	commandkit.DefaultRegistry.Register(c)
 }
