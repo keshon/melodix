@@ -1,8 +1,6 @@
-# Professional release workflow for Go multi-platform binaries
-#
-# On new tag, builds binaries for major OS/arch, attaches to GitHub Release named after the tag.
-
+# release.yml
 name: Release
+
 on:
   push:
     tags:
@@ -10,28 +8,60 @@ on:
 
 jobs:
   release:
-    name: Release Binaries
+    name: Release (${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux, windows, darwin]
-        goarch: [amd64, arm64]
-        exclude:
-          - goos: darwin
-            goarch: arm64 # Only build darwin/arm64 if needed, comment out to enable
+        include:
+          - goarch: amd64
+            cc: gcc
+          - goarch: arm64
+            cc: aarch64-linux-gnu-gcc
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-      - name: Build
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: src/go.sum
+
+      - name: Install dependencies
         run: |
-          mkdir -p dist
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags="-s -w" -o dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/melodix
-      - name: Upload Release Asset
+          sudo apt-get update -q
+          sudo apt-get install -y gcc libopus-dev
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu libopus-dev:arm64 || \
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
+      - name: Build
+        working-directory: src
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+        run: |
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
+          mkdir -p ../dist
+          go build -trimpath \
+            -ldflags="-s -w \
+              -X github.com/keshon/buildinfo.Version=dev \
+              -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
+              -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
+              -X github.com/keshon/buildinfo.Project=Melodix \
+              -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
+            -o ../dist/melodix-linux-${{ matrix.goarch }} \
+            ./cmd/discord/
+
+      - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }}
+          files: dist/melodix-linux-${{ matrix.goarch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

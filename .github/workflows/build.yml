@@ -1,12 +1,6 @@
-# Professional GitHub Actions workflow for Go multi-platform builds (production-ready)
-#
-# - Builds and uploads binaries for every commit/PR on main branch
-# - Cross-compiles for major OS/arch targets
-# - Uses Go build cache for faster builds
-# - Artifacts retained for 14 days
-# - Fail-fast and matrix optimizations
+# build.yml
+name: Build
 
-name: Build (Multi-Platform)
 on:
   push:
     branches: [main]
@@ -14,16 +8,17 @@ on:
 
 jobs:
   build:
-    name: Build Binaries
+    name: Build (${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
-        goos: [linux, windows, darwin]
-        goarch: [amd64, arm64]
-        exclude:
-          - goos: darwin
-            goarch: arm64 # Enable if you want darwin/arm64 (Apple Silicon)
+        include:
+          - goarch: amd64
+            cc: gcc
+          - goarch: arm64
+            cc: aarch64-linux-gnu-gcc
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,27 +26,43 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
+          cache-dependency-path: src/go.sum
 
-      - name: Cache Go build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y gcc libopus-dev
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu libopus-dev:arm64 || \
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
 
       - name: Build
+        working-directory: src
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
         run: |
-          mkdir -p dist
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags="-s -w" -o dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/melodix
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
+          mkdir -p ../dist
+          go build -trimpath \
+            -ldflags="-s -w \
+              -X github.com/keshon/buildinfo.Version=dev \
+              -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
+              -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
+              -X github.com/keshon/buildinfo.Project=Melodix \
+              -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
+            -o ../dist/melodix-linux-${{ matrix.goarch }} \
+            ./cmd/discord/
 
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: melodix-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: melodix-linux-${{ matrix.goarch }}
+          path: dist/melodix-linux-${{ matrix.goarch }}
           retention-days: 14
