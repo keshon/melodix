@@ -49,18 +49,21 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
+          set -x
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
           GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
-          mkdir -p ../dist
-          go build -trimpath \
+          mkdir -p dist
+          ls -la ./cmd/
+          go build -v -trimpath \
             -ldflags="-s -w \
               -X github.com/keshon/buildinfo.Version=dev \
               -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
               -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
               -X github.com/keshon/buildinfo.Project=Melodix \
               -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
-            -o ../dist/${{ steps.bin.outputs.name }} \
+            -o dist/${{ steps.bin.outputs.name }} \
             ./cmd/discord/
+          ls -la dist/
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
