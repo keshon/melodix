@@ -33,15 +33,28 @@ Melodix is a Discord bot that plays music in voice channels. You can add it to y
 
 - **/about** — Discover the origin of this bot
 - **/help** — Get a list of available commands
+  - **/help category** — View commands grouped by category
+  - **/help group** — View commands grouped by group
+  - **/help flat** — View all commands as a flat list
 
 ### 🎵 Music
 
 - **/music** — Control music playback
+  - **/music play** — Play a music track
+  - **/music next** — Skip to the next track
+  - **/music stop** — Stop playback and clear queue
 
 ### ⚙️ Settings
 
 - **/commands** — Manage or inspect commands
+  - **/commands log** — Review recent commands called by users
+  - **/commands status** — Check which command groups are enabled or disabled
+  - **/commands toggle** — Enable or disable a group of commands
+  - **/commands update** — Re-register or update slash commands
 - **/maintenance** — Bot maintenance commands
+  - **/maintenance ping** — Check bot latency
+  - **/maintenance download-db** — Download the current server database as a JSON file
+  - **/maintenance status** — Retrieve statistics about the guild
 
 
 **Music examples:** Play by search query or by link. You must be in a voice channel to use `/music play`.
@@ -99,9 +112,9 @@ Optional variables (you can add these to `.env` if needed):
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave. | (none) |
 
 **Run the bot:**
-
-- **From source (Go):** Clone the repo, run `go build ./cmd/discord`, then run the produced binary. Ensure `DISCORD_TOKEN` is set (e.g. in `.env`).
-- **From a release:** Download the Windows binary from [releases](https://github.com/keshon/melodix/releases), put it in a folder with your `.env` (or set `DISCORD_TOKEN`), and run it.
+Ensure `DISCORD_TOKEN` is set (e.g. in `.env`).
+- **From source (Go):** Clone the repo, run `go build ./cmd/discord`.
+- **From a release:** Download the pre-built binary from [releases](https://github.com/keshon/melodix/releases).
 - **With Docker:** See [docker/README.md](docker/README.md) for Docker and Docker Compose instructions.
 
 After the bot is running and invited to your server, use slash commands in any channel where the bot can read and send messages. For music, be in a voice channel and use `/music play` with a link or search term.

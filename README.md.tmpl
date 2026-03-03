@@ -86,9 +86,9 @@ Optional variables (you can add these to `.env` if needed):
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave. | (none) |
 
 **Run the bot:**
-
-- **From source (Go):** Clone the repo, run `go build ./cmd/discord`, then run the produced binary. Ensure `DISCORD_TOKEN` is set (e.g. in `.env`).
-- **From a release:** Download the Windows binary from [releases](https://github.com/keshon/melodix/releases), put it in a folder with your `.env` (or set `DISCORD_TOKEN`), and run it.
+Ensure `DISCORD_TOKEN` is set (e.g. in `.env`).
+- **From source (Go):** Clone the repo, run `go build ./cmd/discord`.
+- **From a release:** Download the pre-built binary from [releases](https://github.com/keshon/melodix/releases).
 - **With Docker:** See [docker/README.md](docker/README.md) for Docker and Docker Compose instructions.
 
 After the bot is running and invited to your server, use slash commands in any channel where the bot can read and send messages. For music, be in a voice channel and use `/music play` with a link or search term.

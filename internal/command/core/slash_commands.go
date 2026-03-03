@@ -47,7 +47,7 @@ func (c *CommandsCommand) SlashDefinition() *discordgo.ApplicationCommand {
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Name:        "log",
-				Description: "Review recent commands and their punishments",
+				Description: "Review recent commands called by users",
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
