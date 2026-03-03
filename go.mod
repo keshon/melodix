@@ -3,12 +3,17 @@ module github.com/keshon/melodix
 go 1.24.10
 
 require (
+	github.com/bwmarrin/discordgo v0.29.0
 	github.com/keshon/buildinfo v0.1.0
 	github.com/keshon/commandkit v0.1.0
 	github.com/keshon/datastore v0.1.0
 )
 
-require github.com/tetratelabs/wazero v1.9.0 // indirect
+require (
+	github.com/tetratelabs/wazero v1.9.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+)
 
 require (
 	github.com/bdandy/go-errors v1.2.2 // indirect
@@ -23,7 +28,6 @@ require (
 )
 
 require (
-	github.com/bwmarrin/discordgo v0.29.1-0.20251229154532-54ae40de5723
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/joho/godotenv v1.5.1
