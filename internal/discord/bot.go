@@ -260,8 +260,10 @@ func (b *Bot) onGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
 		}
 		return
 	}
-	if err := b.registerCommands(g.Guild.ID); err != nil {
-		log.Printf("[ERR] Failed to register commands for guild %s: %v", g.Guild.ID, err)
+	if b.cfg.InitSlashCommands {
+		if err := b.registerCommands(g.Guild.ID); err != nil {
+			log.Printf("[ERR] Failed to register commands for guild %s: %v", g.Guild.ID, err)
+		}
 	}
 }
 
