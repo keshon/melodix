@@ -38,15 +38,10 @@ func (b *Bot) registerCommands(guildID string) error {
 	}
 
 	remote, _ := b.dg.ApplicationCommands(appID, guildID)
-	remoteByName := make(map[string]*discordgo.ApplicationCommand, len(remote))
-	for _, c := range remote {
-		remoteByName[c.Name] = c
-	}
-
 	local := buildCommandDefinitions()
 	cachedHashes := loadCommandHashes(guildID)
 
-	b.deleteObsoleteCommands(appID, guildID, remoteByName, local)
+	b.deleteObsoleteCommands(appID, guildID, remote, local)
 	b.upsertChangedCommands(appID, guildID, local, cachedHashes)
 
 	return nil
@@ -63,23 +58,31 @@ func buildCommandDefinitions() []*discordgo.ApplicationCommand {
 	return defs
 }
 
+// commandKey returns a unique key for matching (name, type) so we delete all obsolete commands,
+// including duplicates with the same name but different type (e.g. Chat vs Message).
+func commandKey(c *discordgo.ApplicationCommand) string {
+	return fmt.Sprintf("%s:%d", c.Name, c.Type)
+}
+
 // deleteObsoleteCommands removes commands from Discord that are no longer in the local registry.
-func (b *Bot) deleteObsoleteCommands(appID, guildID string, remote map[string]*discordgo.ApplicationCommand, local []*discordgo.ApplicationCommand) {
-	localNames := make(map[string]struct{}, len(local))
+// Remote is the full list from Discord; we match by (name, type) so same-name, different-type commands are removed.
+func (b *Bot) deleteObsoleteCommands(appID, guildID string, remote []*discordgo.ApplicationCommand, local []*discordgo.ApplicationCommand) {
+	localKeys := make(map[string]struct{}, len(local))
 	for _, d := range local {
-		localNames[d.Name] = struct{}{}
+		localKeys[commandKey(d)] = struct{}{}
 	}
 
 	hashes := loadCommandHashes(guildID)
-	for name, rc := range remote {
-		if _, exists := localNames[name]; exists {
+	for _, rc := range remote {
+		key := commandKey(rc)
+		if _, exists := localKeys[key]; exists {
 			continue
 		}
-		log.Printf("[INFO] [%s] Deleting obsolete command: %s", guildID, name)
+		log.Printf("[INFO] [%s] Deleting obsolete command: %s (type %d)", guildID, rc.Name, rc.Type)
 		if err := b.dg.ApplicationCommandDelete(appID, guildID, rc.ID); err != nil {
-			log.Printf("[ERR] [%s] Failed to delete %s: %v", guildID, name, err)
+			log.Printf("[ERR] [%s] Failed to delete %s: %v", guildID, rc.Name, err)
 		} else {
-			delete(hashes, name)
+			delete(hashes, rc.Name)
 		}
 	}
 	saveCommandHashes(guildID, hashes)
