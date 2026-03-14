@@ -15,8 +15,7 @@ func (s *Storage) DisableGroup(guildID, group string) error {
 	}
 
 	record.CommandsDisabled = append(record.CommandsDisabled, group)
-	s.ds.Add(guildID, record)
-	return nil
+	return s.ds.Set(guildID, record)
 }
 
 func (s *Storage) EnableGroup(guildID, group string) error {
@@ -32,8 +31,7 @@ func (s *Storage) EnableGroup(guildID, group string) error {
 		}
 	}
 	record.CommandsDisabled = updated
-	s.ds.Add(guildID, record)
-	return nil
+	return s.ds.Set(guildID, record)
 }
 
 func (s *Storage) IsGroupDisabled(guildID, group string) (bool, error) {

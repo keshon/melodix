@@ -84,6 +84,8 @@ func (b *Bot) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
+	// So voice connection inherits LogInformational and we see OP2/OP4/DAVE handshake in logs.
+	dg.LogLevel = discordgo.LogInformational
 
 	b.mu.Lock()
 	b.dg = dg

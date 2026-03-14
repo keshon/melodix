@@ -1,6 +1,7 @@
 package player
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -228,7 +229,7 @@ func (p *Player) Stop(exitVc bool) error {
 		p.channelID = ""
 
 		if p.vc != nil {
-			err := p.vc.Disconnect()
+			err := p.vc.Disconnect(context.Background())
 			if err != nil {
 				log.Printf("[Player] Error during VC disconnect: %v", err)
 			}
@@ -390,7 +391,7 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 			// discordgo starts opusSender on op 2 but aead is set on op 4; sending
 			// before op 4 causes nil pointer panic in opusSender.
 			time.Sleep(p.voiceReadyDelay)
-			log.Printf("[Player] Streaming to Discord VC: ready=%v guild=%s", p.vc.Ready, p.guildID)
+			log.Printf("[Player] Streaming to Discord VC: status=%v guild=%s", p.vc.Status, p.guildID)
 			if streamErr := stream.StreamToDiscord(rs, stopCh, vc); streamErr != nil {
 				err = streamErr
 				log.Printf("[Player] StreamToDiscord error: %v", streamErr)
@@ -432,7 +433,7 @@ func (p *Player) getOrCreateVoiceConnection() (*discordgo.VoiceConnection, error
 		return p.vc, nil // reuse
 	}
 
-	vc, err := p.dg.ChannelVoiceJoin(p.guildID, p.channelID, false, true)
+	vc, err := p.dg.ChannelVoiceJoin(context.Background(), p.guildID, p.channelID, false, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to join voice channel: %w", err)
 	}

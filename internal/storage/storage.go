@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -18,7 +18,7 @@ type Storage struct {
 }
 
 func New(filePath string) (*Storage, error) {
-	ds, err := datastore.New(filePath)
+	ds, err := datastore.New(context.Background(), filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -30,22 +30,17 @@ func (s *Storage) Close() error {
 }
 
 func (s *Storage) getOrCreateGuildRecord(guildID string) (*st.Record, error) {
-	data, exists := s.ds.Get(guildID)
+	var record st.Record
+	exists, err := s.ds.Get(guildID, &record)
+	if err != nil {
+		return nil, fmt.Errorf("error getting guild record: %w", err)
+	}
 	if !exists {
 		newRecord := &st.Record{}
-		s.ds.Add(guildID, newRecord)
+		if err := s.ds.Set(guildID, newRecord); err != nil {
+			return nil, err
+		}
 		return newRecord, nil
-	}
-
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling data: %w", err)
-	}
-
-	var record st.Record
-	err = json.Unmarshal(jsonData, &record)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling to *Record: %w", err)
 	}
 
 	if len(record.CommandsHistory) > commandHistoryLimit {
@@ -60,23 +55,17 @@ func (s *Storage) GetGuildRecord(guildID string) (*st.Record, error) {
 }
 
 func (s *Storage) GetRecordsList() map[string]st.Record {
-	mapStringAny := s.ds.GetAll()
-
 	mapStringRecord := make(map[string]st.Record)
-	for key, value := range mapStringAny {
-		jsonData, err := json.Marshal(value)
-		if err != nil {
-			log.Printf("error marshalling data: %v", err)
-			continue
-		}
-
+	for _, key := range s.ds.Keys() {
 		var record st.Record
-		err = json.Unmarshal(jsonData, &record)
+		exists, err := s.ds.Get(key, &record)
 		if err != nil {
-			log.Printf("error unmarshalling to *Record: %v", err)
+			log.Printf("error getting record for key %q: %v", key, err)
 			continue
 		}
-
+		if !exists {
+			continue
+		}
 		mapStringRecord[key] = record
 	}
 	return mapStringRecord
@@ -90,8 +79,7 @@ func (s *Storage) appendCommandToHistory(guildID string, command st.CommandHisto
 	}
 
 	record.CommandsHistory = append(record.CommandsHistory, command)
-	s.ds.Add(guildID, record)
-	return nil
+	return s.ds.Set(guildID, record)
 }
 
 func (s *Storage) SetCommand(

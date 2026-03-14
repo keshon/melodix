@@ -1,9 +1,11 @@
 package kkdai
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"sync"
 
@@ -88,6 +90,17 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 	if err != nil {
 		return nil, nil, fmt.Errorf("stdout pipe error: %w", err)
 	}
+
+	stderr, err := ffmpeg.StderrPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("stderr pipe error: %w", err)
+	}
+	go func() {
+		sc := bufio.NewScanner(stderr)
+		for sc.Scan() {
+			log.Printf("[kkdai-link] ffmpeg: %s", sc.Text())
+		}
+	}()
 
 	if err := ffmpeg.Start(); err != nil {
 		return nil, nil, fmt.Errorf("command start error: %w", err)
