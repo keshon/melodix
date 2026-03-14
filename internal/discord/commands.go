@@ -64,6 +64,35 @@ func commandKey(c *discordgo.ApplicationCommand) string {
 	return fmt.Sprintf("%s:%d", c.Name, c.Type)
 }
 
+// deleteObsoleteGlobalCommands removes global application commands that are no longer in the local registry.
+// The bot only registers guild commands; old versions may have registered global commands, which stay in the UI
+// until explicitly deleted. Call this on startup (when InitSlashCommands) and when /commands update is run
+// so the global command list is cleaned.
+func (b *Bot) deleteObsoleteGlobalCommands() {
+	appID, err := b.appID()
+	if err != nil {
+		return
+	}
+	remote, err := b.dg.ApplicationCommands(appID, "")
+	if err != nil || len(remote) == 0 {
+		return
+	}
+	local := buildCommandDefinitions()
+	localKeys := make(map[string]struct{}, len(local))
+	for _, d := range local {
+		localKeys[commandKey(d)] = struct{}{}
+	}
+	for _, rc := range remote {
+		if _, exists := localKeys[commandKey(rc)]; exists {
+			continue
+		}
+		log.Printf("[INFO] Deleting obsolete global command: %s (type %d)", rc.Name, rc.Type)
+		if err := b.dg.ApplicationCommandDelete(appID, "", rc.ID); err != nil {
+			log.Printf("[ERR] Failed to delete global command %s: %v", rc.Name, err)
+		}
+	}
+}
+
 // deleteObsoleteCommands removes commands from Discord that are no longer in the local registry.
 // Remote is the full list from Discord; we match by (name, type) so same-name, different-type commands are removed.
 func (b *Bot) deleteObsoleteCommands(appID, guildID string, remote []*discordgo.ApplicationCommand, local []*discordgo.ApplicationCommand) {
@@ -137,6 +166,7 @@ func (b *Bot) handleRefreshCommands(evt SystemEvent) {
 	case strings.HasPrefix(evt.Target, "group:"):
 		b.refreshGroup(appID, evt.GuildID, strings.TrimPrefix(evt.Target, "group:"))
 	case evt.Target == "" || strings.ToLower(evt.Target) == "all":
+		b.deleteObsoleteGlobalCommands()
 		_ = b.registerCommands(evt.GuildID)
 	default:
 		b.refreshSingle(appID, evt.GuildID, evt.Target)

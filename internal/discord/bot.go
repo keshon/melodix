@@ -250,6 +250,9 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 			}
 		}
 	}
+	if b.cfg.InitSlashCommands {
+		b.deleteObsoleteGlobalCommands()
+	}
 
 	// Background services start once across all reconnects.
 	b.once.Do(func() {
