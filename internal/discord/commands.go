@@ -165,7 +165,12 @@ func (b *Bot) handleRefreshCommands(evt SystemEvent) {
 	switch {
 	case strings.HasPrefix(evt.Target, "group:"):
 		b.refreshGroup(appID, evt.GuildID, strings.TrimPrefix(evt.Target, "group:"))
-	case evt.Target == "" || strings.ToLower(evt.Target) == "all":
+	case strings.ToLower(evt.Target) == "purge":
+		b.removeAllCommands(appID, evt.GuildID)
+		clearCommandHashes(evt.GuildID)
+		_ = b.registerCommands(evt.GuildID)
+		log.Printf("[INFO] [%s] Purge complete; current commands re-registered (this server only)", evt.GuildID)
+	case evt.Target == "" || strings.ToLower(evt.Target) == "sync":
 		b.deleteObsoleteGlobalCommands()
 		_ = b.registerCommands(evt.GuildID)
 	default:
@@ -183,6 +188,30 @@ func (b *Bot) removeAllCommands(appID, guildID string) {
 			log.Printf("[DONE][%s] Deleted %s", guildID, c.Name)
 		}
 	}
+}
+
+// removeAllGlobalCommands deletes every global application command for this bot.
+// Used by purge so the global command list can be cleared and no stale entries remain.
+func (b *Bot) removeAllGlobalCommands(appID string) {
+	existing, err := b.dg.ApplicationCommands(appID, "")
+	if err != nil || len(existing) == 0 {
+		return
+	}
+	log.Printf("[INFO] Purging %d global command(s)", len(existing))
+	for _, c := range existing {
+		if err := b.dg.ApplicationCommandDelete(appID, "", c.ID); err != nil {
+			log.Printf("[ERR] Failed to delete global command %s: %v", c.Name, err)
+		} else {
+			log.Printf("[DONE] Deleted global command: %s", c.Name)
+		}
+	}
+}
+
+// clearCommandHashes removes the hash cache file for a guild so the next registerCommands
+// will treat all commands as new and re-create them (used after purge).
+func clearCommandHashes(guildID string) {
+	path := commandHashPath(guildID)
+	_ = os.Remove(path)
 }
 
 func (b *Bot) refreshGroup(appID, guildID, group string) {

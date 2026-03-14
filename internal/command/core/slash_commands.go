@@ -86,7 +86,7 @@ func (c *CommandsCommand) SlashDefinition() *discordgo.ApplicationCommand {
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "target",
-						Description: "Type a command name to update, or 'all', use /help for a list",
+						Description: "Command name, 'sync' to sync commands, or 'purge' to remove all in this server and re-register",
 						Required:    true,
 					},
 				},
