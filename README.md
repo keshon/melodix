@@ -11,6 +11,7 @@ Melodix is a Discord bot that plays music in voice channels. You can add it to y
 ## What Melodix does
 
 - **Plays audio in voice channels** — Join a voice channel, use the music commands, and the bot streams audio from the given link or search.
+- **DAVE voice support** — Uses Discord’s voice encryption (DAVE) so audio works with current Discord clients and infrastructure.
 - **Multiple sources** — YouTube (by link or search), SoundCloud, and direct radio/stream URLs.
 - **Queue and controls** — Play, skip to the next track, or stop and clear the queue.
 - **Multiple servers** — One bot instance can serve many Discord servers.
@@ -22,8 +23,8 @@ Melodix is a Discord bot that plays music in voice channels. You can add it to y
 
 ## Try Melodix without installing
 
-- **Official Discord server** — Join the [Melodix Discord server](https://discord.gg/NVtdTka8ZT), go to a voice channel and the `#bot-spam` (or similar) text channel, and use the slash commands there.
-- **Pre-built binaries** — Download a [release](https://github.com/keshon/melodix/releases) (Windows), then follow the setup steps below to create a bot in the Developer Portal and run the binary.
+- **Official Discord server** — Join the [Melodix Discord server](https://discord.gg/NVtdTka8ZT), go to a voice channel and use the slash commands at the `#bot-music-spam` text channel.
+- **Pre-built binaries** — Download a [release](https://github.com/keshon/melodix/releases), then follow the setup steps below to create a bot in the Developer Portal and run the binary.
 
 ---
 

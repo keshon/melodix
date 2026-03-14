@@ -1,4 +1,5 @@
 # ---- Stage 1: Builder ----
+# Use same Go version as go.mod (e.g. go 1.25.0) when available; 1.24 works with current module.
 FROM golang:1.24.10-alpine3.21 AS builder
 
 ENV GOPROXY=https://proxy.golang.org,direct

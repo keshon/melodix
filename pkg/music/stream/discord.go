@@ -10,10 +10,16 @@ import (
 	"github.com/godeps/opus"
 )
 
-// StreamToDiscord streams audio from a reader to a voice connection
-func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.VoiceConnection) error {
-	defer stream.Close()
+// safeOpusSend sends a packet to vc.OpusSend. Returns false if the channel was closed (voice connection gone).
+func safeOpusSend(vc *discordgo.VoiceConnection, packet []byte) (sent bool) {
+	defer func() { _ = recover() }()
+	vc.OpusSend <- packet
+	return true
+}
 
+// StreamToDiscord streams audio from a reader to a voice connection.
+// The caller owns the stream and must close it when done; StreamToDiscord does not close it.
+func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.VoiceConnection) error {
 	encoder, err := opus.NewEncoder(SampleRate, Channels, opus.AppAudio)
 	if err != nil {
 		return fmt.Errorf("encoder error: %w", err)
@@ -37,7 +43,7 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 		}
 		_, err := io.ReadFull(stream, pcmBuf)
 		if err != nil {
-			if err == io.EOF {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				return nil
 			}
 			return fmt.Errorf("warm-up read error: %w", err)
@@ -69,7 +75,7 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 		}
 		_, err := io.ReadFull(stream, pcmBuf)
 		if err != nil {
-			if err == io.EOF {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				return nil
 			}
 			return fmt.Errorf("skip-silence read error: %w", err)
@@ -99,7 +105,10 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 	select {
 	case <-stop:
 		return nil
-	case vc.OpusSend <- append([]byte(nil), opusBuf[:n]...):
+	default:
+		if !safeOpusSend(vc, append([]byte(nil), opusBuf[:n]...)) {
+			return nil
+		}
 	}
 
 	for {
@@ -109,7 +118,7 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 		default:
 			_, err := io.ReadFull(stream, pcmBuf)
 			if err != nil {
-				if err == io.EOF {
+				if err == io.EOF || err == io.ErrUnexpectedEOF {
 					return nil
 				}
 				return fmt.Errorf("read error: %w", err)
@@ -133,8 +142,10 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 			select {
 			case <-stop:
 				return nil
-			case vc.OpusSend <- packet:
-				// sent
+			default:
+				if !safeOpusSend(vc, packet) {
+					return nil
+				}
 			}
 		}
 	}

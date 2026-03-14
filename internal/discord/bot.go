@@ -102,7 +102,17 @@ func (b *Bot) run(ctx context.Context) error {
 		})
 	}
 
-	dg.AddHandler(func(_ *discordgo.Session, _ *discordgo.Disconnect) { notifyDisconnect() })
+	dg.AddHandler(func(_ *discordgo.Session, _ *discordgo.Disconnect) {
+		// Ignore disconnects caused by intentional shutdown (dg.Close in our
+		// defer) so the auto-recovery loop doesn't log a misleading restart
+		// message or race with the ctx.Done cleanup path.
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			notifyDisconnect()
+		}
+	})
 
 	b.configureIntents()
 	dg.AddHandler(b.onReady)

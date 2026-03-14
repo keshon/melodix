@@ -1,37 +1,44 @@
 # Docker Deployment
 
-The deployment is organized with Docker Compose, allowing for simple and extended deployment options.
+The deployment uses Docker Compose. The build expects the project source either to be cloned into `./src` by the script or to be present in `./src` when building locally.
 
 ## Prerequisites
 
-Before you proceed, ensure you have the following prerequisites:
-
 - Docker and Docker Compose installed
-- Git (if you intend to pull the source code from a Git repository)
-- A Discord bot token acquired from the Discord Developer Portal
+- Git (if using the script to clone the repo)
+- A Discord bot token from the [Discord Developer Portal](https://discord.com/developers/applications)
+- **External network:** The Compose file uses a `proxy` network. Create it if it does not exist:
+
+  ```bash
+  docker network create proxy
+  ```
 
 ## Configuration
 
-### Environment Variables
+Copy `.env.example` to `.env` in this directory and set at least:
 
-The deployment relies on environment variables, which can be configured in the `.env` file.
+- `DISCORD_TOKEN` — your bot token (required)
+- `ALIAS` — container name and image tag (e.g. `melodix`)
+- `GIT` / `GIT_URL` — set `GIT=true` to clone the repo into `./src`; set `GIT=false` to use an existing `./src` directory
 
-#### Deployment Key Environment Variables
-
-- `ALIAS`: Docker container name.
+Other variables (e.g. `STORAGE_PATH`, `INIT_SLASH_COMMANDS`, `DEVELOPER_ID`, `DISCORD_GUILD_BLACKLIST`, `VOICE_READY_DELAY_MS`) are optional and match the main app config.
 
 ## Deployment
 
-To deploy the app, run:
-
-```bash
-docker-compose -f docker-compose.yml up -d
-```
-
-## Build and Deploy Script
-
-For easy deployment and updates, you can use the `build-and-deploy.sh` script. This script reads the environment variables from the `.env` file and automates the build and deployment process. Run it as follows:
+**Option 1 — Build and deploy (recommended)**  
+From this directory (`docker/`), run:
 
 ```bash
 ./build-n-deploy.sh
 ```
+
+This loads `.env`, clones the repo into `./src` (or uses existing `./src`), builds the image, and starts the container.
+
+**Option 2 — Compose only**  
+If the image is already built:
+
+```bash
+docker compose -f docker-compose.yml up -d
+```
+
+Data is persisted in `./data` (mounted at `/usr/project/data` in the container).

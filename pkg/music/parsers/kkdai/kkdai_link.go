@@ -107,7 +107,8 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 	}
 
 	cleanup := func() {
-		ffmpeg.Process.Kill()
+		_ = ffmpeg.Process.Kill()
+		_ = ffmpeg.Wait()
 	}
 
 	return reader, cleanup, nil

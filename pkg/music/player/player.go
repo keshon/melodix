@@ -333,13 +333,12 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 		log.Printf("[Player] Starting track %q", track.Title)
 	}
 
+	p.mu.Lock()
 	p.currTrack = track
 	p.playing = true
-
-	// Capture channels for this run so runPlayback always closes the one Stop() is waiting on,
-	// even if startTrack runs again (e.g. user hits play while first stop is still in progress).
 	stopCh := p.stopPlayback
 	doneCh := p.playbackDone
+	p.mu.Unlock()
 
 	go func() {
 		// runPlayback closes doneCh on exit so Stop() unblocks on the correct channel.
@@ -347,10 +346,15 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 			log.Printf("[Player] Playback error for track %q: %v", track.Title, err)
 		}
 
-		// Attempt to play next track automatically (if any). If no tracks, PlayNext returns ErrNoTracksInQueue.
-		// We ignore the error here because empty queue is fine; PlayNext has its own logging.
-		if nextErr := p.PlayNext(p.channelID); nextErr != nil && errors.Is(nextErr, ErrNoTracksInQueue) {
-			// nothing queued; nothing to do
+		// Attempt to play next track automatically (if any). Only if we still have a channel
+		// (Stop(true) clears channelID; avoid calling PlayNext with empty channel).
+		p.mu.Lock()
+		chID := p.channelID
+		p.mu.Unlock()
+		if chID != "" {
+			if nextErr := p.PlayNext(chID); nextErr != nil && !errors.Is(nextErr, ErrNoTracksInQueue) {
+				log.Printf("[Player] PlayNext after track failed: %v", nextErr)
+			}
 		}
 	}()
 
@@ -377,7 +381,12 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 
 	log.Printf("[Player] Running playback for track: %q", title)
 
-	switch p.output {
+	p.mu.Lock()
+	output := p.output
+	voiceReadyDelay := p.voiceReadyDelay
+	p.mu.Unlock()
+
+	switch output {
 	case OutputSpeaker:
 		log.Printf("[Player] Output mode: Speaker (not implemented)")
 	default:
@@ -386,12 +395,14 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 			err = vErr
 			log.Printf("[Player] Failed to get/create voice connection: %v", vErr)
 		} else {
+			p.mu.Lock()
 			p.vc = vc
+			p.mu.Unlock()
 			// Wait for voice encryption (op 4) to be applied before sending opus.
 			// discordgo starts opusSender on op 2 but aead is set on op 4; sending
 			// before op 4 causes nil pointer panic in opusSender.
-			time.Sleep(p.voiceReadyDelay)
-			log.Printf("[Player] Streaming to Discord VC: status=%v guild=%s", p.vc.Status, p.guildID)
+			time.Sleep(voiceReadyDelay)
+			log.Printf("[Player] Streaming to Discord VC: status=%v guild=%s", vc.Status, p.guildID)
 			if streamErr := stream.StreamToDiscord(rs, stopCh, vc); streamErr != nil {
 				err = streamErr
 				log.Printf("[Player] StreamToDiscord error: %v", streamErr)
@@ -423,22 +434,29 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 	return err
 }
 
-// getOrCreateVoiceConnection joins or reuses existing VC
+// getOrCreateVoiceConnection joins or reuses existing VC. Caller must not hold p.mu.
 func (p *Player) getOrCreateVoiceConnection() (*discordgo.VoiceConnection, error) {
-	if p.channelID == "" {
+	p.mu.Lock()
+	channelID := p.channelID
+	vc := p.vc
+	p.mu.Unlock()
+
+	if channelID == "" {
 		return nil, errors.New("voice channel ID is not set")
 	}
-
-	if p.vc != nil {
-		return p.vc, nil // reuse
+	if vc != nil {
+		return vc, nil
 	}
 
-	vc, err := p.dg.ChannelVoiceJoin(context.Background(), p.guildID, p.channelID, false, true)
+	vc, err := p.dg.ChannelVoiceJoin(context.Background(), p.guildID, channelID, false, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to join voice channel: %w", err)
 	}
 
-	log.Printf("[Player] Joined voice channel %s on guild %s", p.channelID, p.guildID)
+	p.mu.Lock()
+	p.vc = vc
+	p.mu.Unlock()
+	log.Printf("[Player] Joined voice channel %s on guild %s", channelID, p.guildID)
 	return vc, nil
 }
 

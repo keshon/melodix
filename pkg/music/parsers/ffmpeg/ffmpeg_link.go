@@ -29,7 +29,8 @@ func ffmpegLink(url string) (io.ReadCloser, func(), error) {
 	}
 
 	cleanup := func() {
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
 	}
 
 	return reader, cleanup, nil

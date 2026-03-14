@@ -74,8 +74,9 @@ func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 	}
 
 	cleanup := func() {
-		ffmpeg.Process.Kill()
-		ytdlp.Process.Kill()
+		_ = ffmpeg.Process.Kill()
+		_ = ytdlp.Process.Kill()
+		_, _ = ffmpeg.Wait(), ytdlp.Wait()
 	}
 
 	return reader, cleanup, nil

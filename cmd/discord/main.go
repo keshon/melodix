@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/keshon/buildinfo"
 	_ "github.com/keshon/melodix/internal/command/core"
@@ -70,6 +71,14 @@ func main() {
 		cancel()
 	case <-ctx.Done():
 	}
+
+	// Force-exit if cleanup takes too long (e.g. blocked voice disconnect,
+	// storage close, or lingering goroutines).
+	go func() {
+		time.Sleep(1 * time.Second)
+		log.Println("[WARN] Cleanup timed out, forcing exit")
+		os.Exit(1)
+	}()
 
 	// Wait for the bot goroutine to exit so defer dg.Close() and cleanup run before process exit.
 	<-errCh

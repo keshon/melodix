@@ -4,13 +4,15 @@ services:
     restart: always
     image: '${ALIAS}-image'
     volumes:
-      - ./data:/usr/project/data    
+      - ./data:/usr/project/data
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_GUILD_BLACKLIST=${DISCORD_GUILD_BLACKLIST}
-      - STORAGE_PATH=${STORAGE_PATH}
+      - STORAGE_PATH=${STORAGE_PATH:-/usr/project/data/datastore.json}
       - INIT_SLASH_COMMANDS=${INIT_SLASH_COMMANDS}
-    entrypoint: /usr/project/app
+      - DEVELOPER_ID=${DEVELOPER_ID}
+      - VOICE_READY_DELAY_MS=${VOICE_READY_DELAY_MS:-500}
+    entrypoint: ["/usr/project/app"]
     networks:
       - proxy
 
