@@ -2,11 +2,9 @@ package discord
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/pkg/music/player"
-	"github.com/keshon/melodix/pkg/music/source_resolver"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
@@ -25,34 +23,12 @@ type VoiceState struct {
 	UserID    string
 }
 
-// GetOrCreatePlayer returns an existing player for the guild or creates a new one.
+// GetOrCreatePlayer returns an existing player for the guild or creates a new one (delegates to voice service).
 func (b *Bot) GetOrCreatePlayer(guildID string) *player.Player {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if p, ok := b.players[guildID]; ok {
-		return p
+	if b.voice == nil {
+		return nil
 	}
-	if b.sourceResolver == nil {
-		b.sourceResolver = source_resolver.New()
-	}
-	if b.sinkProviders == nil {
-		b.sinkProviders = make(map[string]*DiscordSinkProvider)
-	}
-	provider, ok := b.sinkProviders[guildID]
-	if !ok {
-		voiceDelay := time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond
-		provider = NewDiscordSinkProvider(func() *discordgo.Session {
-			b.mu.RLock()
-			dg := b.dg
-			b.mu.RUnlock()
-			return dg
-		}, guildID, voiceDelay)
-		b.sinkProviders[guildID] = provider
-	}
-	p := player.New(provider, b.sourceResolver)
-	b.players[guildID] = p
-	return p
+	return b.voice.GetOrCreatePlayer(guildID)
 }
 
 // FindUserVoiceState returns the voice channel a user is currently in, or an error if none.
@@ -69,45 +45,18 @@ func (b *Bot) FindUserVoiceState(guildID, userID string) (*VoiceState, error) {
 	return nil, fmt.Errorf("user not in any voice channel")
 }
 
-// Resolve resolves input to tracks using the bot's shared resolver (single resolve for play flow).
+// Resolve resolves input to tracks using the bot's shared resolver (delegates to voice service).
 func (b *Bot) Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
-	b.mu.Lock()
-	if b.sourceResolver == nil {
-		b.sourceResolver = source_resolver.New()
+	if b.voice == nil {
+		return nil, fmt.Errorf("voice service not available")
 	}
-	r := b.sourceResolver
-	b.mu.Unlock()
-	return r.Resolve(input, source, parser)
+	return b.voice.Resolve(guildID, input, source, parser)
 }
 
-// UpdateGuildMusicStatus creates or edits the guild's music status message.
-// First call uses the interaction followup and stores the message; later calls edit it (works beyond 15 min token expiry).
+// UpdateGuildMusicStatus creates or edits the guild's music status message (delegates to voice service).
 func (b *Bot) UpdateGuildMusicStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
-	b.guildMusicStatusMu.RLock()
-	msg, ok := b.guildMusicStatus[guildID]
-	b.guildMusicStatusMu.RUnlock()
-
-	if ok {
-		_, err := s.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, embed)
-		return err
+	if b.voice == nil {
+		return nil
 	}
-
-	if i == nil {
-		return nil // cannot create first message without interaction
-	}
-
-	m, err := s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{embed},
-	})
-	if err != nil {
-		return err
-	}
-	if m == nil {
-		return nil // Discord may not return the message in the response; followup was still sent
-	}
-
-	b.guildMusicStatusMu.Lock()
-	b.guildMusicStatus[guildID] = guildMusicStatus{ChannelID: m.ChannelID, MessageID: m.ID}
-	b.guildMusicStatusMu.Unlock()
-	return nil
+	return b.voice.UpdateGuildMusicStatus(s, i, guildID, embed)
 }

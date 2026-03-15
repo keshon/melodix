@@ -63,3 +63,30 @@ func (s *Storage) GetCommandsHistory(guildID string) ([]st.CommandHistory, error
 
 	return record.CommandsHistory, nil
 }
+
+// GetCommandHashes returns the cached slash-command hashes for a guild (used to skip re-registration when unchanged).
+func (s *Storage) GetCommandHashes(guildID string) (map[string]string, error) {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return nil, err
+	}
+	if record.CommandHashes == nil {
+		return map[string]string{}, nil
+	}
+	return record.CommandHashes, nil
+}
+
+// SetCommandHashes persists the slash-command hashes for a guild.
+func (s *Storage) SetCommandHashes(guildID string, hashes map[string]string) error {
+	record, err := s.getOrCreateGuildRecord(guildID)
+	if err != nil {
+		return err
+	}
+	record.CommandHashes = hashes
+	return s.ds.Set(guildID, record)
+}
+
+// ClearCommandHashes clears the cached hashes for a guild (e.g. after a full command purge).
+func (s *Storage) ClearCommandHashes(guildID string) error {
+	return s.SetCommandHashes(guildID, map[string]string{})
+}

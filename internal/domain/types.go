@@ -17,4 +17,5 @@ type CommandHistory struct {
 type Record struct {
 	CommandsDisabled []string         `json:"commands_disabled"`
 	CommandsHistory  []CommandHistory `json:"commands_history"`
+	CommandHashes    map[string]string `json:"command_hashes,omitempty"` // slash command name -> hash for sync
 }

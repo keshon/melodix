@@ -1,4 +1,4 @@
-package source_resolver
+package resolver
 
 import "strings"
 

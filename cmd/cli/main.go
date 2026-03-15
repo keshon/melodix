@@ -14,8 +14,8 @@ import (
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/pkg/music/player"
+	"github.com/keshon/melodix/pkg/music/resolver"
 	"github.com/keshon/melodix/pkg/music/sink"
-	"github.com/keshon/melodix/pkg/music/source_resolver"
 )
 
 func main() {
@@ -31,8 +31,8 @@ func main() {
 	provider := sink.NewSpeakerProvider()
 	defer provider.Close()
 
-	resolver := source_resolver.New()
-	p := player.New(provider, resolver)
+	res := resolver.New()
+	p := player.New(provider, res)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

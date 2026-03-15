@@ -1,4 +1,4 @@
-package stream
+package voice
 
 import (
 	"encoding/binary"
@@ -8,40 +8,33 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/godeps/opus"
+	"github.com/keshon/melodix/pkg/music/stream"
 )
 
-// safeOpusSend sends a packet to vc.OpusSend. Returns false if the channel was closed (voice connection gone).
-func safeOpusSend(vc *discordgo.VoiceConnection, packet []byte) (sent bool) {
-	defer func() { _ = recover() }()
-	vc.OpusSend <- packet
-	return true
-}
-
-// StreamToDiscord streams audio from a reader to a voice connection.
-// The caller owns the stream and must close it when done; StreamToDiscord does not close it.
-func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.VoiceConnection) error {
-	encoder, err := opus.NewEncoder(SampleRate, Channels, opus.AppAudio)
+// streamToDiscord streams PCM audio from a reader to a Discord voice connection.
+// Uses stream package constants (SampleRate, Channels, FrameSize) for format.
+// The caller owns the read closer and must close it when done; streamToDiscord does not close it.
+func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.VoiceConnection) error {
+	encoder, err := opus.NewEncoder(stream.SampleRate, stream.Channels, opus.AppAudio)
 	if err != nil {
 		return fmt.Errorf("encoder error: %w", err)
 	}
 	defer encoder.Reset()
 
-	pcmBuf := make([]byte, FrameSize*Channels*2)
-	intBuf := make([]int16, FrameSize*Channels)
+	pcmBuf := make([]byte, stream.FrameSize*stream.Channels*2)
+	intBuf := make([]int16, stream.FrameSize*stream.Channels)
 	opusBuf := make([]byte, 4096)
 	const debugPacketCount = 5
 	packetNum := 0
 
-	// Warm-up: ffmpeg often outputs silence at pipe start while buffering. Discard
-	// a few frames so the first frames we send are real audio (fixes 3-byte OPUS = no sound).
-	const warmUpFrames = 10 // 200ms at 20ms/frame
+	const warmUpFrames = 10
 	for i := 0; i < warmUpFrames; i++ {
 		select {
 		case <-stop:
 			return nil
 		default:
 		}
-		_, err := io.ReadFull(stream, pcmBuf)
+		_, err := io.ReadFull(src, pcmBuf)
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				return nil
@@ -51,9 +44,8 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 	}
 	log.Printf("[Stream] Warm-up: discarded %d frames", warmUpFrames)
 
-	// Skip until we see non-silence (or give up after 3s) so we don't send silent OPUS.
-	const silenceThreshold = 100   // min peak to consider "real" audio
-	const maxSilenceFrames = 150    // 3s at 20ms/frame
+	const silenceThreshold = 100
+	const maxSilenceFrames = 150
 	frameMaxAbs := func(buf []int16) int16 {
 		var max int16
 		for _, s := range buf {
@@ -73,7 +65,7 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 			return nil
 		default:
 		}
-		_, err := io.ReadFull(stream, pcmBuf)
+		_, err := io.ReadFull(src, pcmBuf)
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				return nil
@@ -92,7 +84,6 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 		}
 	}
 
-	// Encode and send the frame we have (first non-silent or last after give-up).
 	log.Printf("[Stream] First send frame max amplitude=%d", frameMaxAbs(intBuf))
 	n, err := encoder.Encode(intBuf, opusBuf)
 	if err != nil {
@@ -116,7 +107,7 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 		case <-stop:
 			return nil
 		default:
-			_, err := io.ReadFull(stream, pcmBuf)
+			_, err := io.ReadFull(src, pcmBuf)
 			if err != nil {
 				if err == io.EOF || err == io.ErrUnexpectedEOF {
 					return nil
@@ -149,4 +140,10 @@ func StreamToDiscord(stream io.ReadCloser, stop <-chan struct{}, vc *discordgo.V
 			}
 		}
 	}
+}
+
+func safeOpusSend(vc *discordgo.VoiceConnection, packet []byte) (sent bool) {
+	defer func() { _ = recover() }()
+	vc.OpusSend <- packet
+	return true
 }

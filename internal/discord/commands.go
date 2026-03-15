@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -39,7 +37,10 @@ func (b *Bot) registerCommands(guildID string) error {
 
 	remote, _ := b.dg.ApplicationCommands(appID, guildID)
 	local := buildCommandDefinitions()
-	cachedHashes := loadCommandHashes(guildID)
+	cachedHashes, _ := b.storage.GetCommandHashes(guildID)
+	if cachedHashes == nil {
+		cachedHashes = map[string]string{}
+	}
 
 	b.deleteObsoleteCommands(appID, guildID, remote, local)
 	b.upsertChangedCommands(appID, guildID, local, cachedHashes)
@@ -101,7 +102,10 @@ func (b *Bot) deleteObsoleteCommands(appID, guildID string, remote []*discordgo.
 		localKeys[commandKey(d)] = struct{}{}
 	}
 
-	hashes := loadCommandHashes(guildID)
+	hashes, _ := b.storage.GetCommandHashes(guildID)
+	if hashes == nil {
+		hashes = map[string]string{}
+	}
 	for _, rc := range remote {
 		key := commandKey(rc)
 		if _, exists := localKeys[key]; exists {
@@ -114,7 +118,7 @@ func (b *Bot) deleteObsoleteCommands(appID, guildID string, remote []*discordgo.
 			delete(hashes, rc.Name)
 		}
 	}
-	saveCommandHashes(guildID, hashes)
+	_ = b.storage.SetCommandHashes(guildID, hashes)
 }
 
 // upsertChangedCommands creates or updates commands whose hash differs from the cached value.
@@ -142,11 +146,14 @@ func (b *Bot) upsertChangedCommands(appID, guildID string, defs []*discordgo.App
 		time.Sleep(25 * time.Millisecond) // stay well under Discord's rate limit
 	}
 
-	merged := loadCommandHashes(guildID)
+	merged, _ := b.storage.GetCommandHashes(guildID)
+	if merged == nil {
+		merged = map[string]string{}
+	}
 	for k, v := range newHashes {
 		merged[k] = v
 	}
-	saveCommandHashes(guildID, merged)
+	_ = b.storage.SetCommandHashes(guildID, merged)
 }
 
 // handleRefreshCommands processes a SystemEventRefreshCommands event.
@@ -167,7 +174,7 @@ func (b *Bot) handleRefreshCommands(evt SystemEvent) {
 		b.refreshGroup(appID, evt.GuildID, strings.TrimPrefix(evt.Target, "group:"))
 	case strings.ToLower(evt.Target) == "purge":
 		b.removeAllCommands(appID, evt.GuildID)
-		clearCommandHashes(evt.GuildID)
+		_ = b.storage.ClearCommandHashes(evt.GuildID)
 		_ = b.registerCommands(evt.GuildID)
 		log.Printf("[INFO] [%s] Purge complete; current commands re-registered (this server only)", evt.GuildID)
 	case evt.Target == "" || strings.ToLower(evt.Target) == "sync":
@@ -205,13 +212,6 @@ func (b *Bot) removeAllGlobalCommands(appID string) {
 			log.Printf("[DONE] Deleted global command: %s", c.Name)
 		}
 	}
-}
-
-// clearCommandHashes removes the hash cache file for a guild so the next registerCommands
-// will treat all commands as new and re-create them (used after purge).
-func clearCommandHashes(guildID string) {
-	path := commandHashPath(guildID)
-	_ = os.Remove(path)
 }
 
 func (b *Bot) refreshGroup(appID, guildID, group string) {
@@ -290,28 +290,6 @@ func (b *Bot) appID() (string, error) {
 		return "", fmt.Errorf("failed to fetch bot user: %w", err)
 	}
 	return u.ID, nil
-}
-
-// --- Command hash cache ---
-
-func commandHashPath(guildID string) string {
-	return filepath.Join("data", "commands", guildID+".json")
-}
-
-func loadCommandHashes(guildID string) map[string]string {
-	out := make(map[string]string)
-	if data, err := os.ReadFile(commandHashPath(guildID)); err == nil {
-		_ = json.Unmarshal(data, &out)
-	}
-	return out
-}
-
-func saveCommandHashes(guildID string, hashes map[string]string) {
-	path := commandHashPath(guildID)
-	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	if data, err := json.MarshalIndent(hashes, "", "  "); err == nil {
-		_ = os.WriteFile(path, data, 0644)
-	}
 }
 
 // --- Command hashing ---

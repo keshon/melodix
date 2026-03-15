@@ -4,42 +4,27 @@ import (
 	"context"
 	"fmt"
 	"log"
-
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/music/player"
-
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/docs"
-
-	"github.com/keshon/melodix/pkg/music/source_resolver"
+	"github.com/keshon/melodix/internal/storage"
 )
-
-// guildMusicStatus holds the channel and message ID for a guild's "now playing" message,
-// so we can edit it for later updates (works beyond interaction token expiry).
-type guildMusicStatus struct {
-	ChannelID string
-	MessageID string
-}
 
 // Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired in run.
 type Bot struct {
-	dg                 *discordgo.Session
-	storage            *storage.Storage
-	slashCmds          map[string][]*discordgo.ApplicationCommand
-	cfg                *config.Config
-	mu                 sync.RWMutex
-	players            map[string]*player.Player
-	sinkProviders      map[string]*DiscordSinkProvider
-	sourceResolver     *source_resolver.SourceResolver
-	guildMusicStatus   map[string]guildMusicStatus
-	guildMusicStatusMu sync.RWMutex
+	dg        *discordgo.Session
+	storage   *storage.Storage
+	slashCmds map[string][]*discordgo.ApplicationCommand
+	cfg       *config.Config
+	mu        sync.RWMutex
+	voice     *voice.Service
 
 	// once ensures one-time background services (purge, shortlink) are not
 	// re-launched on subsequent reconnects.
@@ -49,11 +34,9 @@ type Bot struct {
 // NewBot creates a Bot. Register any bot-dependent commands before calling Run.
 func NewBot(cfg *config.Config, storage *storage.Storage) *Bot {
 	return &Bot{
-		cfg:              cfg,
-		storage:          storage,
-		slashCmds:        make(map[string][]*discordgo.ApplicationCommand),
-		players:          make(map[string]*player.Player),
-		guildMusicStatus: make(map[string]guildMusicStatus),
+		cfg:       cfg,
+		storage:   storage,
+		slashCmds: make(map[string][]*discordgo.ApplicationCommand),
 	}
 }
 
@@ -90,6 +73,12 @@ func (b *Bot) run(ctx context.Context) error {
 
 	b.mu.Lock()
 	b.dg = dg
+	b.voice = voice.New(func() *discordgo.Session {
+		b.mu.RLock()
+		s := b.dg
+		b.mu.RUnlock()
+		return s
+	}, b.cfg)
 	b.mu.Unlock()
 
 	// disconnected is closed once — multiple concurrent signals (our handler + discordgo
@@ -208,21 +197,9 @@ func (b *Bot) run(ctx context.Context) error {
 
 // stopAllPlayers stops playback and disconnects voice for all guilds. Call on shutdown.
 func (b *Bot) stopAllPlayers() {
-	b.mu.Lock()
-	players := make(map[string]*player.Player, len(b.players))
-	for k, v := range b.players {
-		players[k] = v
+	if b.voice != nil {
+		b.voice.StopAllPlayers()
 	}
-	b.mu.Unlock()
-
-	for _, p := range players {
-		_ = p.Stop(true)
-	}
-
-	b.mu.Lock()
-	b.players = make(map[string]*player.Player)
-	b.sinkProviders = nil
-	b.mu.Unlock()
 	log.Println("[INFO] All players stopped")
 }
 

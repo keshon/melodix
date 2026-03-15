@@ -1,4 +1,4 @@
-package discord
+package voice
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/pkg/music/sink"
-	"github.com/keshon/melodix/pkg/music/stream"
 )
 
 // discordSink implements sink.AudioSink by encoding PCM to opus and sending to a voice connection.
@@ -19,7 +18,7 @@ type discordSink struct {
 }
 
 func (d *discordSink) Stream(src io.ReadCloser, stop <-chan struct{}) error {
-	return stream.StreamToDiscord(src, stop, d.vc)
+	return streamToDiscord(src, stop, d.vc)
 }
 
 // SessionGetter returns the current Discord session (used so providers stay valid across reconnects).
@@ -79,7 +78,6 @@ func (p *DiscordSinkProvider) GetSink(target string) (sink.AudioSink, error) {
 	p.currentChannelID = target
 	log.Printf("[DiscordSink] Joined voice channel %s on guild %s", target, p.guildID)
 
-	// Wait for voice encryption (op 4) before sending opus; sending before causes nil pointer in opusSender.
 	time.Sleep(p.voiceReadyDelay)
 
 	return &discordSink{vc: vc}, nil

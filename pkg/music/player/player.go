@@ -10,7 +10,6 @@ import (
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sink"
-	"github.com/keshon/melodix/pkg/music/source_resolver"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/keshon/melodix/pkg/music/stream"
 )
@@ -44,6 +43,12 @@ var (
 	ErrNoParsersForTrack = errors.New("track has no available parsers")
 )
 
+// Resolver resolves input (URL or search query) to track info. The player uses this to enqueue tracks.
+// Implementations can be the default resolver (pkg/music/resolver) or a mock/custom resolver.
+type Resolver interface {
+	Resolve(input, source, parser string) ([]sources.TrackInfo, error)
+}
+
 type Player struct {
 	mu        sync.Mutex
 	playing   bool
@@ -51,7 +56,7 @@ type Player struct {
 	queue     []parsers.TrackParse
 	history   []parsers.TrackParse
 
-	resolver     *source_resolver.SourceResolver
+	resolver     Resolver
 	sinkProvider sink.SinkProvider
 
 	target string // voice channel ID for Discord, "" for CLI
@@ -64,9 +69,9 @@ type Player struct {
 }
 
 // New creates a new Player. target is set per playback via PlayNext(target).
-func New(sinkProvider sink.SinkProvider, resolver *source_resolver.SourceResolver) *Player {
+func New(sinkProvider sink.SinkProvider, res Resolver) *Player {
 	return &Player{
-		resolver:     resolver,
+		resolver:     res,
 		sinkProvider: sinkProvider,
 		queue:        make([]parsers.TrackParse, 0),
 		history:      make([]parsers.TrackParse, 0),
