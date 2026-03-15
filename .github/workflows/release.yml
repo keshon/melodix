@@ -10,29 +10,88 @@ permissions:
 
 jobs:
     release:
-        name: Publish GitHub Release
+        name: Release (${{ matrix.goos }}/${{ matrix.goarch }})
         runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                include:
+                    - goos: linux
+                      goarch: amd64
+                    - goos: linux
+                      goarch: arm64
+                    - goos: windows
+                      goarch: amd64
+                    - goos: darwin
+                      goarch: amd64
+                    - goos: darwin
+                      goarch: arm64
 
         steps:
-            - name: Download build artifacts
-              uses: actions/download-artifact@v4
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v5
               with:
-                  path: artifacts
+                  go-version: '1.25'
 
-            - name: Show artifacts
+            - name: Install CGO deps (Linux only)
+              if: matrix.goos == 'linux'
               run: |
-                  ls -R artifacts
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential libasound2-dev
 
-            - name: Collect release files
+            - name: Set binary extension
+              id: bin
               run: |
-                  mkdir dist
-                  find artifacts -name "*.zip" -exec cp {} dist/ \;
-                  ls -la dist
+                  if [ "${{ matrix.goos }}" = "windows" ]; then
+                    echo "ext=.exe" >> $GITHUB_OUTPUT
+                  else
+                    echo "ext=" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Set CGO flag
+              id: cgo
+              run: |
+                  if [ "${{ matrix.goos }}" = "linux" ]; then
+                    echo "enabled=1" >> $GITHUB_OUTPUT
+                  else
+                    echo "enabled=0" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Build Discord bot
+              env:
+                  GOOS: ${{ matrix.goos }}
+                  GOARCH: ${{ matrix.goarch }}
+                  CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
+              run: |
+                  mkdir -p dist
+                  BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+                  GIT_COMMIT=$(git rev-parse --short HEAD)
+                  go build -trimpath -ldflags="-s -w -X github.com/keshon/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE}" -o dist/melodix-discord${{ steps.bin.outputs.ext }} ./cmd/discord/
+
+            - name: Build CLI player
+              env:
+                  GOOS: ${{ matrix.goos }}
+                  GOARCH: ${{ matrix.goarch }}
+                  CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
+              run: |
+                  go build -trimpath -ldflags="-s -w -X github.com/keshon/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE}" -o dist/melodix-cli${{ steps.bin.outputs.ext }} ./cmd/cli/
+
+            - name: Prepare release bundle
+              run: |
+                  PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
+                  mkdir -p "${PKG_ROOT}"
+                  cp dist/* "${PKG_ROOT}/"
+                  cp README.md LICENSE "${PKG_ROOT}/"
+                  [ -f .env.example ] && cp .env.example "${PKG_ROOT}/.env"
+                  mkdir -p "${PKG_ROOT}/data"
+                  [ -d assets ] && cp -R assets "${PKG_ROOT}/"
+                  zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
 
             - name: Publish release
               uses: softprops/action-gh-release@v2
               with:
                   files: dist/*.zip
-                  generate_release_notes: true
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
