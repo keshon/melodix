@@ -36,11 +36,21 @@ func (b *Bot) GetOrCreatePlayer(guildID string) *player.Player {
 	if b.sourceResolver == nil {
 		b.sourceResolver = source_resolver.New()
 	}
-	voiceDelay := time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond
-	if voiceDelay <= 0 {
-		voiceDelay = 500 * time.Millisecond
+	if b.sinkProviders == nil {
+		b.sinkProviders = make(map[string]*DiscordSinkProvider)
 	}
-	p := player.New(b.dg, guildID, b.sourceResolver, voiceDelay)
+	provider, ok := b.sinkProviders[guildID]
+	if !ok {
+		voiceDelay := time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond
+		provider = NewDiscordSinkProvider(func() *discordgo.Session {
+			b.mu.RLock()
+			dg := b.dg
+			b.mu.RUnlock()
+			return dg
+		}, guildID, voiceDelay)
+		b.sinkProviders[guildID] = provider
+	}
+	p := player.New(provider, b.sourceResolver)
 	b.players[guildID] = p
 	return p
 }

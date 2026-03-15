@@ -33,6 +33,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	if cfg.DiscordToken == "" {
+		log.Fatal("DISCORD_TOKEN is required for the Discord bot")
+	}
 
 	store, err := storage.New(cfg.StoragePath)
 	if err != nil {

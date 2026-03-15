@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
+	github.com/ebitengine/oto/v3 v3.4.0
 	github.com/keshon/buildinfo v0.1.0
 	github.com/keshon/commandkit v0.1.0
 	github.com/keshon/datastore v0.1.1
@@ -11,6 +12,7 @@ require (
 
 require (
 	github.com/cloudflare/circl v1.6.3 // indirect
+	github.com/ebitengine/purego v0.9.0 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect

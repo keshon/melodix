@@ -36,6 +36,7 @@ type Bot struct {
 	cfg                *config.Config
 	mu                 sync.RWMutex
 	players            map[string]*player.Player
+	sinkProviders      map[string]*DiscordSinkProvider
 	sourceResolver     *source_resolver.SourceResolver
 	guildMusicStatus   map[string]guildMusicStatus
 	guildMusicStatusMu sync.RWMutex
@@ -220,6 +221,7 @@ func (b *Bot) stopAllPlayers() {
 
 	b.mu.Lock()
 	b.players = make(map[string]*player.Player)
+	b.sinkProviders = nil
 	b.mu.Unlock()
 	log.Println("[INFO] All players stopped")
 }

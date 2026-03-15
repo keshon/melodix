@@ -9,7 +9,7 @@ import (
 
 // Config is the configuration for the bot.
 type Config struct {
-	DiscordToken          string   `env:"DISCORD_TOKEN,required"`
+	DiscordToken          string   `env:"DISCORD_TOKEN"` // required for Discord bot; optional for CLI
 	DiscordGuildBlacklist []string `env:"DISCORD_GUILD_BLACKLIST" envSeparator:","`
 	StoragePath           string   `env:"STORAGE_PATH" envDefault:"./data/datastore.json"`
 	DeveloperID           string   `env:"DEVELOPER_ID"`
