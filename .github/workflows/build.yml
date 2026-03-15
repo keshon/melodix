@@ -19,6 +19,7 @@ jobs:
             goarch: arm64
           - goos: windows
             goarch: amd64
+            goarch: arm64
           - goos: darwin
             goarch: amd64
           - goos: darwin
@@ -54,7 +55,7 @@ jobs:
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
           GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
           mkdir -p dist
-          go build -v -trimpath \
+          go build -tags purego -v -trimpath \
             -ldflags="-s -w \
               -X github.com/keshon/buildinfo.Version=dev \
               -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
@@ -73,7 +74,7 @@ jobs:
           set -x
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
           GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
-          go build -v -trimpath \
+          go build -tags purego -v -trimpath \
             -ldflags="-s -w \
               -X github.com/keshon/buildinfo.Version=dev \
               -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
