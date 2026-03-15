@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
-    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -16,16 +15,29 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            runner: ubuntu-latest
+
           - goos: linux
             goarch: arm64
+            runner: ubuntu-24.04-arm
+
           - goos: windows
             goarch: amd64
+            runner: ubuntu-latest
+
           - goos: windows
             goarch: arm64
+            runner: ubuntu-latest
+
           - goos: darwin
             goarch: amd64
+            runner: ubuntu-latest
+
           - goos: darwin
             goarch: arm64
+            runner: ubuntu-latest
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout code
@@ -34,15 +46,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Install CGO toolchain (Linux only)
+      - name: Install CGO deps (Linux only)
         if: matrix.goos == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential
+          sudo apt-get install -y build-essential libasound2-dev
 
       - name: Set binary extension
         id: bin
@@ -68,13 +80,14 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
         run: |
-          set -x
+          set -e
+
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
           GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 
           mkdir -p dist
 
-          go build -v -trimpath \
+          go build -trimpath \
             -ldflags="-s -w \
               -X github.com/keshon/buildinfo.Version=dev \
               -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
@@ -90,11 +103,12 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
         run: |
-          set -x
+          set -e
+
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
           GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 
-          go build -v -trimpath \
+          go build -trimpath \
             -ldflags="-s -w \
               -X github.com/keshon/buildinfo.Version=dev \
               -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
@@ -104,12 +118,8 @@ jobs:
             -o dist/melodix-cli${{ steps.bin.outputs.ext }} \
             ./cmd/cli/
 
-          ls -la dist/
-
       - name: Prepare build bundle
         run: |
-          set -x
-
           PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
           mkdir -p "${PKG_ROOT}"
 
@@ -128,11 +138,7 @@ jobs:
             cp -R assets "${PKG_ROOT}/"
           fi
 
-          mkdir -p dist
           zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
-
-          ls -R "${PKG_ROOT}"
-          ls -la dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
