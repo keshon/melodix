@@ -13,18 +13,32 @@ jobs:
         name: Release (${{ matrix.goos }}/${{ matrix.goarch }})
         runs-on: ubuntu-latest
         strategy:
+            fail-fast: false
             matrix:
                 include:
                     - goos: linux
                       goarch: amd64
+                      runner: ubuntu-latest
+
                     - goos: linux
                       goarch: arm64
+                      runner: ubuntu-24.04-arm
+
                     - goos: windows
                       goarch: amd64
+                      runner: ubuntu-latest
+
+                    - goos: windows
+                      goarch: arm64
+                      runner: ubuntu-latest
+
                     - goos: darwin
                       goarch: amd64
+                      runner: ubuntu-latest
+
                     - goos: darwin
                       goarch: arm64
+                      runner: ubuntu-latest
 
         steps:
             - name: Checkout code
