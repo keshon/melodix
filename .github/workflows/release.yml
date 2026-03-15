@@ -1,127 +1,38 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+    push:
+        tags:
+            - 'v*'
 
 permissions:
-  contents: write
+    contents: write
 
 jobs:
-  release:
-    name: Release (${{ matrix.goos }}/${{ matrix.goarch }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
+    release:
+        name: Publish GitHub Release
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+        steps:
+            - name: Download build artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: artifacts
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
-          cache-dependency-path: go.sum
+            - name: Show artifacts
+              run: |
+                  ls -R artifacts
 
-      - name: Set binary extension
-        id: bin
-        run: |
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            echo "ext=.exe" >> $GITHUB_OUTPUT
-          else
-            echo "ext=" >> $GITHUB_OUTPUT
-          fi
+            - name: Collect release files
+              run: |
+                  mkdir dist
+                  find artifacts -name "*.zip" -exec cp {} dist/ \;
+                  ls -la dist
 
-      - name: Build Discord bot
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          set -x
-          BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
-          mkdir -p dist
-          go build -v -trimpath \
-            -ldflags="-s -w \
-              -X github.com/keshon/buildinfo.Version=dev \
-              -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
-              -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
-              -X github.com/keshon/buildinfo.Project=Melodix \
-              -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
-            -o dist/melodix-discord${{ steps.bin.outputs.ext }} \
-            ./cmd/discord/
-
-      - name: Build CLI player
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          set -x
-          BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
-          go build -v -trimpath \
-            -ldflags="-s -w \
-              -X github.com/keshon/buildinfo.Version=dev \
-              -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
-              -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
-              -X github.com/keshon/buildinfo.Project=Melodix \
-              -X 'github.com/keshon/buildinfo.Description=CLI music player - same playback engine as the Discord bot.'" \
-            -o dist/melodix-cli${{ steps.bin.outputs.ext }} \
-            ./cmd/cli/
-          ls -la dist/
-
-      - name: Prepare release bundle
-        run: |
-          set -x
-          PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
-          mkdir -p "${PKG_ROOT}"
-
-          # Discord bot binary
-          cp "dist/melodix-discord${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
-          # CLI player binary
-          cp "dist/melodix-cli${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
-
-          # README and LICENSE
-          cp README.md LICENSE "${PKG_ROOT}/"
-
-          # .env from example
-          if [ -f .env.example ]; then
-            cp .env.example "${PKG_ROOT}/.env"
-          fi
-
-          # data directory (empty, datastore.json will be created on first run)
-          mkdir -p "${PKG_ROOT}/data"
-
-          # assets directory (optional, only if present in the repo)
-          if [ -d assets ]; then
-            cp -R assets "${PKG_ROOT}/"
-          fi
-
-          # Create zip archive with everything needed to run the bot and CLI
-          mkdir -p dist
-          zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
-          ls -R "${PKG_ROOT}"
-          ls -la dist/
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }}.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Publish release
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: dist/*.zip
+                  generate_release_notes: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

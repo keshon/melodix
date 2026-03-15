@@ -1,148 +1,150 @@
 name: Build
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+    push:
+        branches: [main]
+        tags:
+            - 'v*'
+    pull_request:
 
 jobs:
-  build:
-    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+    build:
+        name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            runner: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - goos: linux
+                      goarch: amd64
+                      runner: ubuntu-latest
 
-          - goos: linux
-            goarch: arm64
-            runner: ubuntu-24.04-arm
+                    - goos: linux
+                      goarch: arm64
+                      runner: ubuntu-24.04-arm
 
-          - goos: windows
-            goarch: amd64
-            runner: ubuntu-latest
+                    - goos: windows
+                      goarch: amd64
+                      runner: ubuntu-latest
 
-          - goos: windows
-            goarch: arm64
-            runner: ubuntu-latest
+                    - goos: windows
+                      goarch: arm64
+                      runner: ubuntu-latest
 
-          - goos: darwin
-            goarch: amd64
-            runner: ubuntu-latest
+                    - goos: darwin
+                      goarch: amd64
+                      runner: ubuntu-latest
 
-          - goos: darwin
-            goarch: arm64
-            runner: ubuntu-latest
+                    - goos: darwin
+                      goarch: arm64
+                      runner: ubuntu-latest
 
-    runs-on: ${{ matrix.runner }}
+        runs-on: ${{ matrix.runner }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-          cache: true
-          cache-dependency-path: go.sum
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: '1.25'
+                  cache: true
+                  cache-dependency-path: go.sum
 
-      - name: Install CGO deps (Linux only)
-        if: matrix.goos == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libasound2-dev
+            - name: Install CGO deps (Linux only)
+              if: matrix.goos == 'linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y build-essential libasound2-dev
 
-      - name: Set binary extension
-        id: bin
-        run: |
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            echo "ext=.exe" >> $GITHUB_OUTPUT
-          else
-            echo "ext=" >> $GITHUB_OUTPUT
-          fi
+            - name: Set binary extension
+              id: bin
+              run: |
+                  if [ "${{ matrix.goos }}" = "windows" ]; then
+                    echo "ext=.exe" >> $GITHUB_OUTPUT
+                  else
+                    echo "ext=" >> $GITHUB_OUTPUT
+                  fi
 
-      - name: Set CGO flag
-        id: cgo
-        run: |
-          if [ "${{ matrix.goos }}" = "linux" ]; then
-            echo "enabled=1" >> $GITHUB_OUTPUT
-          else
-            echo "enabled=0" >> $GITHUB_OUTPUT
-          fi
+            - name: Set CGO flag
+              id: cgo
+              run: |
+                  if [ "${{ matrix.goos }}" = "linux" ]; then
+                    echo "enabled=1" >> $GITHUB_OUTPUT
+                  else
+                    echo "enabled=0" >> $GITHUB_OUTPUT
+                  fi
 
-      - name: Build Discord bot
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
-        run: |
-          set -e
+            - name: Build Discord bot
+              env:
+                  GOOS: ${{ matrix.goos }}
+                  GOARCH: ${{ matrix.goarch }}
+                  CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
+              run: |
+                  set -e
 
-          BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
+                  BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+                  GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 
-          mkdir -p dist
+                  mkdir -p dist
 
-          go build -trimpath \
-            -ldflags="-s -w \
-              -X github.com/keshon/buildinfo.Version=dev \
-              -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
-              -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
-              -X github.com/keshon/buildinfo.Project=Melodix \
-              -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
-            -o dist/melodix-discord${{ steps.bin.outputs.ext }} \
-            ./cmd/discord/
+                  go build -trimpath \
+                    -ldflags="-s -w \
+                      -X github.com/keshon/buildinfo.Version=dev \
+                      -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
+                      -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
+                      -X github.com/keshon/buildinfo.Project=Melodix \
+                      -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
+                    -o dist/melodix-discord${{ steps.bin.outputs.ext }} \
+                    ./cmd/discord/
 
-      - name: Build CLI player
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
-        run: |
-          set -e
+            - name: Build CLI player
+              env:
+                  GOOS: ${{ matrix.goos }}
+                  GOARCH: ${{ matrix.goarch }}
+                  CGO_ENABLED: ${{ steps.cgo.outputs.enabled }}
+              run: |
+                  set -e
 
-          BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
+                  BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+                  GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 
-          go build -trimpath \
-            -ldflags="-s -w \
-              -X github.com/keshon/buildinfo.Version=dev \
-              -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
-              -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
-              -X github.com/keshon/buildinfo.Project=Melodix \
-              -X 'github.com/keshon/buildinfo.Description=CLI music player - same playback engine as the Discord bot.'" \
-            -o dist/melodix-cli${{ steps.bin.outputs.ext }} \
-            ./cmd/cli/
+                  go build -trimpath \
+                    -ldflags="-s -w \
+                      -X github.com/keshon/buildinfo.Version=dev \
+                      -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
+                      -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
+                      -X github.com/keshon/buildinfo.Project=Melodix \
+                      -X 'github.com/keshon/buildinfo.Description=CLI music player - same playback engine as the Discord bot.'" \
+                    -o dist/melodix-cli${{ steps.bin.outputs.ext }} \
+                    ./cmd/cli/
 
-      - name: Prepare build bundle
-        run: |
-          PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
-          mkdir -p "${PKG_ROOT}"
+            - name: Prepare build bundle
+              run: |
+                  PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
+                  mkdir -p "${PKG_ROOT}"
 
-          cp "dist/melodix-discord${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
-          cp "dist/melodix-cli${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
+                  cp "dist/melodix-discord${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
+                  cp "dist/melodix-cli${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
 
-          cp README.md LICENSE "${PKG_ROOT}/"
+                  cp README.md LICENSE "${PKG_ROOT}/"
 
-          if [ -f .env.example ]; then
-            cp .env.example "${PKG_ROOT}/.env"
-          fi
+                  if [ -f .env.example ]; then
+                    cp .env.example "${PKG_ROOT}/.env"
+                  fi
 
-          mkdir -p "${PKG_ROOT}/data"
+                  mkdir -p "${PKG_ROOT}/data"
 
-          if [ -d assets ]; then
-            cp -R assets "${PKG_ROOT}/"
-          fi
+                  if [ -d assets ]; then
+                    cp -R assets "${PKG_ROOT}/"
+                  fi
 
-          zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
+                  zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: melodix-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }}.zip
-          retention-days: 14
+            - name: Upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: melodix-${{ matrix.goos }}-${{ matrix.goarch }}
+                  path: dist/melodix-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+                  retention-days: 14
