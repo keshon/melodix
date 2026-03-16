@@ -1,3 +1,4 @@
+// Package resolver resolves URLs and search queries to track metadata using configurable sources (YouTube, SoundCloud, radio).
 package resolver
 
 import (

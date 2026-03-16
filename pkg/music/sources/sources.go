@@ -1,3 +1,4 @@
+// Package sources defines the Source interface and track types used by the resolver.
 package sources
 
 const (

@@ -1,3 +1,4 @@
+// Package stream provides track stream opening, recovery, and PCM format constants.
 package stream
 
 import (

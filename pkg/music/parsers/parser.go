@@ -1,3 +1,4 @@
+// Package parsers defines the Streamer interface and track type for opening PCM streams from URLs.
 package parsers
 
 import (

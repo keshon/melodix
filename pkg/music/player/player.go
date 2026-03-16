@@ -1,3 +1,4 @@
+// Package player provides a queue-based playback engine with pluggable sinks and resolvers.
 package player
 
 import (

@@ -1,3 +1,4 @@
+// Package sink defines interfaces and implementations for consuming PCM audio (e.g. speaker, or custom Discord sink).
 package sink
 
 import "io"
