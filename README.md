@@ -4,7 +4,10 @@
 
 # Melodix — Self-hosted Discord music bot & CLI player
 
-Melodix is a music player you can run as a **Discord bot** (plays in voice channels) or as a **CLI app** (plays on your machine). Same playback engine for both: YouTube, SoundCloud, and internet radio. Written in Go.
+> Presented by Señor Mega.  
+> Powered by Go, FFmpeg, and questionable engineering decisions.
+
+Melodix is a music player you can run as a **Discord bot** (plays in voice channels) or as a **CLI app** (plays on your machine). Same playback engine for both: YouTube, SoundCloud, and internet radio with various parsers.
 
 ## Table of contents
 
