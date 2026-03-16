@@ -148,6 +148,15 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 		return nil
 	}
 
+	ok, err := discord.CheckBotVoicePermissions(s, voiceState.ChannelID)
+	if err != nil || !ok {
+		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 Voice Error",
+			Description: "I don't have permission to join or speak in that voice channel.",
+		})
+		return nil
+	}
+
 	tracks, err := c.Bot.Resolve(guildID, input, src, parser)
 	if err != nil || len(tracks) == 0 {
 		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -190,6 +199,15 @@ func (c *MusicCommand) runNext(s *discordgo.Session, e *discordgo.InteractionCre
 		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Voice Channel Error",
 			Description: fmt.Sprintf("Join a voice channel first.\n\n**Error:** %v", err),
+		})
+		return nil
+	}
+
+	ok, err := discord.CheckBotVoicePermissions(s, voiceState.ChannelID)
+	if err != nil || !ok {
+		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 Voice Error",
+			Description: "I don't have permission to join or speak in that voice channel.",
 		})
 		return nil
 	}

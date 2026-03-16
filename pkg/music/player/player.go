@@ -7,6 +7,7 @@ import (
 	"log"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sink"
@@ -41,6 +42,9 @@ var (
 	ErrNoTrackPlaying    = errors.New("no track is currently playing")
 	ErrNoTracksInQueue   = errors.New("no tracks in queue")
 	ErrNoParsersForTrack = errors.New("track has no available parsers")
+	// ErrSinkUnavailable indicates voice/sink could not be obtained (e.g. join timeout or no permission).
+	// When runPlayback returns this, the player skips calling PlayNext to avoid spinning through the queue.
+	ErrSinkUnavailable = errors.New("sink unavailable")
 )
 
 // Resolver resolves input (URL or search query) to track info. The player uses this to enqueue tracks.
@@ -196,8 +200,12 @@ func (p *Player) Stop(disconnect bool) error {
 	p.mu.Unlock()
 
 	if p.IsPlaying() && doneCh != nil {
-		<-doneCh
-		log.Printf("[Player] Playback goroutine finished")
+		select {
+		case <-doneCh:
+			log.Printf("[Player] Playback goroutine finished")
+		case <-time.After(10 * time.Second):
+			log.Printf("[Player] Stop timed out waiting for playback goroutine; cleaning up anyway")
+		}
 	}
 
 	p.mu.Lock()
@@ -310,6 +318,9 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	go func() {
 		if err := p.runPlayback(rs, stopCh, doneCh); err != nil {
 			log.Printf("[Player] Playback error for track %q: %v", track.Title, err)
+			if errors.Is(err, ErrSinkUnavailable) {
+				return
+			}
 		}
 
 		p.mu.Lock()
@@ -347,7 +358,7 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 		p.currTrack = nil
 		p.mu.Unlock()
 		p.emitStatus(StatusError)
-		return fmt.Errorf("get sink: %w", err)
+		return errors.Join(ErrSinkUnavailable, fmt.Errorf("get sink: %w", err))
 	}
 
 	err = audioSink.Stream(rs, stopCh)

@@ -46,6 +46,9 @@ func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReady
 	}
 }
 
+// voiceJoinTimeout limits how long we wait for voice connection to become ready (e.g. no permission = no event).
+const voiceJoinTimeout = 15 * time.Second
+
 // GetSink joins the voice channel (or reuses existing) and returns an AudioSink. target must be non-empty.
 func (p *DiscordSinkProvider) GetSink(target string) (sink.AudioSink, error) {
 	if target == "" {
@@ -70,7 +73,9 @@ func (p *DiscordSinkProvider) GetSink(target string) (sink.AudioSink, error) {
 	if dg == nil {
 		return nil, fmt.Errorf("no Discord session")
 	}
-	vc, err := dg.ChannelVoiceJoin(context.Background(), p.guildID, target, false, true)
+	joinCtx, cancel := context.WithTimeout(context.Background(), voiceJoinTimeout)
+	defer cancel()
+	vc, err := dg.ChannelVoiceJoin(joinCtx, p.guildID, target, false, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to join voice channel: %w", err)
 	}

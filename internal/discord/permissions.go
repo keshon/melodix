@@ -51,3 +51,15 @@ func CheckBotPermissions(s *discordgo.Session, channelID string) bool {
 	}
 	return perms&discordgo.PermissionManageMessages != 0
 }
+
+// CheckBotVoicePermissions reports whether the bot has Connect and Speak permission in a voice channel.
+// Use before starting playback to fail fast with a clear error when the bot cannot join or speak.
+func CheckBotVoicePermissions(s *discordgo.Session, channelID string) (bool, error) {
+	perms, err := s.UserChannelPermissions(s.State.User.ID, channelID)
+	if err != nil {
+		return false, err
+	}
+	need := int64(discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak)
+	ok := perms&need == need
+	return ok, nil
+}
