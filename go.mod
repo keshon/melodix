@@ -38,4 +38,4 @@ require (
 	golang.org/x/net v0.52.0
 )
 
-replace github.com/bwmarrin/discordgo => ./pkg/discordgo-fork
+replace github.com/bwmarrin/discordgo => github.com/yeongaori/discordgo-fork v0.0.0-20260315104245-037b0e48bb49
