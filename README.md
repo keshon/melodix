@@ -9,8 +9,8 @@
 
 Self-hosted music player written in Go that can run either as:
 
-• a **Discord music bot** for voice channels
-• a **CLI player** that plays music directly from your terminal
+- a **Discord music bot** for voice channels
+- a **CLI player** that plays music directly from your terminal
 
 Melodix supports **YouTube, SoundCloud and internet radio**, using multiple parsers with automatic fallback for resilience.
 
@@ -28,7 +28,6 @@ Melodix supports **YouTube, SoundCloud and internet radio**, using multiple pars
 * [Why Melodix?](#why-melodix)
 * [Support](#support)
 * [FAQ](#faq)
-* [Troubleshooting](#troubleshooting)
 * [Contributing](#contributing)
 * [License](#license)
 
@@ -58,9 +57,8 @@ Melodix supports **YouTube, SoundCloud and internet radio**, using multiple pars
 
 ### Use the official server
 
-Join [The Megabyte Order](https://discord.gg/NVtdTka8ZT) Discord server and try the bot immediately.
-
-Join a voice channel and use slash commands in `#bot-music-spam`.
+Try the bot in [The Megabyte Order](https://discord.gg/NVtdTka8ZT) Discord server: 
+enter a voice channel and use slash commands in `#bot-music-spam`.
 
 ---
 
@@ -248,31 +246,26 @@ flowchart TB
 
 ## Music package overview
 
-The playback pipeline in [pkg/music](pkg/music) works as follows:
+The [pkg/music](pkg/music) package is the core of the bot. It implements the entire playback pipeline: resolving tracks, managing the queue, opening audio streams, and delivering PCM audio to different sinks (Discord voice or local playback).
+
+The playback pipeline works as follows:
 
 1. **Resolve** — User input (URL or search) goes to the **resolver**. Sources (YouTube, SoundCloud, radio) match the input and return **track metadata** (URL, title, list of available parsers). No streaming yet.
-2. **Enqueue** — The **player** enqueues one or more tracks (metadata only). If nothing is playing, the caller typically calls **PlayNext**.
-3. **PlayNext** — Player pops the next track, calls **startTrack**: opens a **RecoveryStream** (which wraps **TrackStream**), starts a **playback goroutine** that will get a sink and stream PCM.
-4. **Get sink** — The playback goroutine asks the **sink provider** for an **AudioSink** (Discord: join voice channel and return a sink that encodes PCM to Opus and sends to the VC; CLI: return the speaker sink). If getting the sink fails, playback errors and the queue does not spin.
-5. **Open stream** — **RecoveryStream** opens a **TrackStream** by trying the track's parsers in order (ytdlp-link, kkdai-link, ffmpeg-link). Each parser produces **PCM** (48 kHz, stereo, 16-bit). If the stream dies early, RecoveryStream can retry with the same or next parser (up to a limit).
-6. **Stream to sink** — The player feeds the PCM **ReadCloser** to **AudioSink.Stream**. The sink runs until the stream ends or a stop signal is received.
-7. **Next or stop** — When the stream ends, the player can auto-advance to the next track (PlayNext) or stop; **Stop(true)** clears the queue and releases the sink.
 
-```mermaid
-flowchart LR
-  Resolver["Resolver"]
-  Player["Player"]
-  SinkProvider["SinkProvider"]
-  RecoveryStream["RecoveryStream"]
-  TrackStream["TrackStream"]
-  AudioSink["AudioSink"]
-  Resolver -->|"track metadata"| Player
-  Player -->|"GetSink"| SinkProvider
-  SinkProvider -->|"AudioSink"| Player
-  Player -->|"open"| RecoveryStream
-  RecoveryStream -->|"PCM stream"| TrackStream
-  Player -->|"Stream"| AudioSink
-```
+2. **Enqueue** — The **player** enqueues one or more tracks (metadata only). If nothing is playing, the caller typically calls **PlayNext**.
+
+3. **PlayNext** — The player pops the next track and calls **startTrack**: opens a **RecoveryStream** (which wraps **TrackStream**) and starts a **playback goroutine** that will obtain a sink and stream PCM.
+
+4. **Get sink** — The playback goroutine asks the **sink provider** for an **AudioSink**.  
+   - **Discord**: joins a voice channel and returns a sink that encodes PCM to Opus and sends it to the voice connection.  
+   - **CLI / local**: returns the speaker sink.  
+   If obtaining the sink fails, playback stops and the queue does not advance.
+
+5. **Open stream** — **RecoveryStream** opens a **TrackStream** by trying the track’s parsers in order (`ytdlp-link`, `kkdai-link`, `ffmpeg-link`). Each parser produces **PCM** (48 kHz, stereo, 16-bit). If the stream dies early, RecoveryStream can retry with the same or next parser (up to a limit).
+
+6. **Stream to sink** — The player feeds the PCM **ReadCloser** into **AudioSink.Stream**. The sink runs until the stream ends or a stop signal is received.
+
+7. **Next or stop** — When the stream ends, the player can auto-advance to the next track (`PlayNext`) or stop. Calling **Stop(true)** clears the queue and releases the sink.
 
 Subpackages: [player](pkg/music/player), [resolver](pkg/music/resolver), [sink](pkg/music/sink), [sources](pkg/music/sources), [parsers](pkg/music/parsers), [stream](pkg/music/stream). See also [pkg/music/README.md](pkg/music/README.md) for using the library standalone.
 
@@ -280,11 +273,12 @@ Subpackages: [player](pkg/music/player), [resolver](pkg/music/resolver), [sink](
 
 ## Why Melodix?
 
-I needed a self-hosted music bot that could reliably run for **long DnD sessions** without interruptions. Melodix solves that problem while also offering:
+I needed a self-hosted music bot that could reliably run for **long DnD sessions** without interruptions. I also wanted to achieve:
 
-* Single Go binary
+* Natievly compiled application
 * Resilient playback engine with fallback parsers and recovery streams
-* Easy to self-host for personal or private servers
+* Self-hosted solution anyone can run on their own server
+* Get some knowledge about Go and Discord APIs
 
 ---
 
@@ -296,18 +290,23 @@ For help or questions, use the [The Megabyte Order](https://discord.gg/NVtdTka8Z
 
 ## FAQ
 
-* **Why does play sometimes take a few seconds?** — The bot resolves the input (URL or search) and then opens an audio stream using one of the parsers (yt-dlp, kkdai, ffmpeg). The first time for a track can take a moment; playback then starts.
-* **Can I use only the music library without Discord?** — Yes. The [pkg/music](pkg/music) library is a standalone Go package. Use the speaker sink and resolver for a CLI or custom app; see [pkg/music/README.md](pkg/music/README.md) and [pkg/music/examples/cli_speaker](pkg/music/examples/cli_speaker).
-* **Why is FFmpeg required?** — The parsers use FFmpeg to decode various audio formats (YouTube, radio streams, etc.) into PCM that the bot can send to Discord or play locally.
-* **Why does the bot say it cannot join the voice channel?** — The bot needs **Connect** and **Speak** permission in that channel. Check the channel (or server) permissions for the bot role.
+* **Why does `play` sometimes take a few seconds?**  
+  The bot resolves the input (URL or search) and opens an audio stream using one of the parsers (`yt-dlp`, `kkdai`, `ffmpeg`). The first request for a track may take a moment; playback starts once the stream is ready.
 
----
+* **Can I use only the music library without the bot?**  
+  Yes. The [pkg/music](pkg/music) library is a standalone Go package. You can use the speaker sink and resolver for a CLI or custom app. See [pkg/music/README.md](pkg/music/README.md) and the example in [pkg/music/examples/cli_speaker](pkg/music/examples/cli_speaker).
 
-## Troubleshooting
+* **Why is FFmpeg required?**  
+  Parsers use FFmpeg to decode various audio formats (YouTube, radio streams, etc.) into PCM, which the bot can send to Discord or play locally.
 
-* **Bot does not join the voice channel** — Ensure the bot has Connect and Speak permission in the channel. If the bot still does not join, check logs for voice-join timeout or permission errors.
-* **No audio / track never starts** — Ensure FFmpeg (and optionally yt-dlp) is on your PATH. Check parser logs for stream open failures. For region-locked or live YouTube content, playback may not be supported.
-* **CLI: no sound** — The CLI uses the speaker sink (ebitengine/oto). Ensure your audio device is available and not muted; on some systems you may need to allow the app to use the microphone/speaker.
+* **Why can't the bot join the voice channel?**  
+  The bot needs **Connect** and **Speak** permissions in that channel. Check the channel or server permissions for the bot role.
+
+* **Why is there no audio or the track never starts?**  
+  Ensure **FFmpeg** (and optionally **yt-dlp**) is available in your `PATH`. Check parser logs for stream open errors. Some region-locked or live YouTube streams may not be supported.
+
+* **The bot does not start or cannot connect to Discord**  
+  In some regions Discord may be blocked. If the server running the bot cannot reach Discord, the bot will fail to connect. Run it on a server with open access to Discord, or configure a proxy/VPN if necessary.
 
 ---
 
