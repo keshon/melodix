@@ -31,7 +31,7 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 	for i := 0; i < warmUpFrames; i++ {
 		select {
 		case <-stop:
-			return nil
+			return stream.ErrPlaybackStopped
 		default:
 		}
 		_, err := io.ReadFull(src, pcmBuf)
@@ -62,7 +62,7 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 	for skipCount := 0; skipCount < maxSilenceFrames; skipCount++ {
 		select {
 		case <-stop:
-			return nil
+			return stream.ErrPlaybackStopped
 		default:
 		}
 		_, err := io.ReadFull(src, pcmBuf)
@@ -95,7 +95,7 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 	}
 	select {
 	case <-stop:
-		return nil
+		return stream.ErrPlaybackStopped
 	default:
 		if !safeOpusSend(vc, append([]byte(nil), opusBuf[:n]...)) {
 			return nil
@@ -105,7 +105,7 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 	for {
 		select {
 		case <-stop:
-			return nil
+			return stream.ErrPlaybackStopped
 		default:
 			_, err := io.ReadFull(src, pcmBuf)
 			if err != nil {
@@ -132,7 +132,7 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 			packet := append([]byte(nil), opusBuf[:n]...)
 			select {
 			case <-stop:
-				return nil
+				return stream.ErrPlaybackStopped
 			default:
 				if !safeOpusSend(vc, packet) {
 					return nil
