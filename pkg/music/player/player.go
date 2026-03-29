@@ -55,21 +55,37 @@ type Resolver interface {
 }
 
 type Player struct {
-	mu        sync.Mutex
-	playing   bool
+	// mu protects queue, history, currTrack, playing, starting, target, and the stop/playback fields below.
+	mu sync.Mutex
+	// playing is true while PCM is streaming after the stream has opened successfully.
+	playing bool
+	// starting is true while the current track is still resolving/opening; IsPlaying is playing || starting.
+	starting bool
+	// playNextMu ensures only one goroutine at a time runs dequeue + startTrack (including the slow Open phase),
+	// so concurrent PlayNext or Resume cannot start two tracks.
+	playNextMu sync.Mutex
+	// currTrack is the track being opened or actively playing (nil when idle).
 	currTrack *parsers.TrackParse
-	queue     []parsers.TrackParse
-	history   []parsers.TrackParse
+	// queue holds tracks waiting to play (FIFO).
+	queue []parsers.TrackParse
+	// history holds tracks that started successfully via PlayNext, in order.
+	history []parsers.TrackParse
 
-	resolver     Resolver
+	// resolver turns user input into track metadata for enqueue.
+	resolver Resolver
+	// sinkProvider supplies the audio sink (e.g. Discord VC or speaker) for a target channel.
 	sinkProvider sink.SinkProvider
 
-	target string // voice channel ID for Discord, "" for CLI
+	// target is the voice channel ID for Discord playback, or "" for CLI/non-voice.
+	target string
 
-	// playback lifecycle channels and sync
-	stopOnce     sync.Once
+	// stopOnce closes stopPlayback at most once per playback run.
+	stopOnce sync.Once
+	// stopPlayback signals the active Stream loop to stop (skip, stop, or starting a new track).
 	stopPlayback chan struct{}
+	// playbackDone is closed when the runPlayback goroutine for the current run exits.
 	playbackDone chan struct{}
+	// PlayerStatus receives playback lifecycle updates for UI (buffered; drops if full).
 	PlayerStatus chan PlayerStatus
 }
 
@@ -151,9 +167,16 @@ func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
 func (p *Player) PlayNext(target string) error {
 	log.Printf("[Player] PlayNext called | QueueLen=%d", len(p.queue))
 	for {
+		if p.IsPlaying() {
+			log.Printf("[Player] Stopping current track before playing next")
+			_ = p.Stop(false)
+		}
+
+		p.playNextMu.Lock()
 		p.mu.Lock()
 		if len(p.queue) == 0 {
 			p.mu.Unlock()
+			p.playNextMu.Unlock()
 			log.Printf("[Player] Queue is empty, nothing to play")
 			return ErrNoTracksInQueue
 		}
@@ -165,24 +188,19 @@ func (p *Player) PlayNext(target string) error {
 
 		log.Printf("[Player] Attempting to play track %q (%s)", track.Title, track.URL)
 
-		if p.IsPlaying() {
-			log.Printf("[Player] Stopping current track before playing next")
-			_ = p.Stop(false)
-		}
-
 		err := p.startTrack(&track, false)
+		p.playNextMu.Unlock()
+
 		if err != nil {
 			log.Printf("[Player] Skipping track %q due to error: %v", track.Title, err)
 			continue
 		}
 
 		p.mu.Lock()
-		p.currTrack = &track
-		p.playing = true
 		p.history = append(p.history, track)
 		p.mu.Unlock()
 
-		log.Printf("[Player] Now playing track %q | QueueLen=%d", track.Title, len(p.queue))
+		log.Printf("[Player] Now playing track %q | QueueLen=%d", track.Title, len(p.Queue()))
 		return nil
 	}
 }
@@ -211,6 +229,7 @@ func (p *Player) Stop(disconnect bool) error {
 
 	p.mu.Lock()
 	p.playing = false
+	p.starting = false
 	p.currTrack = nil
 
 	if disconnect {
@@ -251,16 +270,18 @@ func (p *Player) Resume() error {
 		return ErrNoTrackPlaying
 	}
 	track := p.currTrack
-	p.playing = true
 	p.mu.Unlock()
+
+	p.playNextMu.Lock()
+	defer p.playNextMu.Unlock()
 	return p.startTrack(track, true)
 }
 
-// IsPlaying returns current playback state
+// IsPlaying returns true while a track is opening or actively playing (excludes paused state where playing is false).
 func (p *Player) IsPlaying() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.playing
+	return p.playing || p.starting
 }
 
 // CurrentTrack returns currently playing track (nil if none)
@@ -293,11 +314,18 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	p.stopPlayback = make(chan struct{})
 	p.playbackDone = make(chan struct{})
 	p.stopOnce = sync.Once{}
+	p.starting = true
+	p.playing = false
+	p.currTrack = track
 	p.mu.Unlock()
 
 	rs := stream.NewRecoveryStream(track)
 	if err := rs.Open(0); err != nil {
 		log.Printf("[Player] Failed to open resilient stream: %v", err)
+		p.mu.Lock()
+		p.starting = false
+		p.currTrack = nil
+		p.mu.Unlock()
 		return err
 	}
 
@@ -310,8 +338,9 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	}
 
 	p.mu.Lock()
-	p.currTrack = track
+	p.starting = false
 	p.playing = true
+	p.currTrack = track
 	stopCh := p.stopPlayback
 	doneCh := p.playbackDone
 	p.mu.Unlock()
@@ -320,6 +349,9 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 		if err := p.runPlayback(rs, stopCh, doneCh); err != nil {
 			log.Printf("[Player] Playback error for track %q: %v", track.Title, err)
 			if errors.Is(err, ErrSinkUnavailable) {
+				return
+			}
+			if errors.Is(err, stream.ErrPlaybackStopped) {
 				return
 			}
 		}
@@ -370,6 +402,11 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 	p.mu.Unlock()
 
 	if err != nil {
+		if errors.Is(err, stream.ErrPlaybackStopped) {
+			log.Printf("[Player] Playback stopped by user")
+			p.emitStatus(StatusStopped)
+			return err
+		}
 		p.emitStatus(StatusError)
 		log.Printf("[Player] Playback finished with error: %v", err)
 		return fmt.Errorf("playback error: %w", err)

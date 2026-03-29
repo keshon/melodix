@@ -44,14 +44,14 @@ func (s *SpeakerSink) ensureContext() error {
 }
 
 // Stream reads PCM from the stream and plays it. Returns when the stream ends or stop is closed.
-func (s *SpeakerSink) Stream(stream io.ReadCloser, stop <-chan struct{}) error {
-	defer stream.Close()
+func (s *SpeakerSink) Stream(src io.ReadCloser, stop <-chan struct{}) error {
+	defer src.Close()
 	if err := s.ensureContext(); err != nil {
 		return err
 	}
 	<-s.readyChan
 
-	r := &stopReader{r: stream, stop: stop}
+	r := &stopReader{r: src, stop: stop}
 	player := s.ctx.NewPlayer(r)
 	player.Play()
 
@@ -59,7 +59,7 @@ func (s *SpeakerSink) Stream(stream io.ReadCloser, stop <-chan struct{}) error {
 		select {
 		case <-stop:
 			_ = player.Close()
-			return nil
+			return stream.ErrPlaybackStopped
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}
