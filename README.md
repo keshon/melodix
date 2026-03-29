@@ -57,8 +57,8 @@ Melodix supports **YouTube, SoundCloud and internet radio**, using multiple pars
 
 ### Use the official server
 
-Try the bot in [The Megabyte Order](https://discord.gg/NVtdTka8ZT) Discord server: 
-enter a voice channel and use slash commands in `#bot-music-spam`.
+Try the bot in [Ctrl+Z](https://discord.gg/NVtdTka8ZT) Discord server: 
+enter a voice channel and use slash commands in `#music-spam`.
 
 ---
 
@@ -128,7 +128,7 @@ You must be in a voice channel to use `/music play`.
 * **How to play your first track** — (Discord) Join a voice channel, then run `/music play` with a link or search term (e.g., `/music play Never Gonna Give You Up`).
 * **How to self-host the bot** — Install FFmpeg (and optionally yt-dlp) on your PATH, create a bot in the [Discord Developer Portal](https://discord.com/developers/applications), set `DISCORD_TOKEN` in `.env`, and run the Discord binary. Full steps: [Discord bot — Step 2](#discord-bot--step-2-configure-and-run).
 * **How to run the CLI player** — Build with `go build -o melodix-cli ./cmd/cli` or use the `melodix-cli` binary from [releases](https://github.com/keshon/melodix/releases). No Discord token needed. Commands: `play`, `next`, `stop`, `queue`, `status`, `quit`. See [CLI player](#cli-player).
-* **How to try without installing** — Join the [official support server](https://discord.gg/NVtdTka8ZT) and use the bot in a voice channel, or download a [release](https://github.com/keshon/melodix/releases) and run the binaries. See [Try Melodix without installing](#try-melodix-without-installing).
+* **How to try without installing** — Join the [official support server](https://discord.gg/uDnTenPxAY) and use the bot in a voice channel, or download a [release](https://github.com/keshon/melodix/releases) and run the binaries. See [Try Melodix without installing](#try-melodix-without-installing).
 
 ---
 
@@ -284,7 +284,7 @@ I needed a self-hosted music bot that could reliably run for **long DnD sessions
 
 ## Support
 
-For help or questions, use the [The Megabyte Order](https://discord.gg/NVtdTka8ZT) — official Melodix Discord server.
+For help or questions, use the [official Melodix Discord server](https://discord.gg/uDnTenPxAY).
 
 ---
 
@@ -312,7 +312,7 @@ For help or questions, use the [The Megabyte Order](https://discord.gg/NVtdTka8Z
 
 ## Contributing
 
-Contributions are welcome. Open an issue or pull request on [GitHub](https://github.com/keshon/melodix). For larger changes, discuss in the [Melodix Discord server](https://discord.gg/NVtdTka8ZT) first.
+Contributions are welcome. Open an issue or pull request on [GitHub](https://github.com/keshon/melodix). For larger changes, discuss in the [Melodix Discord server](https://discord.gg/uDnTenPxAY) first.
 
 ---
 
