@@ -57,7 +57,7 @@ Melodix supports **YouTube, SoundCloud and internet radio**, using multiple pars
 
 ### Use the official server
 
-Try the bot in [Ctrl+Z](https://discord.gg/NVtdTka8ZT) Discord server: 
+Try the bot in [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server: 
 enter a voice channel and use slash commands in `#music-spam`.
 
 ---
