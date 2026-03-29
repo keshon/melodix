@@ -78,7 +78,7 @@ func (b *Bot) run(ctx context.Context) error {
 		s := b.dg
 		b.mu.RUnlock()
 		return s
-	}, b.cfg)
+	}, b.cfg, b.storage)
 	b.mu.Unlock()
 
 	// disconnected is closed once — multiple concurrent signals (our handler + discordgo

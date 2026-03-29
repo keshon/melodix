@@ -58,7 +58,7 @@ Melodix supports **YouTube, SoundCloud and internet radio**, using multiple pars
 ### Use the official server
 
 Try the bot in [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server: 
-enter a voice channel and use slash commands in `#music-spam`.
+enter a voice channel and use slash commands in `#bot-music-spam`.
 
 ---
 
@@ -94,6 +94,7 @@ Each archive contains:
   - **/music play** — Play a music track
   - **/music next** — Skip to the next track
   - **/music stop** — Stop playback and clear queue
+  - **/music history** — Show recently played tracks (replay by id with /music play)
 
 ### ⚙️ Settings
 
@@ -284,7 +285,7 @@ I needed a self-hosted music bot that could reliably run for **long DnD sessions
 
 ## Support
 
-For help or questions, use the [official Melodix Discord server](https://discord.gg/uDnTenPxAY).
+For help or questions, use the [Ctrl+Z](https://discord.gg/uDnTenPxAY) — official Melodix Discord server.
 
 ---
 

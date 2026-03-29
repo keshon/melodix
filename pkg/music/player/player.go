@@ -54,8 +54,14 @@ type Resolver interface {
 	Resolve(input, source, parser string) ([]sources.TrackInfo, error)
 }
 
+// PlaybackRecorder is called after a track successfully starts (after Open), e.g. to persist guild playback history.
+// Discord wiring sets guildID; CLI/examples leave recorder nil.
+type PlaybackRecorder interface {
+	Record(guildID string, playedAt time.Time, track parsers.TrackParse)
+}
+
 type Player struct {
-	// mu protects queue, history, currTrack, playing, starting, target, and the stop/playback fields below.
+	// mu protects queue, currTrack, playing, starting, target, and the stop/playback fields below.
 	mu sync.Mutex
 	// playing is true while PCM is streaming after the stream has opened successfully.
 	playing bool
@@ -68,8 +74,6 @@ type Player struct {
 	currTrack *parsers.TrackParse
 	// queue holds tracks waiting to play (FIFO).
 	queue []parsers.TrackParse
-	// history holds tracks that started successfully via PlayNext, in order.
-	history []parsers.TrackParse
 
 	// resolver turns user input into track metadata for enqueue.
 	resolver Resolver
@@ -78,6 +82,10 @@ type Player struct {
 
 	// target is the voice channel ID for Discord playback, or "" for CLI/non-voice.
 	target string
+	// guildID is set by the Discord voice layer for playback recording; empty for CLI.
+	guildID string
+	// recorder persists successful starts (nil for CLI).
+	recorder PlaybackRecorder
 
 	// stopOnce closes stopPlayback at most once per playback run.
 	stopOnce sync.Once
@@ -95,11 +103,24 @@ func New(sinkProvider sink.SinkProvider, res Resolver) *Player {
 		resolver:     res,
 		sinkProvider: sinkProvider,
 		queue:        make([]parsers.TrackParse, 0),
-		history:      make([]parsers.TrackParse, 0),
 		stopPlayback: make(chan struct{}),
 		playbackDone: make(chan struct{}),
 		PlayerStatus: make(chan PlayerStatus, 10),
 	}
+}
+
+// SetGuildID sets the Discord guild id for this player (used when invoking the playback recorder).
+func (p *Player) SetGuildID(guildID string) {
+	p.mu.Lock()
+	p.guildID = guildID
+	p.mu.Unlock()
+}
+
+// SetRecorder sets an optional callback invoked after a track successfully starts. Pass nil to disable.
+func (p *Player) SetRecorder(r PlaybackRecorder) {
+	p.mu.Lock()
+	p.recorder = r
+	p.mu.Unlock()
 }
 
 // Enqueue adds tracks to the queue
@@ -196,9 +217,15 @@ func (p *Player) PlayNext(target string) error {
 			continue
 		}
 
+		playedAt := time.Now()
 		p.mu.Lock()
-		p.history = append(p.history, track)
+		gid := p.guildID
+		rec := p.recorder
 		p.mu.Unlock()
+		if rec != nil && gid != "" {
+			// Future: listened-duration aggregation would require completion callbacks from here or runPlayback.
+			rec.Record(gid, playedAt, cloneTrackParse(track))
+		}
 
 		log.Printf("[Player] Now playing track %q | QueueLen=%d", track.Title, len(p.Queue()))
 		return nil
@@ -298,11 +325,12 @@ func (p *Player) Queue() []parsers.TrackParse {
 	return slices.Clone(p.queue)
 }
 
-// History returns a copy of played tracks
-func (p *Player) History() []parsers.TrackParse {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return slices.Clone(p.history)
+func cloneTrackParse(tp parsers.TrackParse) parsers.TrackParse {
+	out := tp
+	if len(tp.SourceInfo.AvailableParsers) > 0 {
+		out.SourceInfo.AvailableParsers = slices.Clone(tp.SourceInfo.AvailableParsers)
+	}
+	return out
 }
 
 // startTrack launches playback goroutine

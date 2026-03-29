@@ -1,6 +1,6 @@
 module github.com/keshon/melodix
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
@@ -12,7 +12,7 @@ require (
 
 require (
 	github.com/cloudflare/circl v1.6.3 // indirect
-	github.com/ebitengine/purego v0.9.0 // indirect
+	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
@@ -34,7 +34,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/joho/godotenv v1.5.1
-	github.com/kkdai/youtube/v2 v2.10.5
+	github.com/kkdai/youtube/v2 v2.10.6
 	golang.org/x/net v0.52.0
 )
 

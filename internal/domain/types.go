@@ -14,8 +14,22 @@ type CommandHistory struct {
 	Datetime    time.Time `json:"datetime"`
 }
 
+// MusicPlayback is one persisted row for a track that actually started playing (Discord).
+type MusicPlayback struct {
+	ID               uint64    `json:"id"`
+	PlayedAt         time.Time `json:"played_at"`
+	URL              string    `json:"url"`
+	Title            string    `json:"title"`
+	CurrentParser    string    `json:"current_parser"`
+	AvailableParsers []string  `json:"available_parsers"`
+	SourceName       string    `json:"source_name"`
+}
+
 type Record struct {
-	CommandsDisabled []string         `json:"commands_disabled"`
+	CommandsDisabled []string `json:"commands_disabled"`
 	CommandsHistory  []CommandHistory `json:"commands_history"`
 	CommandHashes    map[string]string `json:"command_hashes,omitempty"` // slash command name -> hash for sync
+
+	MusicPlaybackHistory []MusicPlayback `json:"music_playback_history,omitempty"`
+	NextMusicHistoryID   uint64          `json:"next_music_history_id"`
 }

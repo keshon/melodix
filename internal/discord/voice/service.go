@@ -1,11 +1,14 @@
 package voice
 
 import (
+	"log"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolver"
 	"github.com/keshon/melodix/pkg/music/sources"
@@ -21,6 +24,7 @@ type guildMusicStatus struct {
 type Service struct {
 	getSession   SessionGetter
 	cfg          *config.Config
+	store        *storage.Storage
 	mu           sync.RWMutex
 	players      map[string]*player.Player
 	sinkProviders map[string]*DiscordSinkProvider
@@ -31,13 +35,27 @@ type Service struct {
 }
 
 // New creates a voice service for the given session getter and config.
-func New(getSession SessionGetter, cfg *config.Config) *Service {
+func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage) *Service {
 	return &Service{
-		getSession:        getSession,
-		cfg:               cfg,
-		players:           make(map[string]*player.Player),
-		sinkProviders:     make(map[string]*DiscordSinkProvider),
-		guildMusicStatus:  make(map[string]guildMusicStatus),
+		getSession:       getSession,
+		cfg:              cfg,
+		store:            store,
+		players:          make(map[string]*player.Player),
+		sinkProviders:    make(map[string]*DiscordSinkProvider),
+		guildMusicStatus: make(map[string]guildMusicStatus),
+	}
+}
+
+type playbackRecorder struct {
+	store *storage.Storage
+}
+
+func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parsers.TrackParse) {
+	if r.store == nil {
+		return
+	}
+	if _, err := r.store.AppendMusicPlayback(guildID, track, playedAt); err != nil {
+		log.Printf("[music] append playback history: %v", err)
 	}
 }
 
@@ -50,6 +68,10 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		s.sinkProviders = make(map[string]*DiscordSinkProvider)
 	}
 	if p, ok := s.players[guildID]; ok {
+		p.SetGuildID(guildID)
+		if s.store != nil {
+			p.SetRecorder(playbackRecorder{store: s.store})
+		}
 		return p
 	}
 	if s.resolver == nil {
@@ -62,6 +84,10 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		s.sinkProviders[guildID] = provider
 	}
 	p := player.New(provider, s.resolver)
+	p.SetGuildID(guildID)
+	if s.store != nil {
+		p.SetRecorder(playbackRecorder{store: s.store})
+	}
 	s.players[guildID] = p
 	return p
 }
