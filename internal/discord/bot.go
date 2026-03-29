@@ -13,7 +13,7 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/voice"
-	"github.com/keshon/melodix/internal/docs"
+	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -236,7 +236,7 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 	// Background services start once across all reconnects.
 	b.once.Do(func() {
 		log.Println("[INFO] Starting background services...")
-		if err := docs.UpdateReadme(commandkit.DefaultRegistry, config.CategoryWeights); err != nil {
+		if err := readme.UpdateReadme(commandkit.DefaultRegistry, config.CategoryWeights); err != nil {
 			log.Println("[ERR] Failed to update README:", err)
 		}
 	})

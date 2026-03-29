@@ -1,4 +1,4 @@
-package docs
+package readme
 
 import (
 	"bytes"

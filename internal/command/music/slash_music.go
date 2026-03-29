@@ -87,12 +87,12 @@ func (c *MusicCommand) SlashDefinition() *discordgo.ApplicationCommand {
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
-						Name:        "mode",
-						Description: "Timeline (chronological) or counts grouped by URL",
+						Name:        "view",
+						Description: "Chronological list or plays per link",
 						Required:    false,
 						Choices: []*discordgo.ApplicationCommandOptionChoice{
-							{Name: "Timeline (chronological)", Value: "timeline"},
-							{Name: "Counts (by URL)", Value: "counts"},
+							{Name: "Timeline", Value: "timeline"},
+							{Name: "By URL", Value: "counts"},
 						},
 					},
 					{
@@ -148,19 +148,19 @@ func (c *MusicCommand) Run(ctx interface{}) error {
 		return c.runStop(s, e)
 
 	case "history":
-		mode := "timeline"
+		view := "timeline"
 		var page int64 = 1
 		for _, opt := range sub.Options {
 			switch opt.Name {
-			case "mode":
+			case "view":
 				if v := strings.TrimSpace(opt.StringValue()); v != "" {
-					mode = v
+					view = v
 				}
 			case "page":
 				page = opt.IntValue()
 			}
 		}
-		return c.runHistory(s, e, page, mode, store)
+		return c.runHistory(s, e, page, view, store)
 
 	default:
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -309,31 +309,10 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 
 const historyLinesPerPage = 15
 
-func formatTimelineLine(m domain.MusicPlayback) string {
-	title := m.Title
-	if title == "" {
-		title = "(no title)"
-	}
-	t := m.PlayedAt.Format("2006-01-02 15:04")
-	if m.URL != "" {
-		return fmt.Sprintf("`%d` — [%s](%s) — %s", m.ID, title, m.URL, t)
-	}
-	return fmt.Sprintf("`%d` — %s — %s", m.ID, title, t)
-}
+// Shown in /music history footer for replay hint (counts view uses the same sentence as timeline).
+const historyFooterReplay = "replay with `/music play <id>`."
 
-func formatCountsLine(r domain.PlaybackCountRow) string {
-	title := r.Title
-	if title == "" {
-		title = "(no title)"
-	}
-	t := r.LastPlayed.Format("2006-01-02 15:04")
-	if r.URL != "" {
-		return fmt.Sprintf("`%d` — ×%d — [%s](%s) — last %s", r.RepresentativeID, r.Count, title, r.URL, t)
-	}
-	return fmt.Sprintf("`%d` — ×%d — %s — last %s", r.RepresentativeID, r.Count, title, t)
-}
-
-func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.InteractionCreate, page int64, mode string, store *storage.Storage) error {
+func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.InteractionCreate, page int64, view string, store *storage.Storage) error {
 	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	}); err != nil {
@@ -375,29 +354,29 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 		return nil
 	}
 
-	mode = strings.ToLower(strings.TrimSpace(mode))
-	if mode == "" {
-		mode = "timeline"
+	view = strings.ToLower(strings.TrimSpace(view))
+	if view == "" {
+		view = "timeline"
 	}
 
 	var lines []string
 	var totalRows int
-	var title string
+	var embedTitle string
 	var footerExtra string
 
-	switch mode {
+	switch view {
 	case "counts":
 		counts := domain.AggregatePlaybackCounts(rows)
 		totalRows = len(counts)
-		title = "🎵 Playback history (counts by URL)"
-		footerExtra = "Distinct URLs; replay id is the latest play for that link."
+		embedTitle = "🎵 Playback history (by URL)"
+		footerExtra = historyFooterReplay
 		for _, r := range counts {
 			lines = append(lines, formatCountsLine(r))
 		}
 	default:
 		totalRows = len(rows)
-		title = "🎵 Playback history (timeline)"
-		footerExtra = "Chronological; replay with `/music play <id>`."
+		embedTitle = "🎵 Playback history (timeline)"
+		footerExtra = "Chronological; " + historyFooterReplay
 		for _, m := range rows {
 			lines = append(lines, formatTimelineLine(m))
 		}
@@ -435,7 +414,7 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       title,
+		Title:       embedTitle,
 		Description: desc,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),

@@ -84,12 +84,23 @@ Each archive contains:
 
 <!-- /generated -->
 
+#### `/music` — usage
+
+Subcommands are summarized in the list above; this section expands the main playback flow.
+
+- **`/music play`** — Enter a **URL** (YouTube, SoundCloud, or a direct radio/stream link), a **search query**, or one or more **history ids** (the numbers shown in `/music history`) to queue that track again without a full resolve. Optional **`source`** and **`parser`** override autodetection. You can separate several ids or URLs with spaces, commas, or semicolons (there is a per-command batch limit).
+- **`/music history`** — **`view`**: **Timeline** lists each play in order with a short date; **By URL** merges identical links and shows a **×** multiplier for how often each was played. Use **`page`** to move through long lists. Each row includes an **id** you can pass to **`/music play`**. History is stored per server; very old rows may be removed when the persisted list is trimmed.
+- **`/music next`** — Skip to the next track in the queue.
+- **`/music stop`** — Stop playback and clear the queue.
+
 Example usage:
 
 ```
 /music play Never Gonna Give You Up
 /music play https://www.youtube.com/watch?v=dQw4w9WgXcQ
 /music play http://stream-uk1.radioparadise.com/aac-320
+/music play 42
+/music history
 ```
 
 You must be in a voice channel to use `/music play`.
