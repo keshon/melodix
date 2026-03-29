@@ -10,7 +10,6 @@ import (
 
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/domain"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/player"
 
@@ -177,12 +176,12 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 		})
 	}
 
-	parsed, err := parsePlayInput(input)
+	parsed, err := ParsePlayInput(input)
 	if err != nil {
 		if errors.Is(err, ErrPlayInputTooManyItems) {
 			return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Error",
-				Description: fmt.Sprintf("Too many tracks in one command (max %d).", maxPlayBatchItems),
+				Description: fmt.Sprintf("Too many tracks in one command (max %d).", MaxPlayBatchItems),
 			})
 		}
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -307,11 +306,6 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 	return nil
 }
 
-const historyLinesPerPage = 15
-
-// Shown in /music history footer for replay hint (counts view uses the same sentence as timeline).
-const historyFooterReplay = "replay with `/music play <id>`."
-
 func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.InteractionCreate, page int64, view string, store *storage.Storage) error {
 	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -336,7 +330,15 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 		return nil
 	}
 
-	rows, err := store.ListMusicPlaybackTimeline(guildID)
+	res, err := BuildHistoryPage(store, guildID, page, view, HistoryFooterReplayDiscord, formatTimelineLine, formatCountsLine, HistoryTitleTimelineDiscord, HistoryTitleCountsDiscord, false)
+	if errors.Is(err, ErrHistoryEmpty) {
+		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 History",
+			Description: "No playback history yet. Use `/music play` first. History is stored per server; very old entries may be removed when the list is trimmed.",
+			Color:       discord.EmbedColor,
+		})
+		return nil
+	}
 	if err != nil {
 		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 History",
@@ -345,66 +347,8 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 		return nil
 	}
 
-	if len(rows) == 0 {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 History",
-			Description: "No playback history yet. Use `/music play` first. History is stored per server; very old entries may be removed when the list is trimmed.",
-			Color:       discord.EmbedColor,
-		})
-		return nil
-	}
-
-	view = strings.ToLower(strings.TrimSpace(view))
-	if view == "" {
-		view = "timeline"
-	}
-
-	var lines []string
-	var totalRows int
-	var embedTitle string
-	var footerExtra string
-
-	switch view {
-	case "counts":
-		counts := domain.AggregatePlaybackCounts(rows)
-		totalRows = len(counts)
-		embedTitle = "🎵 Playback history (by URL)"
-		footerExtra = historyFooterReplay
-		for _, r := range counts {
-			lines = append(lines, formatCountsLine(r))
-		}
-	default:
-		totalRows = len(rows)
-		embedTitle = "🎵 Playback history (timeline)"
-		footerExtra = "Chronological; " + historyFooterReplay
-		for _, m := range rows {
-			lines = append(lines, formatTimelineLine(m))
-		}
-	}
-
-	totalPages := (totalRows + historyLinesPerPage - 1) / historyLinesPerPage
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page < 1 {
-		page = 1
-	}
-	if int64(totalPages) > 0 && page > int64(totalPages) {
-		page = int64(totalPages)
-	}
-
-	start := int((page - 1) * int64(historyLinesPerPage))
-	if start >= len(lines) {
-		start = 0
-		page = 1
-	}
-	end := start + historyLinesPerPage
-	if end > len(lines) {
-		end = len(lines)
-	}
-
 	var b strings.Builder
-	for _, line := range lines[start:end] {
+	for _, line := range res.Lines {
 		b.WriteString(line)
 		b.WriteByte('\n')
 	}
@@ -414,10 +358,10 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       embedTitle,
+		Title:       res.Title,
 		Description: desc,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),
+			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", res.Page, res.TotalPages, res.TotalRows, res.FooterExtra),
 		},
 		Color: discord.EmbedColor,
 	}
@@ -529,15 +473,12 @@ func listenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 						return
 					}
 
+					label := track.DisplayLabel()
 					var desc string
-					if track.Title != "" && track.URL != "" {
-						desc = fmt.Sprintf("🎶 [%s](%s)", track.Title, track.URL)
-					} else if track.Title != "" {
-						desc = "🎶 " + track.Title
-					} else if track.URL != "" {
-						desc = "🎶 " + track.URL
+					if track.URL != "" {
+						desc = fmt.Sprintf("🎶 [%s](%s)", label, track.URL)
 					} else {
-						desc = "🎶 Unknown track"
+						desc = "🎶 " + label
 					}
 
 					if err := bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{

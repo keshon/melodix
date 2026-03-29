@@ -58,7 +58,7 @@ func TestParsePlayInput(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := parsePlayInput(tc.in)
+			got, err := ParsePlayInput(tc.in)
 			if tc.wantErr != nil {
 				if err == nil {
 					t.Fatalf("want error, got nil")
@@ -66,7 +66,7 @@ func TestParsePlayInput(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("parsePlayInput: %v", err)
+				t.Fatalf("ParsePlayInput: %v", err)
 			}
 			if got.Kind != tc.want.Kind {
 				t.Errorf("Kind: got %v want %v", got.Kind, tc.want.Kind)
@@ -97,13 +97,13 @@ func TestParsePlayInput(t *testing.T) {
 func TestParsePlayInputTooManyIDs(t *testing.T) {
 	t.Parallel()
 	var ids string
-	for i := 0; i < maxPlayBatchItems+1; i++ {
+	for i := 0; i < MaxPlayBatchItems+1; i++ {
 		if i > 0 {
 			ids += " "
 		}
 		ids += "1"
 	}
-	_, err := parsePlayInput(ids)
+	_, err := ParsePlayInput(ids)
 	if !errors.Is(err, ErrPlayInputTooManyItems) {
 		t.Fatalf("want ErrPlayInputTooManyItems, got %v", err)
 	}

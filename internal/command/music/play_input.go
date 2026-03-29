@@ -7,10 +7,10 @@ import (
 	"unicode"
 )
 
-// maxPlayBatchItems limits history ids or URLs enqueued in one /music play to avoid huge interactions.
-const maxPlayBatchItems = 15
+// MaxPlayBatchItems limits history ids or URLs enqueued in one /music play to avoid huge interactions.
+const MaxPlayBatchItems = 15
 
-// ErrPlayInputTooManyItems is returned when the parsed id or URL count exceeds maxPlayBatchItems.
+// ErrPlayInputTooManyItems is returned when the parsed id or URL count exceeds MaxPlayBatchItems.
 var ErrPlayInputTooManyItems = errors.New("too many items in one command")
 
 type PlayInputKind int
@@ -21,7 +21,7 @@ const (
 	PlayInputKindQuery
 )
 
-// ParsedPlayInput is the result of parsePlayInput (no Discord or resolver dependencies).
+// ParsedPlayInput is the result of ParsePlayInput (no Discord or resolver dependencies).
 type ParsedPlayInput struct {
 	Kind       PlayInputKind
 	HistoryIDs []uint64
@@ -30,9 +30,9 @@ type ParsedPlayInput struct {
 	Query string
 }
 
-// parsePlayInput classifies play text as history ids, multiple URLs, or one resolver query.
+// ParsePlayInput classifies play text as history ids, multiple URLs, or one resolver query.
 // source/parser apply only to the resolver (query/URL) path; callers may ignore them for history ids.
-func parsePlayInput(s string) (ParsedPlayInput, error) {
+func ParsePlayInput(s string) (ParsedPlayInput, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
 		return ParsedPlayInput{}, errors.New("empty input")
@@ -52,7 +52,7 @@ func parsePlayInput(s string) (ParsedPlayInput, error) {
 			}
 			ids = append(ids, id)
 		}
-		if len(ids) > maxPlayBatchItems {
+		if len(ids) > MaxPlayBatchItems {
 			return ParsedPlayInput{}, ErrPlayInputTooManyItems
 		}
 		return ParsedPlayInput{Kind: PlayInputKindHistoryIDs, HistoryIDs: ids}, nil
@@ -60,7 +60,7 @@ func parsePlayInput(s string) (ParsedPlayInput, error) {
 
 	urls := collectHTTPTokens(tokens)
 	if len(urls) >= 2 {
-		if len(urls) > maxPlayBatchItems {
+		if len(urls) > MaxPlayBatchItems {
 			return ParsedPlayInput{}, ErrPlayInputTooManyItems
 		}
 		return ParsedPlayInput{Kind: PlayInputKindURLs, URLs: urls}, nil

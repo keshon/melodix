@@ -42,7 +42,7 @@ func main() {
 				switch status {
 				case player.StatusPlaying:
 					if track := p.CurrentTrack(); track != nil {
-						fmt.Println("▶", track.Title)
+						fmt.Println("▶", track.DisplayLabel())
 					}
 				case player.StatusAdded:
 					fmt.Println("🎶 Added to queue")
@@ -124,17 +124,17 @@ func main() {
 		case "queue":
 			cur := p.CurrentTrack()
 			if cur != nil {
-				fmt.Println("Now playing:", cur.Title)
+				fmt.Println("Now playing:", cur.DisplayLabel())
 			}
 			for i, t := range p.Queue() {
-				fmt.Printf("  %d. %s\n", i+1, t.Title)
+				fmt.Printf("  %d. %s\n", i+1, t.DisplayLabel())
 			}
 			if cur == nil && len(p.Queue()) == 0 {
 				fmt.Println("(empty)")
 			}
 		case "status":
 			if cur := p.CurrentTrack(); cur != nil {
-				fmt.Println("Playing:", cur.Title, "| Queue:", len(p.Queue()))
+				fmt.Println("Playing:", cur.DisplayLabel(), "| Queue:", len(p.Queue()))
 			} else {
 				fmt.Println("Stopped. Queue:", len(p.Queue()))
 			}

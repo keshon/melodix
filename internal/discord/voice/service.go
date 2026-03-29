@@ -1,14 +1,12 @@
 package voice
 
 import (
-	"log"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolver"
 	"github.com/keshon/melodix/pkg/music/sources"
@@ -46,19 +44,6 @@ func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage) *
 	}
 }
 
-type playbackRecorder struct {
-	store *storage.Storage
-}
-
-func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parsers.TrackParse) {
-	if r.store == nil {
-		return
-	}
-	if _, err := r.store.AppendMusicPlayback(guildID, track, playedAt); err != nil {
-		log.Printf("[music] append playback history: %v", err)
-	}
-}
-
 // GetOrCreatePlayer returns an existing player for the guild or creates a new one.
 func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	s.mu.Lock()
@@ -70,7 +55,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	if p, ok := s.players[guildID]; ok {
 		p.SetGuildID(guildID)
 		if s.store != nil {
-			p.SetRecorder(playbackRecorder{store: s.store})
+			p.SetRecorder(s.store.NewPlaybackRecorder())
 		}
 		return p
 	}
@@ -86,7 +71,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	p := player.New(provider, s.resolver)
 	p.SetGuildID(guildID)
 	if s.store != nil {
-		p.SetRecorder(playbackRecorder{store: s.store})
+		p.SetRecorder(s.store.NewPlaybackRecorder())
 	}
 	s.players[guildID] = p
 	return p

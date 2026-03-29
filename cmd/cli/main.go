@@ -4,15 +4,23 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/keshon/buildinfo"
+	"github.com/keshon/melodix/internal/cli"
+	cliui "github.com/keshon/melodix/internal/cli/ui"
+	"github.com/keshon/melodix/internal/command/music"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolver"
 	"github.com/keshon/melodix/pkg/music/sink"
@@ -26,18 +34,43 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	_ = cfg // reserved for future CLI-specific config
+
+	store, err := storage.New(cfg.StoragePath)
+	if err != nil {
+		log.Fatalf("Failed to open storage: %v", err)
+	}
 
 	provider := sink.NewSpeakerProvider()
-	defer provider.Close()
 
 	res := resolver.New()
 	p := player.New(provider, res)
+	p.SetGuildID(cli.GuildScope)
+	p.SetRecorder(store.NewPlaybackRecorder())
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	// Print status updates (e.g. "Now playing: ...") in the background
+	var shutdownOnce sync.Once
+	// shutdown cancels the UI goroutine, stops playback, releases audio, then closes storage with a bounded wait
+	// so quit and signal paths match and the process does not block indefinitely on datastore autosave.
+	shutdown := func() {
+		shutdownOnce.Do(func() {
+			cancel()
+			_ = p.Stop(true)
+			_ = provider.Close()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_ = store.Close()
+			}()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				log.Printf("[WARN] storage Close timed out after 5s; exiting")
+			}
+		})
+	}
+
+	// Print status updates (e.g. now playing) in the background.
 	go func() {
 		for {
 			select {
@@ -50,14 +83,14 @@ func main() {
 				switch status {
 				case player.StatusPlaying:
 					if track := p.CurrentTrack(); track != nil {
-						fmt.Println("▶", track.Title)
+						cliui.PrintNowPlaying(os.Stdout, track.DisplayLabel())
 					}
 				case player.StatusAdded:
-					fmt.Println("🎶 Added to queue")
+					cliui.PrintAddedToQueue(os.Stdout)
 				case player.StatusStopped:
-					fmt.Println("⏹ Stopped")
+					cliui.PrintStoppedStatus(os.Stdout)
 				case player.StatusError:
-					fmt.Println("❌ Error")
+					cliui.PrintPlaybackError(os.Stdout)
 				}
 			}
 		}
@@ -68,12 +101,11 @@ func main() {
 	go func() {
 		<-sig
 		fmt.Println("\nShutting down...")
-		cancel()
-		_ = p.Stop(true)
+		shutdown()
 		os.Exit(0)
 	}()
 
-	fmt.Println("Commands: play <url|query> [source] [parser] | next | stop | queue | status | quit")
+	cliui.PrintStartupHelp(os.Stdout)
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("> ")
@@ -91,23 +123,21 @@ func main() {
 		cmd, args := parts[0], parts[1:]
 		switch cmd {
 		case "quit", "exit", "q":
-			_ = p.Stop(true)
-			return
+			shutdown()
+			os.Exit(0)
+		case "help", "?":
+			cliui.PrintHelpDetail(os.Stdout)
 		case "play", "p":
 			if len(args) == 0 {
-				fmt.Println("Usage: play <url|query> [source] [parser]")
+				fmt.Println("Usage: play <url|query|id> [source] [parser]")
 				continue
 			}
-			input := args[0]
-			source, parser := "", ""
-			if len(args) > 1 {
-				source = args[1]
-			}
-			if len(args) > 2 {
-				parser = args[2]
-			}
-			if err := p.Enqueue(input, source, parser); err != nil {
-				fmt.Println("Error:", err)
+			if err := playFromArgs(p, store, cli.GuildScope, args); err != nil {
+				if errors.Is(err, music.ErrPlayInputTooManyItems) {
+					fmt.Println("Error: too many items in one command (max", music.MaxPlayBatchItems, ")")
+				} else {
+					fmt.Println("Error:", err)
+				}
 				continue
 			}
 			if !p.IsPlaying() {
@@ -128,31 +158,131 @@ func main() {
 			}
 		case "stop", "s":
 			_ = p.Stop(true)
-			fmt.Println("Stopped")
+			fmt.Println("stopped")
 		case "queue":
 			cur := p.CurrentTrack()
 			if cur != nil {
-				fmt.Println("Now playing:", cur.Title)
+				fmt.Println("Now playing:", cur.DisplayLabel())
 			}
 			for i, t := range p.Queue() {
-				fmt.Printf("  %d. %s\n", i+1, t.Title)
+				fmt.Printf("  %d. %s\n", i+1, t.DisplayLabel())
 			}
 			if cur == nil && len(p.Queue()) == 0 {
 				fmt.Println("(empty)")
 			}
 		case "status":
 			if cur := p.CurrentTrack(); cur != nil {
-				fmt.Println("Playing:", cur.Title, "| Queue:", len(p.Queue()))
+				fmt.Println("Playing:", cur.DisplayLabel(), "| Queue:", len(p.Queue()))
 			} else {
 				fmt.Println("Stopped. Queue:", len(p.Queue()))
 			}
+		case "history", "h":
+			view, page := parseHistoryArgs(args)
+			res, err := music.HistoryPageForCLI(store, cli.GuildScope, page, view)
+			if errors.Is(err, music.ErrHistoryEmpty) {
+				fmt.Println("No playback history yet. Use play first. Old entries may be removed when the list is trimmed.")
+				continue
+			}
+			if err != nil {
+				fmt.Println("Error:", err)
+				continue
+			}
+			cliui.PrintHistoryPage(os.Stdout, view, res)
 		default:
-			fmt.Println("Unknown command. Use: play | next | stop | queue | status | quit")
+			fmt.Println("Unknown command. Type `help` or use: play | next | stop | queue | status | history | quit")
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		log.Printf("Read error: %v", err)
 	}
+	shutdown()
+	os.Exit(0)
+}
+
+func parseHistoryArgs(args []string) (view string, page int64) {
+	view = "timeline"
+	page = 1
+	switch len(args) {
+	case 1:
+		a0 := strings.ToLower(strings.TrimSpace(args[0]))
+		if a0 == "timeline" || a0 == "counts" {
+			view = a0
+		} else if pg, err := strconv.ParseInt(a0, 10, 64); err == nil && pg >= 1 {
+			page = pg
+		}
+	case 2:
+		a0 := strings.ToLower(strings.TrimSpace(args[0]))
+		if a0 == "timeline" || a0 == "counts" {
+			view = a0
+			if pg, err := strconv.ParseInt(strings.TrimSpace(args[1]), 10, 64); err == nil && pg >= 1 {
+				page = pg
+			}
+		}
+	}
+	return view, page
+}
+
+func playFromArgs(p *player.Player, store *storage.Storage, guildScope string, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("no input")
+	}
+
+	if len(args) >= 2 && allUintStringTokens(args) {
+		parsed, err := music.ParsePlayInput(strings.Join(args, " "))
+		if err != nil {
+			return err
+		}
+		if parsed.Kind == music.PlayInputKindHistoryIDs {
+			return enqueueHistoryIDs(p, store, guildScope, parsed.HistoryIDs)
+		}
+	}
+
+	parsed, err := music.ParsePlayInput(args[0])
+	if err != nil {
+		return err
+	}
+	if parsed.Kind == music.PlayInputKindHistoryIDs {
+		return enqueueHistoryIDs(p, store, guildScope, parsed.HistoryIDs)
+	}
+
+	input := args[0]
+	source, parser := "", ""
+	if len(args) > 1 {
+		source = args[1]
+	}
+	if len(args) > 2 {
+		parser = args[2]
+	}
+	return p.Enqueue(input, source, parser)
+}
+
+func enqueueHistoryIDs(p *player.Player, store *storage.Storage, guildScope string, ids []uint64) error {
+	if store == nil {
+		return fmt.Errorf("music history storage is not available")
+	}
+	for _, hid := range ids {
+		mp, gerr := store.GetMusicPlayback(guildScope, hid)
+		if gerr != nil {
+			if errors.Is(gerr, storage.ErrMusicPlaybackNotFound) {
+				return fmt.Errorf("unknown history id %d (trimmed list or wrong id)", hid)
+			}
+			return fmt.Errorf("could not load history entry: %w", gerr)
+		}
+		ti := storage.TrackInfoFromMusicPlayback(mp)
+		if err := p.EnqueueTrackInfo(ti); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func allUintStringTokens(ss []string) bool {
+	for _, s := range ss {
+		if _, err := strconv.ParseUint(s, 10, 64); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // splitQuoted splits the line by spaces but keeps quoted segments as one token.
