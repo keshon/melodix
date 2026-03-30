@@ -93,13 +93,8 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 		log.Printf("[Stream] OPUS packet #%d size=%d bytes", packetNum+1, n)
 		packetNum++
 	}
-	select {
-	case <-stop:
-		return stream.ErrPlaybackStopped
-	default:
-		if !safeOpusSend(vc, append([]byte(nil), opusBuf[:n]...)) {
-			return nil
-		}
+	if err := opusSend(vc, stop, append([]byte(nil), opusBuf[:n]...)); err != nil {
+		return err
 	}
 
 	for {
@@ -107,43 +102,48 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 		case <-stop:
 			return stream.ErrPlaybackStopped
 		default:
-			_, err := io.ReadFull(src, pcmBuf)
-			if err != nil {
-				if err == io.EOF || err == io.ErrUnexpectedEOF {
-					return nil
-				}
-				return fmt.Errorf("read error: %w", err)
+		}
+		_, err := io.ReadFull(src, pcmBuf)
+		if err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				return nil
 			}
+			return fmt.Errorf("read error: %w", err)
+		}
 
-			for i := range intBuf {
-				intBuf[i] = int16(binary.LittleEndian.Uint16(pcmBuf[i*2 : i*2+2]))
-			}
+		for i := range intBuf {
+			intBuf[i] = int16(binary.LittleEndian.Uint16(pcmBuf[i*2 : i*2+2]))
+		}
 
-			n, err := encoder.Encode(intBuf, opusBuf)
-			if err != nil {
-				return fmt.Errorf("encode error: %w", err)
-			}
+		n, err := encoder.Encode(intBuf, opusBuf)
+		if err != nil {
+			return fmt.Errorf("encode error: %w", err)
+		}
 
-			if packetNum < debugPacketCount {
-				log.Printf("[Stream] OPUS packet #%d size=%d bytes", packetNum+1, n)
-				packetNum++
-			}
+		if packetNum < debugPacketCount {
+			log.Printf("[Stream] OPUS packet #%d size=%d bytes", packetNum+1, n)
+			packetNum++
+		}
 
-			packet := append([]byte(nil), opusBuf[:n]...)
-			select {
-			case <-stop:
-				return stream.ErrPlaybackStopped
-			default:
-				if !safeOpusSend(vc, packet) {
-					return nil
-				}
-			}
+		if err := opusSend(vc, stop, append([]byte(nil), opusBuf[:n]...)); err != nil {
+			return err
 		}
 	}
 }
 
-func safeOpusSend(vc *discordgo.VoiceConnection, packet []byte) (sent bool) {
+// opusSend delivers one Opus frame to discordgo's OpusSend channel, blocking until the
+// voice goroutine accepts it. That backpressures PCM reads to ~one frame per ~20ms (the
+// rate opusSender drains the channel), which keeps playback real-time. Non-blocking
+// sends that drop under load let ffmpeg run ahead and desync from RTP timing.
+func opusSend(vc *discordgo.VoiceConnection, stop <-chan struct{}, packet []byte) error {
 	defer func() { _ = recover() }()
-	vc.OpusSend <- packet
-	return true
+	if vc == nil || vc.OpusSend == nil {
+		return nil
+	}
+	select {
+	case <-stop:
+		return stream.ErrPlaybackStopped
+	case vc.OpusSend <- packet:
+		return nil
+	}
 }

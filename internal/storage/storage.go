@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	st "github.com/keshon/melodix/internal/domain"
@@ -14,15 +13,20 @@ import (
 const commandHistoryLimit int = 50
 
 type Storage struct {
-	ds *datastore.DataStore
+	ds                        *datastore.DataStore
+	musicPlaybackHistoryLimit int
 }
 
-func New(filePath string) (*Storage, error) {
+// New opens the JSON datastore. musicPlaybackHistoryLimit caps persisted playback rows per guild (≤0 means default 750).
+func New(filePath string, musicPlaybackHistoryLimit int) (*Storage, error) {
 	ds, err := datastore.New(context.Background(), filePath)
 	if err != nil {
 		return nil, err
 	}
-	return &Storage{ds: ds}, nil
+	if musicPlaybackHistoryLimit <= 0 {
+		musicPlaybackHistoryLimit = 750
+	}
+	return &Storage{ds: ds, musicPlaybackHistoryLimit: musicPlaybackHistoryLimit}, nil
 }
 
 func (s *Storage) Close() error {
@@ -54,21 +58,20 @@ func (s *Storage) GetGuildRecord(guildID string) (*st.Record, error) {
 	return s.getOrCreateGuildRecord(guildID)
 }
 
-func (s *Storage) GetRecordsList() map[string]st.Record {
+func (s *Storage) GetRecordsList() (map[string]st.Record, error) {
 	mapStringRecord := make(map[string]st.Record)
 	for _, key := range s.ds.Keys() {
 		var record st.Record
 		exists, err := s.ds.Get(key, &record)
 		if err != nil {
-			log.Printf("error getting record for key %q: %v", key, err)
-			continue
+			return nil, fmt.Errorf("get record for key %q: %w", key, err)
 		}
 		if !exists {
 			continue
 		}
 		mapStringRecord[key] = record
 	}
-	return mapStringRecord
+	return mapStringRecord, nil
 }
 
 func (s *Storage) appendCommandToHistory(guildID string, command st.CommandHistory) error {

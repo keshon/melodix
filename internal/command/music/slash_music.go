@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	appmusic "github.com/keshon/melodix/internal/app/music"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/domain"
@@ -18,7 +19,8 @@ import (
 )
 
 type MusicCommand struct {
-	Bot discord.BotVoice
+	Bot discord.DiscordMusicBot
+	App *appmusic.Service
 }
 
 // discordgo requires a pointer for MinValue on slash options.
@@ -113,10 +115,18 @@ func (c *MusicCommand) Run(ctx interface{}) error {
 	if !ok {
 		return nil
 	}
+	return c.RunSlash(slashCtx)
+}
 
+// RunSlash implements command.SlashRunner for typed slash handling.
+func (c *MusicCommand) RunSlash(slashCtx *command.SlashInteractionContext) error {
 	s := slashCtx.Session
 	e := slashCtx.Event
 	store := slashCtx.Storage
+	reqCtx := slashCtx.Ctx
+	if reqCtx == nil {
+		reqCtx = context.Background()
+	}
 
 	if len(e.ApplicationCommandData().Options) == 0 {
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -139,7 +149,7 @@ func (c *MusicCommand) Run(ctx interface{}) error {
 				parser = opt.StringValue()
 			}
 		}
-		return c.runPlay(s, e, input, source, parser, store)
+		return c.runPlay(reqCtx, s, e, input, source, parser, store)
 
 	case "next":
 		return c.runNext(s, e)
@@ -169,7 +179,7 @@ func (c *MusicCommand) Run(ctx interface{}) error {
 	}
 }
 
-func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCreate, input, src, parser string, store *storage.Storage) error {
+func (c *MusicCommand) runPlay(ctx context.Context, s *discordgo.Session, e *discordgo.InteractionCreate, input, src, parser string, store *storage.Storage) error {
 	if input == "" {
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
@@ -177,12 +187,12 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 		})
 	}
 
-	parsed, err := parsePlayInput(input)
+	parsed, err := appmusic.ParsePlayInput(input)
 	if err != nil {
-		if errors.Is(err, ErrPlayInputTooManyItems) {
+		if errors.Is(err, appmusic.ErrPlayInputTooManyItems) {
 			return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Error",
-				Description: fmt.Sprintf("Too many tracks in one command (max %d).", maxPlayBatchItems),
+				Description: fmt.Sprintf("Too many tracks in one command (max %d).", appmusic.MaxPlayBatchItems),
 			})
 		}
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -218,99 +228,65 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 		return nil
 	}
 
-	p := c.Bot.GetOrCreatePlayer(guildID)
-	if p == nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Error",
-			Description: "Music service is not available.",
-		})
-		return nil
+	var repo domain.MusicHistoryRepository
+	if store != nil {
+		repo = store
 	}
 
-	switch parsed.Kind {
-	case PlayInputKindHistoryIDs:
-		if store == nil {
+	playErr := c.App.Play(ctx, guildID, voiceState.ChannelID, parsed, src, parser, repo)
+	if playErr != nil {
+		switch {
+		case errors.Is(playErr, appmusic.ErrMusicUnavailable):
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Error",
+				Description: "Music service is not available.",
+			})
+		case errors.Is(playErr, appmusic.ErrHistoryUnavailable):
 			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Error",
 				Description: "Music history storage is not available.",
 			})
-			return nil
-		}
-		for _, hid := range parsed.HistoryIDs {
-			mp, gerr := store.GetMusicPlayback(guildID, hid)
-			if gerr != nil {
-				if errors.Is(gerr, storage.ErrMusicPlaybackNotFound) {
-					discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-						Title:       "🎵 History",
-						Description: "Unknown history id. It may have been removed when the list was trimmed, or the id is wrong.",
-					})
-				} else {
-					discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-						Title:       "🎵 History",
-						Description: fmt.Sprintf("Could not load history entry: %v", gerr),
-					})
-				}
-				return nil
-			}
-			ti := storage.TrackInfoFromMusicPlayback(mp)
-			if err := p.EnqueueTrackInfo(ti); err != nil {
-				discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-					Title:       "🎵 Queue Error",
-					Description: fmt.Sprintf("%v", err),
-				})
-				return nil
-			}
-		}
-
-	case PlayInputKindURLs:
-		for _, u := range parsed.URLs {
-			tracks, resErr := c.Bot.Resolve(guildID, u, src, parser)
-			if resErr != nil || len(tracks) == 0 {
-				discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-					Title:       "🎵 Error",
-					Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
-				})
-				return nil
-			}
-			if err := p.EnqueueTrackInfo(tracks[0]); err != nil {
-				discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-					Title:       "🎵 Queue Error",
-					Description: fmt.Sprintf("%v", err),
-				})
-				return nil
-			}
-		}
-
-	case PlayInputKindQuery:
-		tracks, resErr := c.Bot.Resolve(guildID, parsed.Query, src, parser)
-		if resErr != nil || len(tracks) == 0 {
+		case errors.Is(playErr, appmusic.ErrPlayNoTracksResolved):
 			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-				Title:       "🎵 Error",
-				Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
+				Title:       "🎵 Nothing found",
+				Description: "No tracks were found for that input. Try a different query or a direct link.",
 			})
-			return nil
-		}
-		if err := p.EnqueueTrackInfo(tracks[0]); err != nil {
+		case errors.Is(playErr, appmusic.ErrPlayResolveFailed):
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Resolve Error",
+				Description: "Failed to resolve that input. Try again, or try a direct link.",
+			})
+		case errors.Is(playErr, appmusic.ErrPlayEnqueueTrackFailed):
+			// Keep a generic message; details are in logs via wrapped error.
 			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Queue Error",
-				Description: fmt.Sprintf("%v", err),
+				Description: "Failed to add track to the queue.",
 			})
-			return nil
+		case errors.Is(playErr, domain.ErrMusicPlaybackNotFound):
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 History",
+				Description: "Unknown history id. It may have been removed when the list was trimmed, or the id is wrong.",
+			})
+		case errors.Is(playErr, player.ErrNoParsersForTrack):
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Unsupported Track",
+				Description: "That track can't be played (no supported parsers). Try a different link or source.",
+			})
+		default:
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Error",
+				Description: fmt.Sprintf("Failed to play: %v", playErr),
+			})
 		}
+		return nil
 	}
 
-	if !p.IsPlaying() {
-		p.PlayNext(voiceState.ChannelID)
+	p := c.Bot.GetOrCreatePlayer(guildID)
+	if p != nil {
+		listenPlayerStatusSlash(s, e, p, c.Bot, guildID)
 	}
-
-	listenPlayerStatusSlash(s, e, p, c.Bot, guildID)
 	return nil
 }
-
-const historyLinesPerPage = 15
-
-// Shown in /music history footer for replay hint (counts view uses the same sentence as timeline).
-const historyFooterReplay = "replay with `/music play <id>`."
 
 func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.InteractionCreate, page int64, view string, store *storage.Storage) error {
 	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
@@ -320,24 +296,28 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 	}
 
 	guildID := e.GuildID
-	if c.Bot.GetOrCreatePlayer(guildID) == nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Error",
-			Description: "Music service is not available.",
-		})
-		return nil
+
+	var repo domain.MusicHistoryRepository
+	if store != nil {
+		repo = store
 	}
 
-	if store == nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Error",
-			Description: "Music history storage is not available.",
-		})
-		return nil
-	}
-
-	rows, err := store.ListMusicPlaybackTimeline(guildID)
+	res, err := c.App.HistoryPage(guildID, page, view, repo)
 	if err != nil {
+		if errors.Is(err, appmusic.ErrMusicUnavailable) {
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Error",
+				Description: "Music service is not available.",
+			})
+			return nil
+		}
+		if errors.Is(err, appmusic.ErrHistoryUnavailable) {
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Error",
+				Description: "Music history storage is not available.",
+			})
+			return nil
+		}
 		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 History",
 			Description: fmt.Sprintf("Could not load history: %v", err),
@@ -345,7 +325,7 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 		return nil
 	}
 
-	if len(rows) == 0 {
+	if res.TotalRows == 0 {
 		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 History",
 			Description: "No playback history yet. Use `/music play` first. History is stored per server; very old entries may be removed when the list is trimmed.",
@@ -354,57 +334,9 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 		return nil
 	}
 
-	view = strings.ToLower(strings.TrimSpace(view))
-	if view == "" {
-		view = "timeline"
-	}
-
-	var lines []string
-	var totalRows int
-	var embedTitle string
-	var footerExtra string
-
-	switch view {
-	case "counts":
-		counts := domain.AggregatePlaybackCounts(rows)
-		totalRows = len(counts)
-		embedTitle = "🎵 Playback history (by URL)"
-		footerExtra = historyFooterReplay
-		for _, r := range counts {
-			lines = append(lines, formatCountsLine(r))
-		}
-	default:
-		totalRows = len(rows)
-		embedTitle = "🎵 Playback history (timeline)"
-		footerExtra = "Chronological; " + historyFooterReplay
-		for _, m := range rows {
-			lines = append(lines, formatTimelineLine(m))
-		}
-	}
-
-	totalPages := (totalRows + historyLinesPerPage - 1) / historyLinesPerPage
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page < 1 {
-		page = 1
-	}
-	if int64(totalPages) > 0 && page > int64(totalPages) {
-		page = int64(totalPages)
-	}
-
-	start := int((page - 1) * int64(historyLinesPerPage))
-	if start >= len(lines) {
-		start = 0
-		page = 1
-	}
-	end := start + historyLinesPerPage
-	if end > len(lines) {
-		end = len(lines)
-	}
-
+	lines := FormatHistoryLines(res)
 	var b strings.Builder
-	for _, line := range lines[start:end] {
+	for _, line := range lines {
 		b.WriteString(line)
 		b.WriteByte('\n')
 	}
@@ -414,10 +346,10 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       embedTitle,
+		Title:       historyEmbedTitle(res.View),
 		Description: desc,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),
+			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", res.Page, res.TotalPages, res.TotalRows, historyFooterExtra(res.View)),
 		},
 		Color: discord.EmbedColor,
 	}
@@ -455,25 +387,29 @@ func (c *MusicCommand) runNext(s *discordgo.Session, e *discordgo.InteractionCre
 		return nil
 	}
 
+	skipErr := c.App.Skip(guildID, voiceState.ChannelID)
+	if skipErr != nil {
+		switch {
+		case errors.Is(skipErr, appmusic.ErrMusicUnavailable):
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Error",
+				Description: "Music service is not available.",
+			})
+		case errors.Is(skipErr, appmusic.ErrQueueEmpty):
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Queue Empty",
+				Description: "No tracks left to skip.",
+			})
+		default:
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Playback Error",
+				Description: fmt.Sprintf("Failed to play next track.\n\n**Error:** %v", skipErr),
+			})
+		}
+		return nil
+	}
+
 	player := c.Bot.GetOrCreatePlayer(guildID)
-	queue := player.Queue()
-	if len(queue) == 0 {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Queue Empty",
-			Description: "No tracks left to skip.",
-		})
-		return nil
-	}
-
-	player.Stop(false)
-	if err = player.PlayNext(voiceState.ChannelID); err != nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Playback Error",
-			Description: fmt.Sprintf("Failed to play next track.\n\n**Error:** %v", err),
-		})
-		return nil
-	}
-
 	listenPlayerStatusSlash(s, e, player, c.Bot, guildID)
 	return nil
 }
@@ -487,8 +423,14 @@ func (c *MusicCommand) runStop(s *discordgo.Session, e *discordgo.InteractionCre
 		return fmt.Errorf("failed to defer response: %w", err)
 	}
 
-	player := c.Bot.GetOrCreatePlayer(guildID)
-	if err := player.Stop(true); err != nil {
+	if err := c.App.Stop(guildID); err != nil {
+		if errors.Is(err, appmusic.ErrMusicUnavailable) {
+			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Error",
+				Description: "Music service is not available.",
+			})
+			return nil
+		}
 		log.Printf("[WARN] Stop error: %v", err)
 	}
 	stopMsg := "Playback stopped. Queue cleared."
@@ -505,7 +447,7 @@ func (c *MusicCommand) runStop(s *discordgo.Session, e *discordgo.InteractionCre
 // Updates after the first use the guild's stored message (edit), so they work beyond token expiry.
 const statusListenTimeout = 15 * time.Minute
 
-func listenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.BotVoice, guildID string) {
+func listenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.MusicPresenter, guildID string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), statusListenTimeout)
 		defer cancel()

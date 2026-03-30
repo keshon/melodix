@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keshon/melodix/pkg/music/parsers"
-	"github.com/keshon/melodix/pkg/music/sources"
+	appmusic "github.com/keshon/melodix/internal/app/music"
+	st "github.com/keshon/melodix/internal/domain"
 )
 
 // Manual verification (Discord):
@@ -18,27 +18,23 @@ import (
 func TestAppendGetListMusicPlayback(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
-	s, err := New(path)
+	s, err := New(path, 750)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Intentionally omit s.Close(): datastore Close can block on autosave wait in tests.
 
 	guild := "guild1"
-	tp := parsers.TrackParse{
-		URL:           "https://example.com/a",
-		Title:         "Song A",
-		CurrentParser: "p1",
-		SourceInfo: sources.TrackInfo{
-			URL:              "https://example.com/a",
-			Title:            "Song A",
-			SourceName:       "youtube",
-			AvailableParsers: []string{"p1", "p2"},
-		},
+	rec := st.MusicPlaybackAppend{
+		URL:              "https://example.com/a",
+		Title:            "Song A",
+		CurrentParser:    "p1",
+		SourceName:       "youtube",
+		AvailableParsers: []string{"p1", "p2"},
 	}
 	at := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 
-	id, err := s.AppendMusicPlayback(guild, tp, at)
+	id, err := s.AppendMusicPlayback(guild, at, rec)
 	if err != nil || id != 1 {
 		t.Fatalf("append: id=%d err=%v", id, err)
 	}
@@ -47,14 +43,14 @@ func TestAppendGetListMusicPlayback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ID != 1 || got.URL != tp.URL || got.Title != tp.Title || got.CurrentParser != tp.CurrentParser {
+	if got.ID != 1 || got.URL != rec.URL || got.Title != rec.Title || got.CurrentParser != rec.CurrentParser {
 		t.Fatalf("get: %+v", got)
 	}
 	if len(got.AvailableParsers) != 2 {
 		t.Fatalf("available parsers: %v", got.AvailableParsers)
 	}
 
-	ti := TrackInfoFromMusicPlayback(got)
+	ti := appmusic.TrackInfoFromMusicPlayback(got)
 	if ti.URL != got.URL || ti.AvailableParsers[0] != "p1" {
 		t.Fatalf("trackinfo: %+v", ti)
 	}
@@ -66,28 +62,22 @@ func TestAppendGetListMusicPlayback(t *testing.T) {
 }
 
 func TestMusicPlaybackTrimKeepsRecent(t *testing.T) {
-	oldLim := musicPlaybackHistoryLimit
-	musicPlaybackHistoryLimit = 3
-	t.Cleanup(func() { musicPlaybackHistoryLimit = oldLim })
-
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
-	s, err := New(path)
+	s, err := New(path, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	guild := "g2"
-	base := parsers.TrackParse{
-		URL:           "https://example.com/x",
-		Title:         "t",
-		CurrentParser: "p",
-		SourceInfo: sources.TrackInfo{
-			AvailableParsers: []string{"p"},
-		},
+	base := st.MusicPlaybackAppend{
+		URL:              "https://example.com/x",
+		Title:            "t",
+		CurrentParser:    "p",
+		AvailableParsers: []string{"p"},
 	}
 	for i := 0; i < 4; i++ {
-		_, err := s.AppendMusicPlayback(guild, base, time.Unix(int64(i), 0))
+		_, err := s.AppendMusicPlayback(guild, time.Unix(int64(i), 0), base)
 		if err != nil {
 			t.Fatal(err)
 		}

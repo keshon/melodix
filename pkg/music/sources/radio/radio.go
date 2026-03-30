@@ -1,6 +1,7 @@
 package radio
 
 import (
+	"context"
 	"errors"
 	"slices"
 
@@ -20,11 +21,11 @@ func New() *RadioSource {
 }
 
 func (r *RadioSource) Match(input string) bool {
-	ok, _, err := r.resolver.IsValidURL(input)
+	ok, _, err := r.resolver.IsValidURL(context.Background(), input)
 	return err == nil && ok
 }
 
-func (r *RadioSource) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
+func (r *RadioSource) Resolve(ctx context.Context, input string, selectedParser string) ([]source.TrackInfo, error) {
 	parsers := r.AvailableParsers()
 
 	if selectedParser == "" {
@@ -38,7 +39,7 @@ func (r *RadioSource) Resolve(input string, selectedParser string) ([]source.Tra
 		return nil, errors.New(SourceRadio + " source does not support " + selectedParser + " parser")
 	}
 
-	ok, _, err := r.resolver.IsValidURL(input)
+	ok, _, err := r.resolver.IsValidURL(ctx, input)
 	if err != nil {
 		return nil, err
 	}

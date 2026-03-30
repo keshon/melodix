@@ -2,6 +2,7 @@
 package resolver
 
 import (
+	"context"
 	"errors"
 
 	"github.com/keshon/melodix/pkg/music/sources"
@@ -28,7 +29,10 @@ func New() *SourceResolver {
 	}
 }
 
-func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) ([]sources.TrackInfo, error) {
+func (r *SourceResolver) Resolve(ctx context.Context, input, selectedSource, selectedParser string) ([]sources.TrackInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Direct source selection
 	if selectedSource != "" {
 		src, ok := r.Sources[selectedSource]
@@ -44,12 +48,12 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 			if selectedSource != sources.SourceYouTube && selectedSource != sources.SourceSoundCloud {
 				return nil, errors.New("title search is only supported on " + sources.SourceYouTube + " and " + sources.SourceSoundCloud)
 			}
-			return src.Resolve(input, selectedParser)
+			return src.Resolve(ctx, input, selectedParser)
 		}
 		if !src.Match(input) {
 			return nil, errors.New("input does not match selected source: " + selectedSource)
 		}
-		return src.Resolve(input, selectedParser)
+		return src.Resolve(ctx, input, selectedParser)
 	}
 
 	// Automatic detection
@@ -62,7 +66,7 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 		if err != nil {
 			return nil, err
 		}
-		return yt.Resolve(input, selectedParser)
+		return yt.Resolve(ctx, input, selectedParser)
 	}
 
 	for typ, s := range r.Sources {
@@ -74,7 +78,7 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 			if err != nil {
 				return nil, err
 			}
-			return s.Resolve(input, selectedParser)
+			return s.Resolve(ctx, input, selectedParser)
 		}
 	}
 
@@ -83,7 +87,7 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 		if err != nil {
 			return nil, err
 		}
-		return radioSrc.Resolve(input, selectedParser)
+		return radioSrc.Resolve(ctx, input, selectedParser)
 	}
 
 	return nil, errors.New("no matching source found")

@@ -1,6 +1,7 @@
 package radio
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,8 +43,8 @@ func NewRadioResolver() *RadioResolver {
 }
 
 // IsValidURL checks stream validity based on headers, content-type, and file extension heuristics.
-func (r *RadioResolver) IsValidURL(rawURL string) (bool, string, error) {
-	contentType, finalURL, err := r.fetchContentType(rawURL)
+func (r *RadioResolver) IsValidURL(ctx context.Context, rawURL string) (bool, string, error) {
+	contentType, finalURL, err := r.fetchContentType(ctx, rawURL)
 	if err != nil {
 		// Network or request-level failure: big red flag
 		return false, "", fmt.Errorf("failed to fetch content type: %w", err)
@@ -57,8 +58,8 @@ func (r *RadioResolver) IsValidURL(rawURL string) (bool, string, error) {
 	return false, contentType, fmt.Errorf("invalid stream content-type: %q, url: %s", contentType, finalURL)
 }
 
-func (r *RadioResolver) fetchContentType(rawURL string) (string, string, error) {
-	req, err := http.NewRequest(http.MethodHead, rawURL, nil)
+func (r *RadioResolver) fetchContentType(ctx context.Context, rawURL string) (string, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, rawURL, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("request creation failed: %w", err)
 	}
@@ -67,7 +68,11 @@ func (r *RadioResolver) fetchContentType(rawURL string) (string, string, error) 
 	resp, err := r.Client.Do(req)
 	if err != nil || resp.StatusCode >= 400 {
 		// Try GET as fallback
-		req.Method = http.MethodGet
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return "", "", fmt.Errorf("request creation failed: %w", err)
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0")
 		resp, err = r.Client.Do(req)
 		if err != nil {
 			return "", "", fmt.Errorf("GET fallback failed: %w", err)

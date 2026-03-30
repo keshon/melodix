@@ -1,6 +1,7 @@
 package soundcloud
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,10 +30,10 @@ func NewSoundCloudResolver() *SoundCloudResolver {
 	}
 }
 
-func (r *SoundCloudResolver) SearchFirstTrackURL(query string) (string, error) {
+func (r *SoundCloudResolver) SearchFirstTrackURL(ctx context.Context, query string) (string, error) {
 	searchURL := fmt.Sprintf("https://duckduckgo.com/html/?q=site:soundcloud.com+%s", url.QueryEscape(query))
 
-	req, err := http.NewRequest("GET", searchURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return "", err
 	}

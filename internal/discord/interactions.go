@@ -7,8 +7,8 @@ import (
 
 const EmbedColor = 0xb01e66
 
-// responder implements command.Responder so commands can reply without importing
-// the discord package directly (avoids import cycles).
+// responder implements command.Responder so slash handlers use the Responder interface
+// instead of calling discord.Respond* helpers directly (keeps middleware and tests flexible).
 type responder struct{}
 
 func (responder) RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
@@ -22,7 +22,7 @@ func (responder) CheckBotPermissions(s *discordgo.Session, channelID string) boo
 }
 func (responder) EmbedColor() int { return EmbedColor }
 
-// DefaultResponder is injected into command contexts so commands never import discord directly.
+// DefaultResponder is injected into command contexts for embed replies and permission checks.
 var DefaultResponder command.Responder = responder{}
 
 // --- Interaction responses ---

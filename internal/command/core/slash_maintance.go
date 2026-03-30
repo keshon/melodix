@@ -7,7 +7,6 @@ import (
 
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -150,14 +149,4 @@ func runStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 		Description: desc,
 		Color:       discord.EmbedColor,
 	})
-}
-
-func init() {
-	command.RegisterCommand(
-		&MaintenanceCommand{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
 }

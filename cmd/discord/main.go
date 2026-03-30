@@ -10,11 +10,10 @@ import (
 	"time"
 
 	"github.com/keshon/buildinfo"
-	_ "github.com/keshon/melodix/internal/command/core"
-
+	appmusic "github.com/keshon/melodix/internal/app/music"
 	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/command/core"
 	"github.com/keshon/melodix/internal/command/music"
-
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
@@ -37,15 +36,46 @@ func main() {
 		log.Fatal("DISCORD_TOKEN is required for the Discord bot")
 	}
 
-	store, err := storage.New(cfg.StoragePath)
+	store, err := storage.New(cfg.StoragePath, cfg.MusicPlaybackHistoryLimit)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer store.Close()
 
 	bot := discord.NewBot(cfg, store)
+
 	command.RegisterCommand(
-		&music.MusicCommand{Bot: bot},
+		&core.AboutCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+	command.RegisterCommand(
+		&core.HelpUnifiedCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+	command.RegisterCommand(
+		&core.CommandsCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+	command.RegisterCommand(
+		&core.MaintenanceCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
+	musicSvc := appmusic.NewService(bot, bot)
+	command.RegisterCommand(
+		&music.MusicCommand{Bot: bot, App: musicSvc},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),

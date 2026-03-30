@@ -1,11 +1,13 @@
 package sources
 
+import "context"
+
 type Source interface {
 	// Match checks if this source can handle the given input
 	Match(input string) bool
 
 	// Resolve turns an input into one or more playable tracks
-	Resolve(input string, selectedParser string) ([]TrackInfo, error)
+	Resolve(ctx context.Context, input string, selectedParser string) ([]TrackInfo, error)
 
 	// Type returns the string identifier ("youtube", "radio", etc.)
 	SourceName() string

@@ -1,11 +1,11 @@
 # Docker Deployment
 
-The deployment uses Docker Compose. The build expects the project source either to be cloned into `./src` by the script or to be present in `./src` when building locally.
+The image is built with the **repository root** as the Docker build context (same layout as local development: `go.mod`, `cmd/`, `internal/`, `pkg/` at the top level).
 
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- Git (if using the script to clone the repo)
+- Git (optional; only if you use the clone step in `build-n-deploy.sh`)
 - A Discord bot token from the [Discord Developer Portal](https://discord.com/developers/applications)
 - **External network:** The Compose file uses a `proxy` network. Create it if it does not exist:
 
@@ -15,30 +15,40 @@ The deployment uses Docker Compose. The build expects the project source either 
 
 ## Configuration
 
-Copy `.env.example` to `.env` in this directory and set at least:
+Copy `docker/.env.example` to `docker/.env` (or `.env` at the repo root) and set at least:
 
 - `DISCORD_TOKEN` — your bot token (required)
 - `ALIAS` — container name and image tag (e.g. `melodix`)
-- `GIT` / `GIT_URL` — set `GIT=true` to clone the repo into `./src`; set `GIT=false` to use an existing `./src` directory
+- `GIT` / `GIT_URL` — set `GIT=false` to skip cloning; the default build uses the **current checkout** at the repo root
 
-Other variables (e.g. `STORAGE_PATH`, `INIT_SLASH_COMMANDS`, `DEVELOPER_ID`, `DISCORD_GUILD_BLACKLIST`, `VOICE_READY_DELAY_MS`) are optional and match the main app config.
+Other variables (e.g. `STORAGE_PATH`, `INIT_SLASH_COMMANDS`, `DEVELOPER_ID`, `DISCORD_GUILD_BLACKLIST`, `VOICE_READY_DELAY_MS`, `MUSIC_PLAYBACK_HISTORY_LIMIT`) are optional and match the main app config.
+
+## Build manually (from repo root)
+
+```bash
+docker build -f docker/Dockerfile -t melodix-image .
+```
 
 ## Deployment
 
-**Option 1 — Build and deploy (recommended)**  
-From this directory (`docker/`), run:
+**Option 1 — Build and deploy (script)**  
+From the **repository root**:
 
 ```bash
-./build-n-deploy.sh
+./docker/build-n-deploy.sh
 ```
 
-This loads `.env`, clones the repo into `./src` (or uses existing `./src`), builds the image, and starts the container.
+The script loads `docker/.env` or `.env`, optionally clones into `./src` when `GIT=true`, builds with `-f docker/Dockerfile` from the repo root, and starts Compose.
 
 **Option 2 — Compose only**  
 If the image is already built:
 
 ```bash
-docker compose -f docker-compose.yml up -d
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-Data is persisted in `./data` (mounted at `/usr/project/data` in the container).
+Data is persisted in `./data` at the repo root when Compose is run from the root (mounted at `/usr/project/data` in the container).
+
+## Legacy `src/` layout
+
+Older setups expected sources under `./src` inside `docker/`. That is no longer required: the Dockerfile copies the whole tree from the build context. You can still set `GIT=true` to clone into `./src` for other workflows; the Docker build does not depend on `./src` when building from the repo root.

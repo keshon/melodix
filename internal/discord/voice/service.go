@@ -1,12 +1,15 @@
 package voice
 
 import (
+	"context"
 	"log"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/domain"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
@@ -22,13 +25,14 @@ type guildMusicStatus struct {
 // Service provides voice/music for a Discord bot: players, sink providers, resolver, and guild music status.
 // It is pluggable: a bot without voice can omit it.
 type Service struct {
-	getSession   SessionGetter
 	cfg          *config.Config
-	store        *storage.Storage
-	mu           sync.RWMutex
-	players      map[string]*player.Player
+	getSession    SessionGetter
+	cfg           *config.Config
+	store         *storage.Storage
+	mu            sync.RWMutex
+	players       map[string]*player.Player
 	sinkProviders map[string]*DiscordSinkProvider
-	resolver     *resolver.SourceResolver
+	resolver      *resolver.SourceResolver
 
 	guildMusicStatus   map[string]guildMusicStatus
 	guildMusicStatusMu sync.RWMutex
@@ -47,14 +51,21 @@ func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage) *
 }
 
 type playbackRecorder struct {
-	store *storage.Storage
+	repo domain.MusicHistoryRepository
 }
 
 func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parsers.TrackParse) {
-	if r.store == nil {
+	if r.repo == nil {
 		return
 	}
-	if _, err := r.store.AppendMusicPlayback(guildID, track, playedAt); err != nil {
+	rec := domain.MusicPlaybackAppend{
+		URL:              track.URL,
+		Title:            track.Title,
+		CurrentParser:    track.CurrentParser,
+		AvailableParsers: slices.Clone(track.SourceInfo.AvailableParsers),
+		SourceName:       track.SourceInfo.SourceName,
+	}
+	if _, err := r.repo.AppendMusicPlayback(guildID, playedAt, rec); err != nil {
 		log.Printf("[music] append playback history: %v", err)
 	}
 }
@@ -70,7 +81,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	if p, ok := s.players[guildID]; ok {
 		p.SetGuildID(guildID)
 		if s.store != nil {
-			p.SetRecorder(playbackRecorder{store: s.store})
+			p.SetRecorder(playbackRecorder{repo: s.store})
 		}
 		return p
 	}
@@ -86,21 +97,21 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	p := player.New(provider, s.resolver)
 	p.SetGuildID(guildID)
 	if s.store != nil {
-		p.SetRecorder(playbackRecorder{store: s.store})
+		p.SetRecorder(playbackRecorder{repo: s.store})
 	}
 	s.players[guildID] = p
 	return p
 }
 
 // Resolve resolves input to tracks using the service's shared resolver.
-func (s *Service) Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
+func (s *Service) Resolve(ctx context.Context, input, source, parser string) ([]sources.TrackInfo, error) {
 	s.mu.Lock()
 	if s.resolver == nil {
 		s.resolver = resolver.New()
 	}
 	r := s.resolver
 	s.mu.Unlock()
-	return r.Resolve(input, source, parser)
+	return r.Resolve(ctx, input, source, parser)
 }
 
 // UpdateGuildMusicStatus creates or edits the guild's music status message.

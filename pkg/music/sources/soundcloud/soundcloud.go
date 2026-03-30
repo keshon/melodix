@@ -1,6 +1,7 @@
 package soundcloud
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -24,7 +25,7 @@ func (s *SoundCloudSource) Match(input string) bool {
 	return strings.Contains(input, "soundcloud.com") || !strings.HasPrefix(input, "http")
 }
 
-func (s *SoundCloudSource) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
+func (s *SoundCloudSource) Resolve(ctx context.Context, input string, selectedParser string) ([]source.TrackInfo, error) {
 	parsers := s.AvailableParsers()
 
 	if selectedParser == "" {
@@ -53,7 +54,7 @@ func (s *SoundCloudSource) Resolve(input string, selectedParser string) ([]sourc
 	}
 
 	// otherwise, search by title
-	trackURL, err := s.resolver.SearchFirstTrackURL(input)
+	trackURL, err := s.resolver.SearchFirstTrackURL(ctx, input)
 	if err != nil {
 		return nil, err
 	}

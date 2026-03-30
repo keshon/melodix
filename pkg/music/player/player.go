@@ -2,6 +2,7 @@
 package player
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -51,7 +52,7 @@ var (
 // Resolver resolves input (URL or search query) to track info. The player uses this to enqueue tracks.
 // Implementations can be the default resolver (pkg/music/resolver) or a mock/custom resolver.
 type Resolver interface {
-	Resolve(input, source, parser string) ([]sources.TrackInfo, error)
+	Resolve(ctx context.Context, input, source, parser string) ([]sources.TrackInfo, error)
 }
 
 // PlaybackRecorder is called after a track successfully starts (after Open), e.g. to persist guild playback history.
@@ -124,9 +125,9 @@ func (p *Player) SetRecorder(r PlaybackRecorder) {
 }
 
 // Enqueue adds tracks to the queue
-func (p *Player) Enqueue(input string, source string, parser string) error {
+func (p *Player) Enqueue(ctx context.Context, input string, source string, parser string) error {
 	log.Printf("[Player] Enqueue called | input=%q source=%q parser=%q", input, source, parser)
-	tracksInfo, err := p.resolver.Resolve(input, source, parser)
+	tracksInfo, err := p.resolver.Resolve(ctx, input, source, parser)
 	if err != nil {
 		log.Printf("[Player] Failed to resolve tracks: %v", err)
 		p.emitStatus(StatusError)
@@ -276,7 +277,8 @@ func (p *Player) Stop(disconnect bool) error {
 	return nil
 }
 
-// Pause pauses playback. Note: Not wired to actual streaming — only sets playing=false and emits StatusPaused.
+// Pause pauses playback. Not wired to the PCM/opus pipeline: streaming continues until Stop/Skip.
+// Exposed for API completeness; do not surface in UX until implemented.
 func (p *Player) Pause() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -12,6 +12,7 @@ services:
       - INIT_SLASH_COMMANDS=${INIT_SLASH_COMMANDS}
       - DEVELOPER_ID=${DEVELOPER_ID}
       - VOICE_READY_DELAY_MS=${VOICE_READY_DELAY_MS:-500}
+      - MUSIC_PLAYBACK_HISTORY_LIMIT=${MUSIC_PLAYBACK_HISTORY_LIMIT:-750}
     entrypoint: ["/usr/project/app"]
     networks:
       - proxy

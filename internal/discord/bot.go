@@ -1,3 +1,4 @@
+// FILE: melodix/internal/discord/bot.go
 package discord
 
 import (
@@ -12,6 +13,8 @@ import (
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/command_logger"
+	"github.com/keshon/melodix/internal/discord/command_manager"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
@@ -19,14 +22,21 @@ import (
 
 // Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired in run.
 type Bot struct {
-	dg        *discordgo.Session
-	storage   *storage.Storage
-	slashCmds map[string][]*discordgo.ApplicationCommand
-	cfg       *config.Config
-	mu        sync.RWMutex
-	voice     *voice.Service
+	cfg     *config.Config
+	storage *storage.Storage
 
-	// once ensures one-time background services (purge, shortlink) are not
+	mu    sync.RWMutex
+	dg    *discordgo.Session
+	voice *voice.Service
+
+	cmdManager *command_manager.Manager
+	cmdLogger  *command_logger.CommandLogger // recreated each session alongside dg
+
+	// invokeCtx is cancelled when the Discord session ends. Passed to slash
+	// commands so long-running handlers can respect shutdown.
+	invokeCtx context.Context
+
+	// once ensures one-time background services (readme, purge, …) are not
 	// re-launched on subsequent reconnects.
 	once sync.Once
 }
@@ -34,14 +44,13 @@ type Bot struct {
 // NewBot creates a Bot. Register any bot-dependent commands before calling Run.
 func NewBot(cfg *config.Config, storage *storage.Storage) *Bot {
 	return &Bot{
-		cfg:       cfg,
-		storage:   storage,
-		slashCmds: make(map[string][]*discordgo.ApplicationCommand),
+		cfg:     cfg,
+		storage: storage,
 	}
 }
 
 // StartBot is a convenience constructor + runner.
-// Use NewBot + Run directly when you need to register bot-dependent commands first.
+// Use NewBot + Run directly when you need to register commands before starting.
 func StartBot(ctx context.Context, cfg *config.Config, storage *storage.Storage) error {
 	return NewBot(cfg, storage).Run(ctx)
 }
@@ -68,9 +77,11 @@ func (b *Bot) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	// So voice connection inherits LogInformational and we see OP2/OP4/DAVE handshake in logs.
 	dg.LogLevel = discordgo.LogInformational
 
+	// All session-scoped services are recreated here so they always hold a
+	// reference to the current *discordgo.Session, not a stale one from a
+	// previous connect cycle.
 	b.mu.Lock()
 	b.dg = dg
 	b.voice = voice.New(func() *discordgo.Session {
@@ -79,10 +90,19 @@ func (b *Bot) run(ctx context.Context) error {
 		b.mu.RUnlock()
 		return s
 	}, b.cfg, b.storage)
+
+	b.cmdLogger = command_logger.NewCommandLogger(dg, b.storage)
+	b.cmdManager = command_manager.NewManager(dg, b.storage, commandkit.DefaultRegistry)
+
 	b.mu.Unlock()
 
-	// disconnected is closed once — multiple concurrent signals (our handler + discordgo
-	// internal reconnect attempts) collapse into a single restart.
+	sessionCtx, cancelSession := context.WithCancel(ctx)
+	defer cancelSession()
+
+	b.mu.Lock()
+	b.invokeCtx = sessionCtx
+	b.mu.Unlock()
+
 	disconnected := make(chan struct{})
 	var disconnectOnce sync.Once
 	notifyDisconnect := func() {
@@ -93,9 +113,6 @@ func (b *Bot) run(ctx context.Context) error {
 	}
 
 	dg.AddHandler(func(_ *discordgo.Session, _ *discordgo.Disconnect) {
-		// Ignore disconnects caused by intentional shutdown (dg.Close in our
-		// defer) so the auto-recovery loop doesn't log a misleading restart
-		// message or race with the ctx.Done cleanup path.
 		select {
 		case <-ctx.Done():
 			return
@@ -119,71 +136,8 @@ func (b *Bot) run(ctx context.Context) error {
 		dg.Close()
 	}()
 
-	sessionCtx, cancelSession := context.WithCancel(ctx)
-	defer cancelSession()
-
-	// Forward system events (e.g. command refresh) to the handler.
-	go func() {
-		for {
-			select {
-			case <-sessionCtx.Done():
-				return
-			case evt, ok := <-SystemEvents():
-				if !ok {
-					return
-				}
-				if evt.Type == SystemEventRefreshCommands {
-					go b.handleRefreshCommands(evt)
-				}
-			}
-		}
-	}()
-
-	// Connection health monitor: active API probe every 30s.
-	// HeartbeatLatency alone is unreliable after system sleep — the TCP connection
-	// may appear alive while Discord is actually unreachable.
-	go func() {
-		select {
-		case <-sessionCtx.Done():
-			return
-		case <-time.After(15 * time.Second): // let the session settle first
-		}
-
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		fails := 0
-
-		for {
-			select {
-			case <-sessionCtx.Done():
-				return
-			case <-ticker.C:
-				// Negative latency is normal during discordgo's internal reconnect cycle —
-				// it resets the heartbeat timer and the next ACK appears to arrive "before"
-				// the send. Skip the probe this tick and let discordgo handle it.
-				lat := dg.HeartbeatLatency()
-				if lat < 0 {
-					log.Printf("[DEBUG] Heartbeat latency negative (%v), skipping probe this tick", lat)
-					continue
-				}
-				if _, err := dg.User("@me"); err != nil {
-					fails++
-					log.Printf("[WARN] API probe failed (%d/3): %v", fails, err)
-					if fails >= 3 {
-						log.Println("[WARN] 3 consecutive API probe failures — reconnecting")
-						notifyDisconnect()
-						return
-					}
-				} else {
-					if fails > 0 {
-						log.Printf("[INFO] API probe recovered after %d failure(s)", fails)
-					}
-					fails = 0
-					log.Printf("[DEBUG] Heartbeat latency: %v", lat)
-				}
-			}
-		}
-	}()
+	go b.forwardSystemEvents(sessionCtx)
+	go b.monitorConnection(sessionCtx, dg, notifyDisconnect)
 
 	select {
 	case <-ctx.Done():
@@ -195,17 +149,63 @@ func (b *Bot) run(ctx context.Context) error {
 	}
 }
 
-// stopAllPlayers stops playback and disconnects voice for all guilds. Call on shutdown.
-func (b *Bot) stopAllPlayers() {
-	if b.voice != nil {
-		b.voice.StopAllPlayers()
+// --- Background goroutines ---
+
+// forwardSystemEvents listens for bot-level system events and routes them to the right handler.
+func (b *Bot) forwardSystemEvents(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case evt, ok := <-SystemEvents():
+			if !ok {
+				return
+			}
+			if evt.Type == SystemEventRefreshCommands {
+				go b.cmdManager.RefreshAll()
+			}
+		}
 	}
-	log.Println("[INFO] All players stopped")
 }
 
-func (b *Bot) configureIntents() {
-	b.dg.Identify.Intents = discordgo.IntentsAll
+// monitorConnection probes the Discord API periodically and triggers a reconnect
+// after 3 consecutive failures.
+func (b *Bot) monitorConnection(ctx context.Context, dg *discordgo.Session, notifyDisconnect func()) {
+	// Give the connection time to stabilise before starting health checks.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(15 * time.Second):
+	}
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	fails := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if dg.HeartbeatLatency() < 0 {
+				continue
+			}
+			if _, err := dg.User("@me"); err != nil {
+				fails++
+				log.Printf("[WARN] API probe failed (%d/3): %v", fails, err)
+				if fails >= 3 {
+					log.Println("[WARN] 3 consecutive API probe failures — reconnecting")
+					notifyDisconnect()
+					return
+				}
+			} else {
+				fails = 0
+			}
+		}
+	}
 }
+
+// --- Discord event handlers ---
 
 // onReady fires on every successful connect/reconnect.
 func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
@@ -224,16 +224,12 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 			continue
 		}
 		if b.cfg.InitSlashCommands {
-			if err := b.registerCommands(g.ID); err != nil {
-				log.Printf("[ERR] Error registering slash commands for guild %s: %v", g.ID, err)
+			if err := b.cmdManager.RegisterCommands(g.ID); err != nil {
+				log.Printf("[ERR] Error registering commands for guild %s: %v", g.ID, err)
 			}
 		}
 	}
-	if b.cfg.InitSlashCommands {
-		b.deleteObsoleteGlobalCommands()
-	}
 
-	// Background services start once across all reconnects.
 	b.once.Do(func() {
 		log.Println("[INFO] Starting background services...")
 		if err := readme.UpdateReadme(commandkit.DefaultRegistry, config.CategoryWeights); err != nil {
@@ -255,7 +251,7 @@ func (b *Bot) onGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
 		return
 	}
 	if b.cfg.InitSlashCommands {
-		if err := b.registerCommands(g.Guild.ID); err != nil {
+		if err := b.cmdManager.RegisterCommands(g.Guild.ID); err != nil {
 			log.Printf("[ERR] Failed to register commands for guild %s: %v", g.Guild.ID, err)
 		}
 	}
@@ -266,6 +262,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
+
 	mentioned := false
 	for _, u := range m.Mentions {
 		if u.ID == s.State.User.ID {
@@ -277,7 +274,9 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	inv := &commandkit.Invocation{Data: &command.MessageContext{Session: s, Event: m, Storage: b.storage, Config: b.cfg}}
+	inv := &commandkit.Invocation{Data: &command.MessageContext{
+		Session: s, Event: m, Storage: b.storage, Config: b.cfg,
+	}}
 	for _, c := range commandkit.DefaultRegistry.GetAll() {
 		if err := c.Run(context.Background(), inv); err != nil {
 			log.Println("[ERR] Error running message command:", err)
@@ -290,8 +289,12 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 // onMessageReactionAdd handles reaction events for commands that use reactions.
 func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	b.mu.RLock()
+	logger := b.cmdLogger
+	b.mu.RUnlock()
+
 	inv := &commandkit.Invocation{Data: &command.MessageReactionContext{
-		Session: s, Event: r, Storage: b.storage, Config: b.cfg, Logger: DefaultLogger,
+		Session: s, Event: r, Storage: b.storage, Config: b.cfg, Logger: logger,
 	}}
 	for _, c := range commandkit.DefaultRegistry.GetAll() {
 		if _, ok := commandkit.Root(c).(command.ReactionProvider); !ok {
@@ -326,17 +329,36 @@ func (b *Bot) handleApplicationCommand(s *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
+	b.mu.RLock()
+	cmdCtx := b.invokeCtx
+	logger := b.cmdLogger
+	b.mu.RUnlock()
+
+	if cmdCtx == nil {
+		cmdCtx = context.Background()
+	}
+
 	var inv *commandkit.Invocation
 	switch i.ApplicationCommandData().CommandType {
 	case discordgo.MessageApplicationCommand:
 		inv = &commandkit.Invocation{Data: &command.MessageApplicationCommandContext{
-			Session: s, Event: i, Storage: b.storage, Target: i.Message,
-			Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
+			Session:   s,
+			Event:     i,
+			Storage:   b.storage,
+			Target:    i.Message,
+			Config:    b.cfg,
+			Responder: DefaultResponder,
+			Logger:    logger,
 		}}
 	case discordgo.ChatApplicationCommand:
 		inv = &commandkit.Invocation{Data: &command.SlashInteractionContext{
-			Session: s, Event: i, Storage: b.storage,
-			Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
+			Ctx:       cmdCtx,
+			Session:   s,
+			Event:     i,
+			Storage:   b.storage,
+			Config:    b.cfg,
+			Responder: DefaultResponder,
+			Logger:    logger,
 		}}
 	default:
 		return
@@ -372,9 +394,17 @@ func (b *Bot) handleComponentInteraction(s *discordgo.Session, i *discordgo.Inte
 		return
 	}
 
+	b.mu.RLock()
+	logger := b.cmdLogger
+	b.mu.RUnlock()
+
 	err := handler.Component(&command.ComponentInteractionContext{
-		Session: s, Event: i, Storage: b.storage,
-		Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
+		Session:   s,
+		Event:     i,
+		Storage:   b.storage,
+		Config:    b.cfg,
+		Responder: DefaultResponder,
+		Logger:    logger,
 	})
 	if err != nil {
 		log.Printf("[ERR] Error in component handler %s: %v", matched.Name(), err)
@@ -383,6 +413,8 @@ func (b *Bot) handleComponentInteraction(s *discordgo.Session, i *discordgo.Inte
 		})
 	}
 }
+
+// --- Utility ---
 
 // matchesComponentID reports whether a component customID belongs to a command.
 // CustomIDs follow the convention "commandName", "commandName:...", or "commandName_...".
@@ -397,6 +429,20 @@ func matchesComponentID(customID, commandName string) bool {
 	return false
 }
 
+// isGuildBlacklisted reports whether a guild is on the blacklist.
 func (b *Bot) isGuildBlacklisted(guildID string) bool {
 	return slices.Contains(b.cfg.DiscordGuildBlacklist, guildID)
+}
+
+// stopAllPlayers stops playback and disconnects voice in all guilds. Call on shutdown.
+func (b *Bot) stopAllPlayers() {
+	if b.voice != nil {
+		b.voice.StopAllPlayers()
+	}
+	log.Println("[INFO] All players stopped")
+}
+
+// configureIntents sets the gateway intents for the session.
+func (b *Bot) configureIntents() {
+	b.dg.Identify.Intents = discordgo.IntentsAll
 }

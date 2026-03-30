@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,10 +31,14 @@ func NewYouTubeResolver() *YouTubeResolver {
 	}
 }
 
-func (r *YouTubeResolver) SearchFirstVideoURL(query string) (string, error) {
+func (r *YouTubeResolver) SearchFirstVideoURL(ctx context.Context, query string) (string, error) {
 	searchURL := fmt.Sprintf("%s/results?search_query=%s", r.BaseURL, url.QueryEscape(query))
 
-	resp, err := r.Client.Get(searchURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := r.Client.Do(req)
 	if err != nil {
 		return "", err
 	}

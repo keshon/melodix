@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -24,7 +25,7 @@ func (y *YouTubeSource) Match(input string) bool {
 	return isYouTubeURL(input)
 }
 
-func (y *YouTubeSource) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
+func (y *YouTubeSource) Resolve(ctx context.Context, input string, selectedParser string) ([]source.TrackInfo, error) {
 	parsers := y.AvailableParsers()
 
 	if selectedParser == "" {
@@ -58,7 +59,7 @@ func (y *YouTubeSource) Resolve(input string, selectedParser string) ([]source.T
 	}
 
 	// by title
-	videoURL, err := y.resolver.SearchFirstVideoURL(input)
+	videoURL, err := y.resolver.SearchFirstVideoURL(ctx, input)
 	if err != nil {
 		return nil, errors.New("could not find YouTube video for query")
 	}

@@ -98,7 +98,7 @@ func main() {
 			if len(args) > 2 {
 				parser = args[2]
 			}
-			if err := p.Enqueue(input, source, parser); err != nil {
+			if err := p.Enqueue(ctx, input, source, parser); err != nil {
 				fmt.Println("Error:", err)
 				continue
 			}

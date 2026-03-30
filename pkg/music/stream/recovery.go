@@ -48,6 +48,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		}
 
 		rs.parserIndex = i
+		rs.track.CurrentParser = parser
 		rs.stream = stream
 		rs.cleanup = cleanup
 		rs.seekSec = seek
@@ -84,6 +85,9 @@ func (rs *RecoveryStream) Read(p []byte) (int, error) {
 // shouldRecover decides if we need to attempt recovery
 func (rs *RecoveryStream) shouldRecover() bool {
 	parser := rs.track.CurrentParser
+	if rs.stream != nil && rs.stream.Parser != "" {
+		parser = rs.stream.Parser
+	}
 
 	// Already exceeded max attempts
 	if rs.retries[parser] >= maxRecoveryAttempts {
@@ -117,6 +121,9 @@ func (rs *RecoveryStream) shouldRecover() bool {
 // reopen cleans up the current stream and opens a new one at the current seek position.
 func (rs *RecoveryStream) reopen() error {
 	parser := rs.track.CurrentParser
+	if rs.stream != nil && rs.stream.Parser != "" {
+		parser = rs.stream.Parser
+	}
 	rs.retries[parser]++
 	log.Printf("[RecoveryStream] Recovering stream for parser %s (attempt %d)...", parser, rs.retries[parser])
 
