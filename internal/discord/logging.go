@@ -6,7 +6,7 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/discord/command"
 )
 
 // cmdLogger implements command.CommandLogger so middleware can log without importing discord.

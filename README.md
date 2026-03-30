@@ -80,7 +80,7 @@ Each archive contains:
 
 <!-- generated -->
 
-### 🕯️ Information
+### 🎯 Information
 
 - **/about** — Discover the origin of this bot
 - **/help** — Get a list of available commands

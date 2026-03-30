@@ -10,8 +10,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/command"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
@@ -187,7 +187,7 @@ func (b *Bot) run(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		log.Println("[INFO] ❎ Shutdown signal received. Cleaning up...")
+		log.Println("[INFO]  Shutdown signal received. Cleaning up...")
 		b.stopAllPlayers()
 		return nil
 	case <-disconnected:
@@ -241,7 +241,7 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 		}
 	})
 
-	log.Printf("[INFO] ✅ Discord bot %v is ready.", botInfo.Username)
+	log.Printf("[INFO] Discord bot %v is ready.", botInfo.Username)
 }
 
 // onGuildCreate fires when the bot joins a new guild.

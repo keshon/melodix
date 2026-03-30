@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/discord/command"
 
 	"github.com/bwmarrin/discordgo"
 )

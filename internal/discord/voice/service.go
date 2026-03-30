@@ -6,6 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/playhistory"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolver"
@@ -55,7 +56,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	if p, ok := s.players[guildID]; ok {
 		p.SetGuildID(guildID)
 		if s.store != nil {
-			p.SetRecorder(s.store.NewPlaybackRecorder())
+			p.SetRecorder(playhistory.NewRecorder(s.store))
 		}
 		return p
 	}
@@ -71,7 +72,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	p := player.New(provider, s.resolver)
 	p.SetGuildID(guildID)
 	if s.store != nil {
-		p.SetRecorder(s.store.NewPlaybackRecorder())
+		p.SetRecorder(playhistory.NewRecorder(s.store))
 	}
 	s.players[guildID] = p
 	return p

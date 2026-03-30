@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/keshon/buildinfo"
-	_ "github.com/keshon/melodix/internal/command/core"
+	_ "github.com/keshon/melodix/internal/discord/command/core"
 
-	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/command/music"
+	"github.com/keshon/melodix/internal/discord/command"
+	"github.com/keshon/melodix/internal/discord/command/music"
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
