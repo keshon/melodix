@@ -25,7 +25,6 @@ type guildMusicStatus struct {
 // Service provides voice/music for a Discord bot: players, sink providers, resolver, and guild music status.
 // It is pluggable: a bot without voice can omit it.
 type Service struct {
-	cfg          *config.Config
 	getSession    SessionGetter
 	cfg           *config.Config
 	store         *storage.Storage
