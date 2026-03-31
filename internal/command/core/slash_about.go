@@ -8,7 +8,6 @@ import (
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/middleware"
 )
 
 type AboutCommand struct{}
@@ -76,14 +75,4 @@ func (c *AboutCommand) Run(ctx interface{}) error {
 	discord.RespondEmbedEphemeral(session, event, embed)
 
 	return nil
-}
-
-func init() {
-	command.RegisterCommand(
-		&AboutCommand{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
 }

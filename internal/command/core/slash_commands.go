@@ -9,7 +9,6 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/storage"
 
 	"github.com/bwmarrin/discordgo"
@@ -292,14 +291,4 @@ func getUniqueGroups() []string {
 	}
 	sort.Strings(result)
 	return result
-}
-
-func init() {
-	command.RegisterCommand(
-		&CommandsCommand{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
 }

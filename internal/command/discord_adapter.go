@@ -19,8 +19,10 @@ type Responder interface {
 }
 
 // CommandLogger logs command execution (avoids discord import in middleware).
+// session and storage are injected at construction time — callers only supply
+// the per-invocation identifiers.
 type CommandLogger interface {
-	LogCommand(s *discordgo.Session, store *storage.Storage, guildID, channelID, userID, username, commandName string) error
+	LogCommand(guildID, channelID, userID, username, commandName string) error
 }
 
 // Discord-specific contexts (what the runtime passes when executing).

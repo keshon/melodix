@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/keshon/buildinfo"
+	"github.com/keshon/melodix/internal/command/core"
 	_ "github.com/keshon/melodix/internal/command/core"
 
 	"github.com/keshon/melodix/internal/command"
@@ -23,12 +24,9 @@ import (
 
 func main() {
 	info := buildinfo.Get()
-
 	log.Printf("[INFO] Starting %v bot...", info.Project)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	// Load config
 	cfg, err := config.New()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -37,13 +35,87 @@ func main() {
 		log.Fatal("DISCORD_TOKEN is required for the Discord bot")
 	}
 
+	// Initialize storage
 	store, err := storage.New(cfg.StoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer store.Close()
 
+	// Create bot instance
 	bot := discord.NewBot(cfg, store)
+
+	// Register commands before starting the session
+	registerCommands(bot)
+
+	// Context for shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start Discord session with auto-reconnect loop
+	go func() {
+		for {
+			if err := bot.RunSession(ctx); err != nil {
+				log.Println("[ERR] Discord session ended:", err)
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				log.Println("[WARN] Restarting session in 5s...")
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}()
+
+	// Handle OS signals
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	<-sig
+	log.Println("[INFO] Shutdown signal received, stopping bot...")
+	cancel()
+
+	// Give goroutines time to clean up
+	time.Sleep(1 * time.Second)
+	log.Println("[INFO] Discord bot exited cleanly")
+}
+
+// registerCommands registers all commands with middleware
+func registerCommands(bot *discord.Bot) {
+	command.RegisterCommand(
+		&core.CommandsCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
+	command.RegisterCommand(
+		&core.AboutCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
+	command.RegisterCommand(
+		&core.HelpUnifiedCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
+	command.RegisterCommand(
+		&core.MaintenanceCommand{},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
 	command.RegisterCommand(
 		&music.MusicCommand{Bot: bot},
 		middleware.WithGroupAccessCheck(),
@@ -51,39 +123,4 @@ func main() {
 		middleware.WithUserPermissionCheck(),
 		middleware.WithCommandLogger(),
 	)
-
-	errCh := make(chan error, 1)
-	go func() {
-		if err := bot.Run(ctx); err != nil {
-			errCh <- err
-		}
-		close(errCh)
-	}()
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case s := <-sig:
-		log.Printf("[INFO] Received signal %s, shutting down...\n", s)
-		cancel()
-	case err := <-errCh:
-		if err != nil {
-			log.Println("[ERR] Discord bot error:", err)
-		}
-		cancel()
-	case <-ctx.Done():
-	}
-
-	// Force-exit if cleanup takes too long (e.g. blocked voice disconnect,
-	// storage close, or lingering goroutines).
-	go func() {
-		time.Sleep(1 * time.Second)
-		log.Println("[WARN] Cleanup timed out, forcing exit")
-		os.Exit(1)
-	}()
-
-	// Wait for the bot goroutine to exit so defer dg.Close() and cleanup run before process exit.
-	<-errCh
-	log.Println("[INFO] Discord bot exited cleanly")
 }

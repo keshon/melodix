@@ -12,6 +12,8 @@ import (
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/command_logger"
+	"github.com/keshon/melodix/internal/discord/command_manager"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
@@ -25,6 +27,9 @@ type Bot struct {
 	cfg       *config.Config
 	mu        sync.RWMutex
 	voice     *voice.Service
+
+	cmdManager *command_manager.Manager
+	cmdLogger  *command_logger.CommandLogger
 
 	// once ensures one-time background services (purge, shortlink) are not
 	// re-launched on subsequent reconnects.
@@ -40,30 +45,8 @@ func NewBot(cfg *config.Config, storage *storage.Storage) *Bot {
 	}
 }
 
-// StartBot is a convenience constructor + runner.
-// Use NewBot + Run directly when you need to register bot-dependent commands first.
-func StartBot(ctx context.Context, cfg *config.Config, storage *storage.Storage) error {
-	return NewBot(cfg, storage).Run(ctx)
-}
-
-// Run starts the bot, restarting the session on disconnect until ctx is cancelled.
-func (b *Bot) Run(ctx context.Context) error {
-	for {
-		if err := b.run(ctx); err != nil {
-			log.Println("[ERR] Bot session ended:", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			log.Println("[WARN] Restarting Discord session in 5 seconds...")
-			time.Sleep(5 * time.Second)
-		}
-	}
-}
-
-// run opens one Discord session and blocks until ctx is cancelled or the connection is lost.
-func (b *Bot) run(ctx context.Context) error {
+// RunSession opens one Discord session and blocks until ctx is cancelled or the connection is lost.
+func (b *Bot) RunSession(ctx context.Context) error {
 	dg, err := discordgo.New("Bot " + b.cfg.DiscordToken)
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
@@ -79,6 +62,10 @@ func (b *Bot) run(ctx context.Context) error {
 		b.mu.RUnlock()
 		return s
 	}, b.cfg, b.storage)
+
+	b.cmdLogger = command_logger.NewCommandLogger(dg, b.storage)
+	b.cmdManager = command_manager.NewManager(dg, b.storage, commandkit.DefaultRegistry)
+
 	b.mu.Unlock()
 
 	// disconnected is closed once — multiple concurrent signals (our handler + discordgo
@@ -133,7 +120,7 @@ func (b *Bot) run(ctx context.Context) error {
 					return
 				}
 				if evt.Type == SystemEventRefreshCommands {
-					go b.handleRefreshCommands(evt)
+					go b.cmdManager.RefreshAll()
 				}
 			}
 		}
@@ -224,13 +211,10 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 			continue
 		}
 		if b.cfg.InitSlashCommands {
-			if err := b.registerCommands(g.ID); err != nil {
+			if err := b.cmdManager.RegisterCommands(g.ID); err != nil {
 				log.Printf("[ERR] Error registering slash commands for guild %s: %v", g.ID, err)
 			}
 		}
-	}
-	if b.cfg.InitSlashCommands {
-		b.deleteObsoleteGlobalCommands()
 	}
 
 	// Background services start once across all reconnects.
@@ -255,7 +239,7 @@ func (b *Bot) onGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
 		return
 	}
 	if b.cfg.InitSlashCommands {
-		if err := b.registerCommands(g.Guild.ID); err != nil {
+		if err := b.cmdManager.RegisterCommands(g.Guild.ID); err != nil {
 			log.Printf("[ERR] Failed to register commands for guild %s: %v", g.Guild.ID, err)
 		}
 	}
@@ -290,8 +274,12 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 // onMessageReactionAdd handles reaction events for commands that use reactions.
 func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	b.mu.RLock()
+	logger := b.cmdLogger
+	b.mu.RUnlock()
+
 	inv := &commandkit.Invocation{Data: &command.MessageReactionContext{
-		Session: s, Event: r, Storage: b.storage, Config: b.cfg, Logger: DefaultLogger,
+		Session: s, Event: r, Storage: b.storage, Config: b.cfg, Logger: logger,
 	}}
 	for _, c := range commandkit.DefaultRegistry.GetAll() {
 		if _, ok := commandkit.Root(c).(command.ReactionProvider); !ok {
@@ -326,17 +314,21 @@ func (b *Bot) handleApplicationCommand(s *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
+	b.mu.RLock()
+	logger := b.cmdLogger
+	b.mu.RUnlock()
+
 	var inv *commandkit.Invocation
 	switch i.ApplicationCommandData().CommandType {
 	case discordgo.MessageApplicationCommand:
 		inv = &commandkit.Invocation{Data: &command.MessageApplicationCommandContext{
 			Session: s, Event: i, Storage: b.storage, Target: i.Message,
-			Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
+			Config: b.cfg, Responder: DefaultResponder, Logger: logger,
 		}}
 	case discordgo.ChatApplicationCommand:
 		inv = &commandkit.Invocation{Data: &command.SlashInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
-			Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
+			Config: b.cfg, Responder: DefaultResponder, Logger: logger,
 		}}
 	default:
 		return
@@ -372,9 +364,13 @@ func (b *Bot) handleComponentInteraction(s *discordgo.Session, i *discordgo.Inte
 		return
 	}
 
+	b.mu.RLock()
+	logger := b.cmdLogger
+	b.mu.RUnlock()
+
 	err := handler.Component(&command.ComponentInteractionContext{
 		Session: s, Event: i, Storage: b.storage,
-		Config: b.cfg, Responder: DefaultResponder, Logger: DefaultLogger,
+		Config: b.cfg, Responder: DefaultResponder, Logger: logger,
 	})
 	if err != nil {
 		log.Printf("[ERR] Error in component handler %s: %v", matched.Name(), err)

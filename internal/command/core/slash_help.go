@@ -11,7 +11,6 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/middleware"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -177,14 +176,4 @@ func buildHelpFlat() string {
 		sb.WriteString(fmt.Sprintf("`%s` - %s\n", c.Name(), c.Description()))
 	}
 	return sb.String()
-}
-
-func init() {
-	command.RegisterCommand(
-		&HelpUnifiedCommand{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
 }
