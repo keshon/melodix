@@ -7,12 +7,19 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
+
+// SessionGetter returns the current Discord session (used so providers stay valid across reconnects).
+//
+// Kept in the parent package so call sites (e.g. bot wiring) keep using voice.New(...)
+// without importing the implementation subpackage.
+type SessionGetter = sink.SessionGetter
 
 type guildMusicStatus struct {
 	ChannelID string
@@ -27,7 +34,7 @@ type Service struct {
 	store         *storage.Storage
 	mu            sync.RWMutex
 	players       map[string]*player.Player
-	sinkProviders map[string]*DiscordSinkProvider
+	sinkProviders map[string]*sink.DiscordSinkProvider
 	resolver      *resolve.Resolver
 
 	guildMusicStatus   map[string]guildMusicStatus
@@ -41,7 +48,7 @@ func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage) *
 		cfg:              cfg,
 		store:            store,
 		players:          make(map[string]*player.Player),
-		sinkProviders:    make(map[string]*DiscordSinkProvider),
+		sinkProviders:    make(map[string]*sink.DiscordSinkProvider),
 		guildMusicStatus: make(map[string]guildMusicStatus),
 	}
 }
@@ -65,7 +72,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	defer s.mu.Unlock()
 
 	if s.sinkProviders == nil {
-		s.sinkProviders = make(map[string]*DiscordSinkProvider)
+		s.sinkProviders = make(map[string]*sink.DiscordSinkProvider)
 	}
 	if p, ok := s.players[guildID]; ok {
 		p.SetGuildID(guildID)
@@ -80,7 +87,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	provider, ok := s.sinkProviders[guildID]
 	if !ok {
 		voiceDelay := time.Duration(s.cfg.VoiceReadyDelayMs) * time.Millisecond
-		provider = NewDiscordSinkProvider(s.getSession, guildID, voiceDelay)
+		provider = sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay)
 		s.sinkProviders[guildID] = provider
 	}
 	p := player.New(provider, s.resolver)

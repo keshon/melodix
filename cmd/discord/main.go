@@ -10,11 +10,16 @@ import (
 	"time"
 
 	"github.com/keshon/buildinfo"
-	"github.com/keshon/melodix/internal/command/core"
-	_ "github.com/keshon/melodix/internal/command/core"
+	"github.com/keshon/melodix/internal/command/core/about"
+	"github.com/keshon/melodix/internal/command/core/commands"
+	"github.com/keshon/melodix/internal/command/core/help"
+	"github.com/keshon/melodix/internal/command/core/maintenance"
 
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/command/music"
+	"github.com/keshon/melodix/internal/command/music/history"
+	"github.com/keshon/melodix/internal/command/music/next"
+	"github.com/keshon/melodix/internal/command/music/play"
+	"github.com/keshon/melodix/internal/command/music/stop"
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
@@ -96,7 +101,7 @@ func main() {
 // registerCommands registers all commands with middleware
 func registerCommands(bot *discord.Bot) {
 	command.Register(
-		&core.Commands{},
+		&commands.Commands{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
@@ -104,7 +109,7 @@ func registerCommands(bot *discord.Bot) {
 	)
 
 	command.Register(
-		&core.About{},
+		&about.About{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
@@ -112,7 +117,7 @@ func registerCommands(bot *discord.Bot) {
 	)
 
 	command.Register(
-		&core.Help{},
+		&help.Help{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
@@ -120,7 +125,7 @@ func registerCommands(bot *discord.Bot) {
 	)
 
 	command.Register(
-		&core.Maintenance{},
+		&maintenance.Maintenance{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
@@ -128,7 +133,31 @@ func registerCommands(bot *discord.Bot) {
 	)
 
 	command.Register(
-		&music.Music{Bot: bot},
+		&play.Play{Bot: bot},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
+	command.Register(
+		&next.Next{Bot: bot},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
+	command.Register(
+		&stop.Stop{Bot: bot},
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(),
+	)
+
+	command.Register(
+		&history.History{Bot: bot},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),

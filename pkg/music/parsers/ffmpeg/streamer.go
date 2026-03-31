@@ -10,7 +10,6 @@ import (
 const (
 	channels   = 2
 	sampleRate = 48000
-	frameSize  = 960 // 20ms at 48kHz
 )
 
 type Streamer struct{}

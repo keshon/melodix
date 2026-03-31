@@ -84,33 +84,37 @@ Each archive contains:
 
 <!-- /generated -->
 
-#### `/music` — usage
+#### Music slash commands — usage
 
-Subcommands are summarized in the list above; this section expands the main playback flow.
+Commands are summarized in the list above; this section expands the main playback flow.
 
-- **`/music play`** — Enter a **URL** (YouTube, SoundCloud, or a direct radio/stream link), a **search query**, or one or more **history ids** (the numbers shown in `/music history`) to queue that track again without a full resolve. Optional **`source`** and **`parser`** override autodetection. You can separate several ids or URLs with spaces, commas, or semicolons (there is a per-command batch limit).
-- **`/music history`** — **`view`**: **Timeline** lists each play in order with a short date; **By URL** merges identical links and shows a **×** multiplier for how often each was played. Use **`page`** to move through long lists. Each row includes an **id** you can pass to **`/music play`**. History is stored per server; very old rows may be removed when the persisted list is trimmed.
-- **`/music next`** — Skip to the next track in the queue.
-- **`/music stop`** — Stop playback and clear the queue.
+- **`/play`** — Enter a **URL** (YouTube, SoundCloud, or a direct radio/stream link), a **search query**, or one or more **history ids** (the numbers shown in `/history`) to queue that track again without a full resolve. Optional **`source`** and **`parser`** override autodetection. You can separate several ids or URLs with spaces, commas, or semicolons (there is a per-command batch limit).
+- **`/history`** — **`view`**: 
+**Timeline** lists each play in order with a short date; 
+**By URL** merges identical links and shows a **×** multiplier for how often each was played. 
+Use **`page`** to move through long lists. Each row includes an **id** you can pass to **`/play`**. 
+History is stored per server; very old rows may be removed when the persisted list is trimmed.
+- **`/next`** — Skip to the next track in the queue.
+- **`/stop`** — Stop playback and clear the queue.
 
 Example usage:
 
 ```
-/music play Never Gonna Give You Up
-/music play https://www.youtube.com/watch?v=dQw4w9WgXcQ
-/music play http://stream-uk1.radioparadise.com/aac-320
-/music play 42
-/music history
+/play Never Gonna Give You Up
+/play https://www.youtube.com/watch?v=dQw4w9WgXcQ
+/play http://stream-uk1.radioparadise.com/aac-320
+/play 42
+/history
 ```
 
-You must be in a voice channel to use `/music play`.
+You must be in a voice channel to use `/play`.
 
 ---
 
 ## How-to's
 
 * **How to add Melodix to your Discord server** — Use the OAuth2 invite link (see [Discord bot — Step 1](#discord-bot--step-1-create-the-bot-in-discord)); replace `YOUR_APPLICATION_ID` with your app ID, open the URL, choose your server, and authorize. Then use slash commands. To self-host the bot, see [Running Melodix yourself](#running-melodix-yourself).
-* **How to play your first track** — (Discord) Join a voice channel, then run `/music play` with a link or search term (e.g., `/music play Never Gonna Give You Up`).
+* **How to play your first track** — (Discord) Join a voice channel, then run `/play` with a link or search term (e.g., `/play Never Gonna Give You Up`).
 * **How to self-host the bot** — Install FFmpeg (and optionally yt-dlp) on your PATH, create a bot in the [Discord Developer Portal](https://discord.com/developers/applications), set `DISCORD_TOKEN` in `.env`, and run the Discord binary. Full steps: [Discord bot — Step 2](#discord-bot--step-2-configure-and-run).
 * **How to run the CLI player** — Build with `go build -o melodix-cli ./cmd/cli` or use the `melodix-cli` binary from [releases](https://github.com/keshon/melodix/releases). No Discord token needed. Commands: `play`, `next`, `stop`, `queue`, `status`, `quit`. See [CLI player](#cli-player).
 * **How to try without installing** — Join the [official support server](https://discord.gg/uDnTenPxAY) and use the bot in a voice channel, or download a [release](https://github.com/keshon/melodix/releases) and run the binaries. See [Try Melodix without installing](#try-melodix-without-installing).
@@ -170,7 +174,7 @@ Optional variables (you can add these to `.env` if needed):
 * **From a release:** Use the `melodix-discord` binary from the [releases](https://github.com/keshon/melodix/releases) archive.
 * **With Docker:** See [docker/README.md](docker/README.md) for Docker and Docker Compose instructions.
 
-After the bot is running and invited to your server, use slash commands in any channel. For music, be in a voice channel and use `/music play` with a link or search term.
+After the bot is running and invited to your server, use slash commands in any channel. For music, be in a voice channel and use `/play` with a link or search term.
 
 ### CLI player
 

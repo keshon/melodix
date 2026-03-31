@@ -298,15 +298,15 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 func (b *Bot) onInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
-		b.handleApplicationCommand(s, i)
+		b.onApplicationCommand(s, i)
 	case discordgo.InteractionMessageComponent:
-		b.handleComponentInteraction(s, i)
+		b.onComponentInteraction(s, i)
 	default:
 		log.Printf("[DEBUG] Unhandled interaction type: %d", i.Type)
 	}
 }
 
-func (b *Bot) handleApplicationCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	name := i.ApplicationCommandData().Name
 	c := commandkit.DefaultRegistry.Get(name)
 	if c == nil {
@@ -342,7 +342,7 @@ func (b *Bot) handleApplicationCommand(s *discordgo.Session, i *discordgo.Intera
 	}
 }
 
-func (b *Bot) handleComponentInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	customID := i.MessageComponentData().CustomID
 	log.Printf("[DEBUG] Component interaction: %s", customID)
 
