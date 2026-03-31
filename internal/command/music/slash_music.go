@@ -17,20 +17,20 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type MusicCommand struct {
+type Music struct {
 	Bot discord.BotVoice
 }
 
 // discordgo requires a pointer for MinValue on slash options.
 var historyPageMinValue = 1.0
 
-func (c *MusicCommand) Name() string             { return "music" }
-func (c *MusicCommand) Description() string      { return "Control music playback" }
-func (c *MusicCommand) Group() string            { return "music" }
-func (c *MusicCommand) Category() string         { return "🎵 Music" }
-func (c *MusicCommand) UserPermissions() []int64 { return []int64{} }
+func (c *Music) Name() string             { return "music" }
+func (c *Music) Description() string      { return "Control music playback" }
+func (c *Music) Group() string            { return "music" }
+func (c *Music) Category() string         { return "🎵 Music" }
+func (c *Music) UserPermissions() []int64 { return []int64{} }
 
-func (c *MusicCommand) SlashDefinition() *discordgo.ApplicationCommand {
+func (c *Music) SlashDefinition() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -108,7 +108,7 @@ func (c *MusicCommand) SlashDefinition() *discordgo.ApplicationCommand {
 	}
 }
 
-func (c *MusicCommand) Run(ctx interface{}) error {
+func (c *Music) Run(ctx interface{}) error {
 	slashCtx, ok := ctx.(*command.SlashInteractionContext)
 	if !ok {
 		return nil
@@ -169,7 +169,7 @@ func (c *MusicCommand) Run(ctx interface{}) error {
 	}
 }
 
-func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCreate, input, src, parser string, store *storage.Storage) error {
+func (c *Music) runPlay(s *discordgo.Session, e *discordgo.InteractionCreate, input, src, parser string, store *storage.Storage) error {
 	if input == "" {
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
@@ -237,7 +237,7 @@ func (c *MusicCommand) runPlay(s *discordgo.Session, e *discordgo.InteractionCre
 			return nil
 		}
 		for _, hid := range parsed.HistoryIDs {
-			mp, gerr := store.GetMusicPlayback(guildID, hid)
+			mp, gerr := store.MusicPlayback(guildID, hid)
 			if gerr != nil {
 				if errors.Is(gerr, storage.ErrMusicPlaybackNotFound) {
 					discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -312,7 +312,7 @@ const historyLinesPerPage = 15
 // Shown in /music history footer for replay hint (counts view uses the same sentence as timeline).
 const historyFooterReplay = "replay with `/music play <id>`."
 
-func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.InteractionCreate, page int64, view string, store *storage.Storage) error {
+func (c *Music) runHistory(s *discordgo.Session, e *discordgo.InteractionCreate, page int64, view string, store *storage.Storage) error {
 	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	}); err != nil {
@@ -427,7 +427,7 @@ func (c *MusicCommand) runHistory(s *discordgo.Session, e *discordgo.Interaction
 	return nil
 }
 
-func (c *MusicCommand) runNext(s *discordgo.Session, e *discordgo.InteractionCreate) error {
+func (c *Music) runNext(s *discordgo.Session, e *discordgo.InteractionCreate) error {
 	guildID := e.GuildID
 	member := e.Member
 
@@ -478,7 +478,7 @@ func (c *MusicCommand) runNext(s *discordgo.Session, e *discordgo.InteractionCre
 	return nil
 }
 
-func (c *MusicCommand) runStop(s *discordgo.Session, e *discordgo.InteractionCreate) error {
+func (c *Music) runStop(s *discordgo.Session, e *discordgo.InteractionCreate) error {
 	guildID := e.GuildID
 
 	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{

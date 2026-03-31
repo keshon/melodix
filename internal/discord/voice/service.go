@@ -10,7 +10,7 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
-	"github.com/keshon/melodix/pkg/music/resolver"
+	"github.com/keshon/melodix/pkg/music/resolve"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
@@ -22,13 +22,13 @@ type guildMusicStatus struct {
 // Service provides voice/music for a Discord bot: players, sink providers, resolver, and guild music status.
 // It is pluggable: a bot without voice can omit it.
 type Service struct {
-	getSession   SessionGetter
-	cfg          *config.Config
-	store        *storage.Storage
-	mu           sync.RWMutex
-	players      map[string]*player.Player
+	getSession    SessionGetter
+	cfg           *config.Config
+	store         *storage.Storage
+	mu            sync.RWMutex
+	players       map[string]*player.Player
 	sinkProviders map[string]*DiscordSinkProvider
-	resolver     *resolver.SourceResolver
+	resolver      *resolve.Resolver
 
 	guildMusicStatus   map[string]guildMusicStatus
 	guildMusicStatusMu sync.RWMutex
@@ -75,7 +75,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		return p
 	}
 	if s.resolver == nil {
-		s.resolver = resolver.New()
+		s.resolver = resolve.New()
 	}
 	provider, ok := s.sinkProviders[guildID]
 	if !ok {
@@ -96,7 +96,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 func (s *Service) Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
 	s.mu.Lock()
 	if s.resolver == nil {
-		s.resolver = resolver.New()
+		s.resolver = resolve.New()
 	}
 	r := s.resolver
 	s.mu.Unlock()

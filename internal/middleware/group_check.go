@@ -74,7 +74,7 @@ func WithGroupAccessCheck() commandkit.Middleware {
 }
 
 func disabledGroup(c commandkit.Command, guildID string, stor *storage.Storage, respond func(string)) bool {
-	meta, ok := commandkit.Root(c).(command.DiscordMeta)
+	meta, ok := commandkit.Root(c).(command.Meta)
 	if !ok || meta.Group() == "" {
 		return false
 	}

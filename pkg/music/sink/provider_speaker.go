@@ -2,18 +2,18 @@ package sink
 
 import "github.com/keshon/melodix/pkg/music/sink/speaker"
 
-// SpeakerProvider is a SinkProvider that always returns the same SpeakerSink (target ignored).
+// SpeakerProvider is a Provider that always returns the same speaker.Sink (target ignored).
 type SpeakerProvider struct {
-	sink *speaker.SpeakerSink
+	sink *speaker.Sink
 }
 
-// NewSpeakerProvider creates a provider that returns a single shared SpeakerSink.
+// NewSpeakerProvider creates a provider that returns a single shared speaker sink.
 func NewSpeakerProvider() *SpeakerProvider {
-	return &SpeakerProvider{sink: speaker.NewSpeakerSink()}
+	return &SpeakerProvider{sink: speaker.New()}
 }
 
-// GetSink returns the shared speaker sink. target is ignored.
-func (p *SpeakerProvider) GetSink(target string) (AudioSink, error) {
+// Sink returns the shared speaker sink. target is ignored.
+func (p *SpeakerProvider) Sink(target string) (AudioSink, error) {
 	return p.sink, nil
 }
 

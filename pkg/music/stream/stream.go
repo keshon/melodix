@@ -21,27 +21,27 @@ const (
 // TrackStream wraps a track's PCM stream and metadata.
 type TrackStream struct {
 	io.ReadCloser
-	Track  *parsers.TrackParse
-	Parser string
+	track  *parsers.TrackParse
+	parser string
 }
 
-// GetTrack returns the underlying track
-func (ts *TrackStream) GetTrack() *parsers.TrackParse {
-	return ts.Track
+// Track returns the underlying track.
+func (ts *TrackStream) Track() *parsers.TrackParse {
+	return ts.track
 }
 
-// GetParser returns the parser used for this stream
-func (ts *TrackStream) GetParser() string {
-	return ts.Parser
+// Parser returns the parser used for this stream.
+func (ts *TrackStream) Parser() string {
+	return ts.parser
 }
 
-// StreamerRegistry maps parser names to streamer implementations
-var StreamerRegistry = map[string]parsers.Streamer{
-	"ytdlp-link":  &ytdlp.YTDLPStreamer{},
-	"ytdlp-pipe":  &ytdlp.YTDLPStreamer{},
-	"kkdai-link":  &kkdai.KKDAIStreamer{},
-	"kkdai-pipe":  &kkdai.KKDAIStreamer{},
-	"ffmpeg-link": &ffmpeg.FFMPEGStreamer{},
+// Registry maps parser names to streamer implementations
+var Registry = map[string]parsers.Streamer{
+	"ytdlp-link":  &ytdlp.Streamer{},
+	"ytdlp-pipe":  &ytdlp.Streamer{},
+	"kkdai-link":  &kkdai.Streamer{},
+	"kkdai-pipe":  &kkdai.Streamer{},
+	"ffmpeg-link": &ffmpeg.Streamer{},
 }
 
 // OpenTrack attempts to open a stream for a track, trying parsers in order
@@ -73,7 +73,7 @@ func OpenTrack(track *parsers.TrackParse, seekSec float64) (*TrackStream, func()
 
 // openWithParser opens a stream using the specified parser
 func openWithParser(track *parsers.TrackParse, parser string, seekSec float64) (*TrackStream, func(), error) {
-	streamer, ok := StreamerRegistry[parser]
+	streamer, ok := Registry[parser]
 	if !ok {
 		return nil, nil, fmt.Errorf("streamer not found for parser: %s", parser)
 	}
@@ -83,9 +83,9 @@ func openWithParser(track *parsers.TrackParse, parser string, seekSec float64) (
 	var err error
 
 	if streamer.SupportsPipe() && isPipeParser(parser) {
-		r, cleanup, err = streamer.GetPipeStream(track, seekSec)
+		r, cleanup, err = streamer.PipeStream(track, seekSec)
 	} else {
-		r, cleanup, err = streamer.GetLinkStream(track, seekSec)
+		r, cleanup, err = streamer.LinkStream(track, seekSec)
 	}
 
 	if err != nil {
@@ -94,8 +94,8 @@ func openWithParser(track *parsers.TrackParse, parser string, seekSec float64) (
 
 	ts := &TrackStream{
 		ReadCloser: r,
-		Track:      track,
-		Parser:     parser,
+		track:      track,
+		parser:     parser,
 	}
 	return ts, cleanup, nil
 }

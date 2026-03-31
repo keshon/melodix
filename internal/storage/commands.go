@@ -1,6 +1,6 @@
 package storage
 
-import st "github.com/keshon/melodix/internal/domain"
+import "github.com/keshon/melodix/internal/domain"
 
 func (s *Storage) DisableGroup(guildID, group string) error {
 	record, err := s.getOrCreateGuildRecord(guildID)
@@ -47,7 +47,7 @@ func (s *Storage) IsGroupDisabled(guildID, group string) (bool, error) {
 	return false, nil
 }
 
-func (s *Storage) GetDisabledGroups(guildID string) ([]string, error) {
+func (s *Storage) DisabledGroups(guildID string) ([]string, error) {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func (s *Storage) GetDisabledGroups(guildID string) ([]string, error) {
 	return record.CommandsDisabled, nil
 }
 
-func (s *Storage) GetCommandsHistory(guildID string) ([]st.CommandHistory, error) {
+func (s *Storage) CommandHistory(guildID string) ([]domain.CommandHistory, error) {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (s *Storage) GetCommandsHistory(guildID string) ([]st.CommandHistory, error
 	return record.CommandsHistory, nil
 }
 
-// GetCommandHashes returns the cached slash-command hashes for a guild (used to skip re-registration when unchanged).
-func (s *Storage) GetCommandHashes(guildID string) (map[string]string, error) {
+// CommandHashes returns the cached slash-command hashes for a guild (used to skip re-registration when unchanged).
+func (s *Storage) CommandHashes(guildID string) (map[string]string, error) {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return nil, err

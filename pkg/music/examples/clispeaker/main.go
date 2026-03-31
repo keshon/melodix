@@ -1,5 +1,5 @@
 // Example CLI music player that plays to the default speaker.
-// Run with: go run github.com/keshon/melodix/pkg/music/examples/cli_speaker
+// Run with: go run github.com/keshon/melodix/pkg/music/examples/clispeaker
 //
 // Requires: ffmpeg on PATH. Optional: yt-dlp for more parser options.
 package main
@@ -16,7 +16,7 @@ import (
 	"syscall"
 
 	"github.com/keshon/melodix/pkg/music/player"
-	"github.com/keshon/melodix/pkg/music/resolver"
+	"github.com/keshon/melodix/pkg/music/resolve"
 	"github.com/keshon/melodix/pkg/music/sink"
 )
 
@@ -24,7 +24,7 @@ func main() {
 	provider := sink.NewSpeakerProvider()
 	defer provider.Close()
 
-	res := resolver.New()
+	res := resolve.New()
 	p := player.New(provider, res)
 
 	ctx, cancel := context.WithCancel(context.Background())

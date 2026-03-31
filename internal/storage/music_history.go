@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	st "github.com/keshon/melodix/internal/domain"
+	"github.com/keshon/melodix/internal/domain"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
@@ -17,8 +17,8 @@ var musicPlaybackHistoryLimit = 750
 // ErrMusicPlaybackNotFound is returned when no row matches the id (unknown, trimmed, or typo).
 var ErrMusicPlaybackNotFound = errors.New("music playback not found")
 
-func musicPlaybackFromTrackParse(id uint64, at time.Time, tp parsers.TrackParse) st.MusicPlayback {
-	return st.MusicPlayback{
+func musicPlaybackFromTrackParse(id uint64, at time.Time, tp parsers.TrackParse) domain.MusicPlayback {
+	return domain.MusicPlayback{
 		ID:               id,
 		PlayedAt:         at,
 		URL:              tp.URL,
@@ -30,7 +30,7 @@ func musicPlaybackFromTrackParse(id uint64, at time.Time, tp parsers.TrackParse)
 }
 
 // TrackInfoFromMusicPlayback rebuilds resolver metadata for enqueue. Current parser is first in AvailableParsers when possible.
-func TrackInfoFromMusicPlayback(m st.MusicPlayback) sources.TrackInfo {
+func TrackInfoFromMusicPlayback(m domain.MusicPlayback) sources.TrackInfo {
 	parsersList := slices.Clone(m.AvailableParsers)
 	if m.CurrentParser != "" {
 		if i := slices.Index(parsersList, m.CurrentParser); i > 0 {
@@ -69,22 +69,22 @@ func (s *Storage) AppendMusicPlayback(guildID string, track parsers.TrackParse, 
 	return id, nil
 }
 
-// GetMusicPlayback returns one row by id.
-func (s *Storage) GetMusicPlayback(guildID string, id uint64) (st.MusicPlayback, error) {
+// MusicPlayback returns one row by id.
+func (s *Storage) MusicPlayback(guildID string, id uint64) (domain.MusicPlayback, error) {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
-		return st.MusicPlayback{}, err
+		return domain.MusicPlayback{}, err
 	}
 	for _, row := range record.MusicPlaybackHistory {
 		if row.ID == id {
 			return row, nil
 		}
 	}
-	return st.MusicPlayback{}, ErrMusicPlaybackNotFound
+	return domain.MusicPlayback{}, ErrMusicPlaybackNotFound
 }
 
 // ListMusicPlaybackTimeline returns persisted rows oldest-first (chronological).
-func (s *Storage) ListMusicPlaybackTimeline(guildID string) ([]st.MusicPlayback, error) {
+func (s *Storage) ListMusicPlaybackTimeline(guildID string) ([]domain.MusicPlayback, error) {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return nil, err

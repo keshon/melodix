@@ -1,4 +1,4 @@
-package command_manager
+package cmdmanager
 
 import (
 	"crypto/sha1"

@@ -15,17 +15,17 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type HelpUnifiedCommand struct{}
+type Help struct{}
 
-func (c *HelpUnifiedCommand) Name() string        { return "help" }
-func (c *HelpUnifiedCommand) Description() string { return "Get a list of available commands" }
-func (c *HelpUnifiedCommand) Group() string       { return "core" }
-func (c *HelpUnifiedCommand) Category() string    { return "🕯️ Information" }
-func (c *HelpUnifiedCommand) UserPermissions() []int64 {
+func (c *Help) Name() string        { return "help" }
+func (c *Help) Description() string { return "Get a list of available commands" }
+func (c *Help) Group() string       { return "core" }
+func (c *Help) Category() string    { return "🕯️ Information" }
+func (c *Help) UserPermissions() []int64 {
 	return []int64{}
 }
 
-func (c *HelpUnifiedCommand) SlashDefinition() *discordgo.ApplicationCommand {
+func (c *Help) SlashDefinition() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -49,7 +49,7 @@ func (c *HelpUnifiedCommand) SlashDefinition() *discordgo.ApplicationCommand {
 	}
 }
 
-func (c *HelpUnifiedCommand) Run(ctx interface{}) error {
+func (c *Help) Run(ctx interface{}) error {
 	context, ok := ctx.(*command.SlashInteractionContext)
 	if !ok {
 		return nil
@@ -97,7 +97,7 @@ func buildHelpByCategory() string {
 	categorySort := make(map[string]int)
 
 	for _, c := range all {
-		meta, _ := commandkit.Root(c).(command.DiscordMeta)
+		meta, _ := commandkit.Root(c).(command.Meta)
 		cat := ""
 		if meta != nil {
 			cat = meta.Category()
@@ -139,7 +139,7 @@ func buildHelpByGroup() string {
 
 	groupMap := make(map[string][]commandkit.Command)
 	for _, c := range all {
-		meta, _ := commandkit.Root(c).(command.DiscordMeta)
+		meta, _ := commandkit.Root(c).(command.Meta)
 		group := ""
 		if meta != nil {
 			group = meta.Group()

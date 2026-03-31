@@ -27,10 +27,10 @@ func TestTruncateTitleMiddle(t *testing.T) {
 func TestFormatTimelineLineShape(t *testing.T) {
 	t.Parallel()
 	m := domain.MusicPlayback{
-		ID:        7,
-		PlayedAt:  time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC),
-		URL:       "https://x.test/a",
-		Title:     "Hi",
+		ID:       7,
+		PlayedAt: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC),
+		URL:      "https://x.test/a",
+		Title:    "Hi",
 	}
 	s := formatTimelineLine(m)
 	if !strings.Contains(s, "`7`") || !strings.Contains(s, "[Hi]") || !strings.Contains(s, "`15 Mar 2026`") {

@@ -12,17 +12,17 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type MaintenanceCommand struct{}
+type Maintenance struct{}
 
-func (c *MaintenanceCommand) Name() string        { return "maintenance" }
-func (c *MaintenanceCommand) Description() string { return "Bot maintenance commands" }
-func (c *MaintenanceCommand) Group() string       { return "core" }
-func (c *MaintenanceCommand) Category() string    { return "⚙️ Settings" }
-func (c *MaintenanceCommand) UserPermissions() []int64 {
+func (c *Maintenance) Name() string        { return "maintenance" }
+func (c *Maintenance) Description() string { return "Bot maintenance commands" }
+func (c *Maintenance) Group() string       { return "core" }
+func (c *Maintenance) Category() string    { return "⚙️ Settings" }
+func (c *Maintenance) UserPermissions() []int64 {
 	return []int64{discordgo.PermissionAdministrator}
 }
 
-func (c *MaintenanceCommand) SlashDefinition() *discordgo.ApplicationCommand {
+func (c *Maintenance) SlashDefinition() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -46,7 +46,7 @@ func (c *MaintenanceCommand) SlashDefinition() *discordgo.ApplicationCommand {
 	}
 }
 
-func (c *MaintenanceCommand) Run(ctx interface{}) error {
+func (c *Maintenance) Run(ctx interface{}) error {
 	context, ok := ctx.(*command.SlashInteractionContext)
 	if !ok {
 		return nil
@@ -86,7 +86,7 @@ func (c *MaintenanceCommand) Run(ctx interface{}) error {
 
 func runGetDB(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
 	guildID := e.GuildID
-	record, err := storage.GetGuildRecord(guildID)
+	record, err := storage.GuildRecord(guildID)
 	if err != nil {
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Failed to fetch record: ```%v```", err),

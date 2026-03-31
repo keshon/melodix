@@ -8,34 +8,34 @@ import (
 	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
-const SourceYouTube string = "youtube"
+const Name string = "youtube"
 
-type YouTubeSource struct {
-	resolver *YouTubeResolver
+type Source struct {
+	resolver *Resolver
 }
 
-func New() *YouTubeSource {
-	return &YouTubeSource{
-		resolver: NewYouTubeResolver(),
+func New() *Source {
+	return &Source{
+		resolver: NewResolver(),
 	}
 }
 
-func (y *YouTubeSource) Match(input string) bool {
+func (y *Source) Match(input string) bool {
 	return isYouTubeURL(input)
 }
 
-func (y *YouTubeSource) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
+func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
 	parsers := y.AvailableParsers()
 
 	if selectedParser == "" {
 		if len(parsers) == 0 {
-			return nil, errors.New(SourceYouTube + " has no available parsers")
+			return nil, errors.New(Name + " has no available parsers")
 		}
 		selectedParser = parsers[0]
 	}
 
 	if !slices.Contains(parsers, selectedParser) {
-		return nil, errors.New(SourceYouTube + " source does not support " + selectedParser + " parser")
+		return nil, errors.New(Name + " source does not support " + selectedParser + " parser")
 	}
 
 	input = strings.TrimSpace(input)
@@ -47,7 +47,7 @@ func (y *YouTubeSource) Resolve(input string, selectedParser string) ([]source.T
 			{
 				URL:              input,
 				Title:            "",
-				SourceName:       SourceYouTube,
+				SourceName:       Name,
 				AvailableParsers: MoveToFront(parsers, selectedParser),
 			},
 		}, nil
@@ -67,16 +67,16 @@ func (y *YouTubeSource) Resolve(input string, selectedParser string) ([]source.T
 		{
 			URL:              videoURL,
 			Title:            input,
-			SourceName:       SourceYouTube,
+			SourceName:       Name,
 			AvailableParsers: MoveToFront(parsers, selectedParser),
 		},
 	}, nil
 }
 
-func (y *YouTubeSource) SourceName() string {
-	return SourceYouTube
+func (y *Source) SourceName() string {
+	return Name
 }
 
-func (y *YouTubeSource) AvailableParsers() []string {
+func (y *Source) AvailableParsers() []string {
 	return []string{"kkdai-link", "kkdai-pipe", "ytdlp-link", "ytdlp-pipe"}
 }

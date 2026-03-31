@@ -1,4 +1,4 @@
-package command_manager
+package cmdmanager
 
 import (
 	"fmt"
@@ -48,7 +48,7 @@ func (m *Manager) RegisterCommands(guildID string) error {
 	registeredCmds, _ := m.dg.ApplicationCommands(appID, guildID)
 	definedCmds := m.buildCommandDefinitions()
 
-	cachedHashes, _ := m.storage.GetCommandHashes(guildID)
+	cachedHashes, _ := m.storage.CommandHashes(guildID)
 	if cachedHashes == nil {
 		cachedHashes = map[string]string{}
 	}
@@ -100,7 +100,7 @@ func (m *Manager) deleteObsoleteCommands(
 		definedKeys[commandKey(d)] = struct{}{}
 	}
 
-	hashes, _ := m.storage.GetCommandHashes(guildID)
+	hashes, _ := m.storage.CommandHashes(guildID)
 	if hashes == nil {
 		hashes = map[string]string{}
 	}
@@ -155,7 +155,7 @@ func (m *Manager) upsertChangedCommands(
 
 	// Merge fresh hashes into the stored ones so obsolete entries are preserved
 	// until deleteObsoleteCommands cleans them up.
-	storedHashes, _ := m.storage.GetCommandHashes(guildID)
+	storedHashes, _ := m.storage.CommandHashes(guildID)
 	if storedHashes == nil {
 		storedHashes = map[string]string{}
 	}

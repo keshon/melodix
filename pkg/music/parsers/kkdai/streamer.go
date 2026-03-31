@@ -22,20 +22,20 @@ const (
 	frameSize  = 960 // 20ms at 48kHz
 )
 
-type KKDAIStreamer struct{}
+type Streamer struct{}
 
-func (s *KKDAIStreamer) GetLinkStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s *Streamer) LinkStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
 	return kkdaiLink(track, seekSec)
 }
-func (s *KKDAIStreamer) GetPipeStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s *Streamer) PipeStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
 	return kkdaiPipe(track, seekSec)
 }
-func (s *KKDAIStreamer) SupportsPipe() bool {
+func (s *Streamer) SupportsPipe() bool {
 	return true
 }
 
 // not used
-func NewKkdaiClient(proxyStr string) (*youtube.Client, string) {
+func NewClient(proxyStr string) (*youtube.Client, string) {
 	if proxyStr == "" {
 		fmt.Println("[kkdai] no proxy selected, going raw")
 		return &youtube.Client{

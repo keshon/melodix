@@ -146,15 +146,15 @@ func (rs *RecoveryStream) Close() error {
 	return err
 }
 
-// GetTrack returns the underlying track
-func (rs *RecoveryStream) GetTrack() *parsers.TrackParse {
+// Track returns the underlying track.
+func (rs *RecoveryStream) Track() *parsers.TrackParse {
 	return rs.track
 }
 
-// GetParser returns the current parser used
-func (rs *RecoveryStream) GetParser() string {
+// Parser returns the current parser used.
+func (rs *RecoveryStream) Parser() string {
 	if rs.stream != nil {
-		return rs.stream.Parser
+		return rs.stream.Parser()
 	}
 	return ""
 }

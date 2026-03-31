@@ -98,7 +98,7 @@ func WithUserPermissionCheck() commandkit.Middleware {
 				return c.Run(ctx, inv)
 			}
 
-			meta, ok := commandkit.Root(c).(command.DiscordMeta)
+			meta, ok := commandkit.Root(c).(command.Meta)
 			if !ok {
 				return c.Run(ctx, inv)
 			}

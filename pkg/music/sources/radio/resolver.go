@@ -21,13 +21,13 @@ var validContentTypes = []string{
 	"application/octet-stream", // risky but often used for streams
 }
 
-// RadioResolver validates streaming radio links by checking headers and heuristics.
-type RadioResolver struct {
+// Resolver validates streaming radio links by checking headers and heuristics.
+type Resolver struct {
 	Client *http.Client
 }
 
-func NewRadioResolver() *RadioResolver {
-	return &RadioResolver{
+func NewResolver() *Resolver {
+	return &Resolver{
 		Client: &http.Client{
 			Timeout: 5 * time.Second,
 			// Follow redirects manually so we can inspect each step if needed
@@ -42,7 +42,7 @@ func NewRadioResolver() *RadioResolver {
 }
 
 // IsValidURL checks stream validity based on headers, content-type, and file extension heuristics.
-func (r *RadioResolver) IsValidURL(rawURL string) (bool, string, error) {
+func (r *Resolver) IsValidURL(rawURL string) (bool, string, error) {
 	contentType, finalURL, err := r.fetchContentType(rawURL)
 	if err != nil {
 		// Network or request-level failure: big red flag
@@ -57,7 +57,7 @@ func (r *RadioResolver) IsValidURL(rawURL string) (bool, string, error) {
 	return false, contentType, fmt.Errorf("invalid stream content-type: %q, url: %s", contentType, finalURL)
 }
 
-func (r *RadioResolver) fetchContentType(rawURL string) (string, string, error) {
+func (r *Resolver) fetchContentType(rawURL string) (string, string, error) {
 	req, err := http.NewRequest(http.MethodHead, rawURL, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("request creation failed: %w", err)
@@ -83,7 +83,7 @@ func (r *RadioResolver) fetchContentType(rawURL string) (string, string, error) 
 	return contentType, finalURL, nil
 }
 
-func (r *RadioResolver) isAllowedType(contentType string) bool {
+func (r *Resolver) isAllowedType(contentType string) bool {
 	// Normalize and strip params like "audio/mpeg; charset=utf-8"
 	if idx := strings.Index(contentType, ";"); idx != -1 {
 		contentType = strings.TrimSpace(contentType[:idx])
@@ -96,7 +96,7 @@ func (r *RadioResolver) isAllowedType(contentType string) bool {
 	return false
 }
 
-func (r *RadioResolver) isLikelyPlaylist(rawURL string) bool {
+func (r *Resolver) isLikelyPlaylist(rawURL string) bool {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return false

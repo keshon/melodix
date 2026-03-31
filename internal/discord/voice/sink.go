@@ -24,7 +24,7 @@ func (d *discordSink) Stream(src io.ReadCloser, stop <-chan struct{}) error {
 // SessionGetter returns the current Discord session (used so providers stay valid across reconnects).
 type SessionGetter func() *discordgo.Session
 
-// DiscordSinkProvider implements sink.SinkProvider for a single guild. target is the voice channel ID.
+// DiscordSinkProvider implements sink.Provider for a single guild. target is the voice channel ID.
 type DiscordSinkProvider struct {
 	getSession       SessionGetter
 	guildID          string
@@ -49,8 +49,8 @@ func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReady
 // voiceJoinTimeout limits how long we wait for voice connection to become ready (e.g. no permission = no event).
 const voiceJoinTimeout = 15 * time.Second
 
-// GetSink joins the voice channel (or reuses existing) and returns an AudioSink. target must be non-empty.
-func (p *DiscordSinkProvider) GetSink(target string) (sink.AudioSink, error) {
+// Sink joins the voice channel (or reuses existing) and returns an AudioSink. target must be non-empty.
+func (p *DiscordSinkProvider) Sink(target string) (sink.AudioSink, error) {
 	if target == "" {
 		return nil, fmt.Errorf("voice channel ID is required")
 	}

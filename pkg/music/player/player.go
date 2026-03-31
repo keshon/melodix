@@ -16,19 +16,19 @@ import (
 	"github.com/keshon/melodix/pkg/music/stream"
 )
 
-type PlayerStatus string
+type Status string
 
 const (
-	StatusPlaying PlayerStatus = "Playing"
-	StatusAdded   PlayerStatus = "Track(s) Added"
-	StatusStopped PlayerStatus = "Playback Stopped"
-	StatusPaused  PlayerStatus = "Playback Paused"
-	StatusResumed PlayerStatus = "Playback Resumed"
-	StatusError   PlayerStatus = "Error"
+	StatusPlaying Status = "Playing"
+	StatusAdded   Status = "Track(s) Added"
+	StatusStopped Status = "Playback Stopped"
+	StatusPaused  Status = "Playback Paused"
+	StatusResumed Status = "Playback Resumed"
+	StatusError   Status = "Error"
 )
 
-func (status PlayerStatus) StringEmoji() string {
-	m := map[PlayerStatus]string{
+func (status Status) StringEmoji() string {
+	m := map[Status]string{
 		StatusPlaying: "▶️",
 		StatusAdded:   "🎶",
 		StatusStopped: "⏹",
@@ -49,7 +49,7 @@ var (
 )
 
 // Resolver resolves input (URL or search query) to track info. The player uses this to enqueue tracks.
-// Implementations can be the default resolver (pkg/music/resolver) or a mock/custom resolver.
+// Implementations can be the default resolver (pkg/music/resolve) or a mock/custom resolver.
 type Resolver interface {
 	Resolve(input, source, parser string) ([]sources.TrackInfo, error)
 }
@@ -78,7 +78,7 @@ type Player struct {
 	// resolver turns user input into track metadata for enqueue.
 	resolver Resolver
 	// sinkProvider supplies the audio sink (e.g. Discord VC or speaker) for a target channel.
-	sinkProvider sink.SinkProvider
+	sinkProvider sink.Provider
 
 	// target is the voice channel ID for Discord playback, or "" for CLI/non-voice.
 	target string
@@ -94,18 +94,18 @@ type Player struct {
 	// playbackDone is closed when the runPlayback goroutine for the current run exits.
 	playbackDone chan struct{}
 	// PlayerStatus receives playback lifecycle updates for UI (buffered; drops if full).
-	PlayerStatus chan PlayerStatus
+	PlayerStatus chan Status
 }
 
 // New creates a new Player. target is set per playback via PlayNext(target).
-func New(sinkProvider sink.SinkProvider, res Resolver) *Player {
+func New(sinkProvider sink.Provider, res Resolver) *Player {
 	return &Player{
 		resolver:     res,
 		sinkProvider: sinkProvider,
 		queue:        make([]parsers.TrackParse, 0),
 		stopPlayback: make(chan struct{}),
 		playbackDone: make(chan struct{}),
-		PlayerStatus: make(chan PlayerStatus, 10),
+		PlayerStatus: make(chan Status, 10),
 	}
 }
 
@@ -411,7 +411,7 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 	}
 	log.Printf("[Player] Running playback for track: %q", title)
 
-	audioSink, err := p.sinkProvider.GetSink(target)
+	audioSink, err := p.sinkProvider.Sink(target)
 	if err != nil {
 		log.Printf("[Player] Failed to get sink: %v", err)
 		p.mu.Lock()
@@ -450,7 +450,7 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 	return nil
 }
 
-func (p *Player) emitStatus(status PlayerStatus) {
+func (p *Player) emitStatus(status Status) {
 	select {
 	case p.PlayerStatus <- status:
 	default:

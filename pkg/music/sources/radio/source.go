@@ -7,35 +7,35 @@ import (
 	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
-const SourceRadio = "radio"
+const Name = "radio"
 
-type RadioSource struct {
-	resolver *RadioResolver
+type Source struct {
+	resolver *Resolver
 }
 
-func New() *RadioSource {
-	return &RadioSource{
-		resolver: NewRadioResolver(),
+func New() *Source {
+	return &Source{
+		resolver: NewResolver(),
 	}
 }
 
-func (r *RadioSource) Match(input string) bool {
+func (r *Source) Match(input string) bool {
 	ok, _, err := r.resolver.IsValidURL(input)
 	return err == nil && ok
 }
 
-func (r *RadioSource) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
+func (r *Source) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
 	parsers := r.AvailableParsers()
 
 	if selectedParser == "" {
 		if len(parsers) == 0 {
-			return nil, errors.New(SourceRadio + " has no available parsers")
+			return nil, errors.New(Name + " has no available parsers")
 		}
 		selectedParser = parsers[0]
 	}
 
 	if !slices.Contains(parsers, selectedParser) {
-		return nil, errors.New(SourceRadio + " source does not support " + selectedParser + " parser")
+		return nil, errors.New(Name + " source does not support " + selectedParser + " parser")
 	}
 
 	ok, _, err := r.resolver.IsValidURL(input)
@@ -50,16 +50,16 @@ func (r *RadioSource) Resolve(input string, selectedParser string) ([]source.Tra
 		{
 			URL:              input,
 			Title:            "", // maybe later via icy-* headers
-			SourceName:       SourceRadio,
+			SourceName:       Name,
 			AvailableParsers: MoveToFront(parsers, selectedParser),
 		},
 	}, nil
 }
 
-func (r *RadioSource) SourceName() string {
-	return SourceRadio
+func (r *Source) SourceName() string {
+	return Name
 }
 
-func (r *RadioSource) AvailableParsers() []string {
+func (r *Source) AvailableParsers() []string {
 	return []string{"ffmpeg-link"}
 }

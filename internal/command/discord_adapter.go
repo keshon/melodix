@@ -18,10 +18,10 @@ type Responder interface {
 	EmbedColor() int
 }
 
-// CommandLogger logs command execution (avoids discord import in middleware).
+// Logger logs command execution (avoids discord import in middleware).
 // session and storage are injected at construction time — callers only supply
 // the per-invocation identifiers.
-type CommandLogger interface {
+type Logger interface {
 	LogCommand(guildID, channelID, userID, username, commandName string) error
 }
 
@@ -35,7 +35,7 @@ type SlashInteractionContext struct {
 	Storage   *storage.Storage
 	Config    *config.Config
 	Responder Responder
-	Logger    CommandLogger
+	Logger    Logger
 }
 
 type ComponentInteractionContext struct {
@@ -44,7 +44,7 @@ type ComponentInteractionContext struct {
 	Storage   *storage.Storage
 	Config    *config.Config
 	Responder Responder
-	Logger    CommandLogger
+	Logger    Logger
 }
 
 type MessageReactionContext struct {
@@ -52,7 +52,7 @@ type MessageReactionContext struct {
 	Event   *discordgo.MessageReactionAdd
 	Storage *storage.Storage
 	Config  *config.Config
-	Logger  CommandLogger
+	Logger  Logger
 }
 
 type MessageApplicationCommandContext struct {
@@ -62,7 +62,7 @@ type MessageApplicationCommandContext struct {
 	Target    *discordgo.Message
 	Config    *config.Config
 	Responder Responder
-	Logger    CommandLogger
+	Logger    Logger
 }
 
 type MessageContext struct {
@@ -90,16 +90,16 @@ type ComponentInteractionHandler interface {
 	Component(*ComponentInteractionContext) error
 }
 
-// DiscordMeta is exposed by the Discord adapter so middleware can read Group/Category/Permissions
+// Meta is exposed by the Discord adapter so middleware can read Group/Category/Permissions
 // without depending on the concrete Discord command type.
-type DiscordMeta interface {
+type Meta interface {
 	Group() string
 	Category() string
 	UserPermissions() []int64
 }
 
-// DiscordCommand is what individual Discord commands implement (Run takes interface{} for Discord contexts).
-type DiscordCommand interface {
+// Handler is what individual Discord commands implement (Run takes interface{} for Discord contexts).
+type Handler interface {
 	Name() string
 	Description() string
 	Group() string
@@ -108,45 +108,45 @@ type DiscordCommand interface {
 	Run(ctx interface{}) error
 }
 
-// DiscordAdapter adapts a DiscordCommand to commandkit.Command so it can live in the universal registry.
+// Adapter adapts a Handler to commandkit.Command so it can live in the universal registry.
 // It also implements SlashProvider, ContextMenuProvider, ReactionProvider, ComponentInteractionHandler,
-// and DiscordMeta by delegating to the inner command.
-type DiscordAdapter struct {
-	Cmd DiscordCommand
+// and Meta by delegating to the inner command.
+type Adapter struct {
+	Cmd Handler
 }
 
-func (a *DiscordAdapter) Name() string             { return a.Cmd.Name() }
-func (a *DiscordAdapter) Description() string      { return a.Cmd.Description() }
-func (a *DiscordAdapter) Group() string            { return a.Cmd.Group() }
-func (a *DiscordAdapter) Category() string         { return a.Cmd.Category() }
-func (a *DiscordAdapter) UserPermissions() []int64 { return a.Cmd.UserPermissions() }
+func (a *Adapter) Name() string             { return a.Cmd.Name() }
+func (a *Adapter) Description() string      { return a.Cmd.Description() }
+func (a *Adapter) Group() string            { return a.Cmd.Group() }
+func (a *Adapter) Category() string         { return a.Cmd.Category() }
+func (a *Adapter) UserPermissions() []int64 { return a.Cmd.UserPermissions() }
 
-func (a *DiscordAdapter) Run(ctx context.Context, inv *commandkit.Invocation) error {
+func (a *Adapter) Run(ctx context.Context, inv *commandkit.Invocation) error {
 	return a.Cmd.Run(inv.Data)
 }
 
-func (a *DiscordAdapter) SlashDefinition() *discordgo.ApplicationCommand {
+func (a *Adapter) SlashDefinition() *discordgo.ApplicationCommand {
 	if sp, ok := a.Cmd.(SlashProvider); ok {
 		return sp.SlashDefinition()
 	}
 	return nil
 }
 
-func (a *DiscordAdapter) ContextDefinition() *discordgo.ApplicationCommand {
+func (a *Adapter) ContextDefinition() *discordgo.ApplicationCommand {
 	if cp, ok := a.Cmd.(ContextMenuProvider); ok {
 		return cp.ContextDefinition()
 	}
 	return nil
 }
 
-func (a *DiscordAdapter) ReactionDefinition() string {
+func (a *Adapter) ReactionDefinition() string {
 	if rp, ok := a.Cmd.(ReactionProvider); ok {
 		return rp.ReactionDefinition()
 	}
 	return ""
 }
 
-func (a *DiscordAdapter) Component(ctx *ComponentInteractionContext) error {
+func (a *Adapter) Component(ctx *ComponentInteractionContext) error {
 	if ch, ok := a.Cmd.(ComponentInteractionHandler); ok {
 		return ch.Component(ctx)
 	}
@@ -174,8 +174,8 @@ func ConfigFromInvocation(inv *commandkit.Invocation) *config.Config {
 	}
 }
 
-// RegisterCommand registers a Discord command with the universal registry and applies middlewares.
-func RegisterCommand(discordCmd DiscordCommand, mws ...commandkit.Middleware) {
-	c := commandkit.Apply(&DiscordAdapter{Cmd: discordCmd}, mws...)
+// Register registers a Discord command with the universal registry and applies middlewares.
+func Register(discordCmd Handler, mws ...commandkit.Middleware) {
+	c := commandkit.Apply(&Adapter{Cmd: discordCmd}, mws...)
 	commandkit.DefaultRegistry.Register(c)
 }

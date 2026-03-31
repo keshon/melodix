@@ -8,34 +8,34 @@ import (
 	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
-const SourceSoundCloud string = "soundcloud"
+const Name string = "soundcloud"
 
-type SoundCloudSource struct {
-	resolver *SoundCloudResolver
+type Source struct {
+	resolver *Resolver
 }
 
-func New() *SoundCloudSource {
-	return &SoundCloudSource{
-		resolver: NewSoundCloudResolver(),
+func New() *Source {
+	return &Source{
+		resolver: NewResolver(),
 	}
 }
 
-func (s *SoundCloudSource) Match(input string) bool {
+func (s *Source) Match(input string) bool {
 	return strings.Contains(input, "soundcloud.com") || !strings.HasPrefix(input, "http")
 }
 
-func (s *SoundCloudSource) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
+func (s *Source) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {
 	parsers := s.AvailableParsers()
 
 	if selectedParser == "" {
 		if len(parsers) == 0 {
-			return nil, errors.New(SourceSoundCloud + " has no available parsers")
+			return nil, errors.New(Name + " has no available parsers")
 		}
 		selectedParser = parsers[0]
 	}
 
 	if !slices.Contains(parsers, selectedParser) {
-		return nil, errors.New(SourceSoundCloud + " source does not support " + selectedParser + " parser")
+		return nil, errors.New(Name + " source does not support " + selectedParser + " parser")
 	}
 
 	input = strings.TrimSpace(input)
@@ -46,7 +46,7 @@ func (s *SoundCloudSource) Resolve(input string, selectedParser string) ([]sourc
 			{
 				URL:              input,
 				Title:            "",
-				SourceName:       SourceSoundCloud,
+				SourceName:       Name,
 				AvailableParsers: MoveToFront(parsers, selectedParser),
 			},
 		}, nil
@@ -62,16 +62,16 @@ func (s *SoundCloudSource) Resolve(input string, selectedParser string) ([]sourc
 		{
 			URL:              trackURL,
 			Title:            input,
-			SourceName:       SourceSoundCloud,
+			SourceName:       Name,
 			AvailableParsers: MoveToFront(parsers, selectedParser),
 		},
 	}, nil
 }
 
-func (s *SoundCloudSource) SourceName() string {
-	return SourceSoundCloud
+func (s *Source) SourceName() string {
+	return Name
 }
 
-func (s *SoundCloudSource) AvailableParsers() []string {
+func (s *Source) AvailableParsers() []string {
 	return []string{"ytdlp-pipe", "ytdlp-link"}
 }

@@ -10,20 +10,20 @@ import (
 	"github.com/keshon/melodix/pkg/music/stream"
 )
 
-// SpeakerSink plays PCM (48kHz, 2ch, 16-bit LE) to the default audio device.
-type SpeakerSink struct {
-	ctx        *oto.Context
-	readyChan  <-chan struct{}
-	contextMu  sync.Mutex
+// Sink plays PCM (48kHz, 2ch, 16-bit LE) to the default audio device.
+type Sink struct {
+	ctx       *oto.Context
+	readyChan <-chan struct{}
+	contextMu sync.Mutex
 }
 
-// NewSpeakerSink creates a new speaker sink. The oto context is created lazily on first Stream().
-func NewSpeakerSink() *SpeakerSink {
-	return &SpeakerSink{}
+// New creates a new speaker sink. The oto context is created lazily on first Stream().
+func New() *Sink {
+	return &Sink{}
 }
 
 // ensureContext creates the oto context once.
-func (s *SpeakerSink) ensureContext() error {
+func (s *Sink) ensureContext() error {
 	s.contextMu.Lock()
 	defer s.contextMu.Unlock()
 	if s.ctx != nil {
@@ -44,7 +44,7 @@ func (s *SpeakerSink) ensureContext() error {
 }
 
 // Stream reads PCM from the stream and plays it. Returns when the stream ends or stop is closed.
-func (s *SpeakerSink) Stream(src io.ReadCloser, stop <-chan struct{}) error {
+func (s *Sink) Stream(src io.ReadCloser, stop <-chan struct{}) error {
 	defer src.Close()
 	if err := s.ensureContext(); err != nil {
 		return err
@@ -93,13 +93,13 @@ func (s *stopReader) Read(p []byte) (n int, err error) {
 }
 
 // Close releases the oto context. Call when the CLI exits to free the audio device.
-func (s *SpeakerSink) Close() error {
+func (s *Sink) Close() error {
 	s.contextMu.Lock()
 	defer s.contextMu.Unlock()
 	if s.ctx != nil {
 		err := s.ctx.Suspend()
 		if err != nil {
-			log.Printf("[SpeakerSink] Suspend: %v", err)
+			log.Printf("[speaker] Suspend: %v", err)
 		}
 		s.ctx = nil
 	}

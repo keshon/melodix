@@ -48,7 +48,7 @@ func logInvocation(cmdName string, inv *commandkit.Invocation) {
 }
 
 // logInteraction extracts user info from an InteractionCreate event and logs it.
-func logInteraction(cmdName string, logger command.CommandLogger, s *discordgo.Session, e *discordgo.InteractionCreate) {
+func logInteraction(cmdName string, logger command.Logger, s *discordgo.Session, e *discordgo.InteractionCreate) {
 	if logger == nil {
 		return
 	}
@@ -57,7 +57,7 @@ func logInteraction(cmdName string, logger command.CommandLogger, s *discordgo.S
 }
 
 // logEntry calls the logger and warns on failure.
-func logEntry(cmdName string, logger command.CommandLogger, guildID, channelID, userID, username string) {
+func logEntry(cmdName string, logger command.Logger, guildID, channelID, userID, username string) {
 	if err := logger.LogCommand(guildID, channelID, userID, username, cmdName); err != nil {
 		log.Printf("[WARN] Failed to log command %q: %v", cmdName, err)
 	}

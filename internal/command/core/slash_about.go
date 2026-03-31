@@ -10,24 +10,24 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 )
 
-type AboutCommand struct{}
+type About struct{}
 
-func (c *AboutCommand) Name() string        { return "about" }
-func (c *AboutCommand) Description() string { return "Discover the origin of this bot" }
-func (c *AboutCommand) Group() string       { return "core" }
-func (c *AboutCommand) Category() string    { return "🕯️ Information" }
-func (c *AboutCommand) UserPermissions() []int64 {
+func (c *About) Name() string        { return "about" }
+func (c *About) Description() string { return "Discover the origin of this bot" }
+func (c *About) Group() string       { return "core" }
+func (c *About) Category() string    { return "🕯️ Information" }
+func (c *About) UserPermissions() []int64 {
 	return []int64{}
 }
 
-func (c *AboutCommand) SlashDefinition() *discordgo.ApplicationCommand {
+func (c *About) SlashDefinition() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *AboutCommand) Run(ctx interface{}) error {
+func (c *About) Run(ctx interface{}) error {
 	context, ok := ctx.(*command.SlashInteractionContext)
 	if !ok {
 		return nil

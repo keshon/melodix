@@ -10,3 +10,4 @@ datastore_dump.json
 *.json
 *.exe~
 dump.bat
+/.cursor

@@ -4,8 +4,8 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,6 +26,10 @@ func main() {
 	info := buildinfo.Get()
 	log.Printf("[INFO] Starting %v bot...", info.Project)
 
+	// Root context cancels on SIGINT/SIGTERM.
+	rootCtx, stopSignal := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignal()
+
 	// Load config
 	cfg, err := config.New()
 	if err != nil {
@@ -36,11 +40,10 @@ func main() {
 	}
 
 	// Initialize storage
-	store, err := storage.New(cfg.StoragePath)
+	store, err := storage.New(rootCtx, cfg.StoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer store.Close()
 
 	// Create bot instance
 	bot := discord.NewBot(cfg, store)
@@ -48,76 +51,84 @@ func main() {
 	// Register commands before starting the session
 	registerCommands(bot)
 
-	// Context for shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// Start Discord session with auto-reconnect loop
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
-			if err := bot.RunSession(ctx); err != nil {
+			if err := bot.RunSession(rootCtx); err != nil {
 				log.Println("[ERR] Discord session ended:", err)
 			}
 
 			select {
-			case <-ctx.Done():
+			case <-rootCtx.Done():
 				return
 			default:
 				log.Println("[WARN] Restarting session in 5s...")
-				time.Sleep(5 * time.Second)
+				timer := time.NewTimer(5 * time.Second)
+				select {
+				case <-rootCtx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
 			}
 		}
 	}()
 
-	// Handle OS signals
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-
-	<-sig
+	<-rootCtx.Done()
 	log.Println("[INFO] Shutdown signal received, stopping bot...")
-	cancel()
 
-	// Give goroutines time to clean up
-	time.Sleep(1 * time.Second)
+	// Wait for the session loop goroutine to exit.
+	wg.Wait()
+
+	// Timebox storage shutdown so Ctrl+C always returns to the shell.
+	closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelClose()
+	if err := store.Close(closeCtx); err != nil {
+		log.Printf("[ERR] Storage close error: %v", err)
+	}
+
 	log.Println("[INFO] Discord bot exited cleanly")
 }
 
 // registerCommands registers all commands with middleware
 func registerCommands(bot *discord.Bot) {
-	command.RegisterCommand(
-		&core.CommandsCommand{},
+	command.Register(
+		&core.Commands{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
 		middleware.WithCommandLogger(),
 	)
 
-	command.RegisterCommand(
-		&core.AboutCommand{},
+	command.Register(
+		&core.About{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
 		middleware.WithCommandLogger(),
 	)
 
-	command.RegisterCommand(
-		&core.HelpUnifiedCommand{},
+	command.Register(
+		&core.Help{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
 		middleware.WithCommandLogger(),
 	)
 
-	command.RegisterCommand(
-		&core.MaintenanceCommand{},
+	command.Register(
+		&core.Maintenance{},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
 		middleware.WithCommandLogger(),
 	)
 
-	command.RegisterCommand(
-		&music.MusicCommand{Bot: bot},
+	command.Register(
+		&music.Music{Bot: bot},
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),

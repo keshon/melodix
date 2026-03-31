@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -18,7 +19,8 @@ import (
 func TestAppendGetListMusicPlayback(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
-	s, err := New(path)
+	ctx := context.Background()
+	s, err := New(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +45,7 @@ func TestAppendGetListMusicPlayback(t *testing.T) {
 		t.Fatalf("append: id=%d err=%v", id, err)
 	}
 
-	got, err := s.GetMusicPlayback(guild, 1)
+	got, err := s.MusicPlayback(guild, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +74,8 @@ func TestMusicPlaybackTrimKeepsRecent(t *testing.T) {
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
-	s, err := New(path)
+	ctx := context.Background()
+	s, err := New(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,11 +96,11 @@ func TestMusicPlaybackTrimKeepsRecent(t *testing.T) {
 		}
 	}
 
-	_, err = s.GetMusicPlayback(guild, 1)
+	_, err = s.MusicPlayback(guild, 1)
 	if !errors.Is(err, ErrMusicPlaybackNotFound) {
 		t.Fatalf("want trimmed id 1 missing, got err=%v", err)
 	}
-	if _, err := s.GetMusicPlayback(guild, 4); err != nil {
+	if _, err := s.MusicPlayback(guild, 4); err != nil {
 		t.Fatal(err)
 	}
 	list, err := s.ListMusicPlaybackTimeline(guild)

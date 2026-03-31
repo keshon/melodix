@@ -14,13 +14,13 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type CommandsCommand struct{}
+type Commands struct{}
 
-func (c *CommandsCommand) Name() string        { return "commands" }
-func (c *CommandsCommand) Description() string { return "Manage or inspect commands" }
-func (c *CommandsCommand) Group() string       { return "core" }
-func (c *CommandsCommand) Category() string    { return "⚙️ Settings" }
-func (c *CommandsCommand) UserPermissions() []int64 {
+func (c *Commands) Name() string        { return "commands" }
+func (c *Commands) Description() string { return "Manage or inspect commands" }
+func (c *Commands) Group() string       { return "core" }
+func (c *Commands) Category() string    { return "⚙️ Settings" }
+func (c *Commands) UserPermissions() []int64 {
 	return []int64{discordgo.PermissionAdministrator}
 }
 
@@ -32,7 +32,7 @@ const (
 
 var maxContentLength = discordMaxMessageLength - len(codeLeftBlockWrapper) - len(codeRightBlockWrapper)
 
-func (c *CommandsCommand) SlashDefinition() *discordgo.ApplicationCommand {
+func (c *Commands) SlashDefinition() *discordgo.ApplicationCommand {
 	groupChoices := []*discordgo.ApplicationCommandOptionChoice{}
 	for _, g := range getUniqueGroups() {
 		groupChoices = append(groupChoices, &discordgo.ApplicationCommandOptionChoice{Name: g, Value: g})
@@ -94,7 +94,7 @@ func (c *CommandsCommand) SlashDefinition() *discordgo.ApplicationCommand {
 	}
 }
 
-func (c *CommandsCommand) Run(ctx interface{}) error {
+func (c *Commands) Run(ctx interface{}) error {
 	context, ok := ctx.(*command.SlashInteractionContext)
 	if !ok {
 		return nil
@@ -126,10 +126,10 @@ func (c *CommandsCommand) Run(ctx interface{}) error {
 	}
 }
 
-func (c *CommandsCommand) runCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage, cfg *config.Config) error {
+func (c *Commands) runCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage, cfg *config.Config) error {
 	guildID := e.GuildID
 
-	records, err := storage.GetCommandsHistory(guildID)
+	records, err := storage.CommandHistory(guildID)
 	if err != nil {
 		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Failed to fetch command logs: %v", err),
@@ -166,10 +166,10 @@ func (c *CommandsCommand) runCmdLog(s *discordgo.Session, e *discordgo.Interacti
 	return discord.RespondEphemeral(s, e, msg)
 }
 
-func (c *CommandsCommand) runCmdStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
+func (c *Commands) runCmdStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
 	guildID := e.GuildID
 
-	disabledGroups, _ := storage.GetDisabledGroups(guildID)
+	disabledGroups, _ := storage.DisabledGroups(guildID)
 	disabledMap := make(map[string]bool)
 	for _, g := range disabledGroups {
 		disabledMap[g] = true
@@ -202,7 +202,7 @@ func (c *CommandsCommand) runCmdStatus(s *discordgo.Session, e *discordgo.Intera
 	return discord.RespondEmbedEphemeral(s, e, embed)
 }
 
-func (c *CommandsCommand) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
+func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
 	data := e.ApplicationCommandData()
 
 	subOptions := data.Options[0].Options
@@ -254,7 +254,7 @@ func (c *CommandsCommand) runCmdToggle(s *discordgo.Session, e *discordgo.Intera
 	return discord.RespondEmbedEphemeral(s, e, embed)
 }
 
-func (c *CommandsCommand) runCmdUpdate(s *discordgo.Session, e *discordgo.InteractionCreate) error {
+func (c *Commands) runCmdUpdate(s *discordgo.Session, e *discordgo.InteractionCreate) error {
 	subOptions := e.ApplicationCommandData().Options[0].Options
 
 	var target string
@@ -276,7 +276,7 @@ func (c *CommandsCommand) runCmdUpdate(s *discordgo.Session, e *discordgo.Intera
 func getUniqueGroups() []string {
 	set := map[string]struct{}{}
 	for _, c := range commandkit.DefaultRegistry.GetAll() {
-		meta, _ := commandkit.Root(c).(command.DiscordMeta)
+		meta, _ := commandkit.Root(c).(command.Meta)
 		group := ""
 		if meta != nil {
 			group = meta.Group()

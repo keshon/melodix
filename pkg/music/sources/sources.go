@@ -2,10 +2,10 @@
 package sources
 
 const (
-	SourceAuto       = "auto"
-	SourceYouTube    = "youtube"
-	SourceRadio      = "radio"
-	SourceSoundCloud = "soundcloud"
+	Auto       = "auto"
+	YouTube    = "youtube"
+	Radio      = "radio"
+	SoundCloud = "soundcloud"
 )
 
 type TrackInfo struct {

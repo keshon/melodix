@@ -1,5 +1,5 @@
-// Package resolver resolves URLs and search queries to track metadata using configurable sources (YouTube, SoundCloud, radio).
-package resolver
+// Package resolve resolves URLs and search queries to track metadata using configurable sources (YouTube, SoundCloud, radio).
+package resolve
 
 import (
 	"errors"
@@ -10,16 +10,16 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
-type SourceResolver struct {
+type Resolver struct {
 	Sources map[string]sources.Source
 }
 
-func New() *SourceResolver {
+func New() *Resolver {
 	youtubeSource := youtube.New()
 	soundcloudSource := soundcloud.New()
 	radioSource := radio.New()
 
-	return &SourceResolver{
+	return &Resolver{
 		Sources: map[string]sources.Source{
 			youtubeSource.SourceName():    youtubeSource,
 			soundcloudSource.SourceName(): soundcloudSource,
@@ -28,7 +28,7 @@ func New() *SourceResolver {
 	}
 }
 
-func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) ([]sources.TrackInfo, error) {
+func (r *Resolver) Resolve(input, selectedSource, selectedParser string) ([]sources.TrackInfo, error) {
 	// Direct source selection
 	if selectedSource != "" {
 		src, ok := r.Sources[selectedSource]
@@ -41,8 +41,8 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 		}
 
 		if !isURL(input) {
-			if selectedSource != sources.SourceYouTube && selectedSource != sources.SourceSoundCloud {
-				return nil, errors.New("title search is only supported on " + sources.SourceYouTube + " and " + sources.SourceSoundCloud)
+			if selectedSource != sources.YouTube && selectedSource != sources.SoundCloud {
+				return nil, errors.New("title search is only supported on " + sources.YouTube + " and " + sources.SoundCloud)
 			}
 			return src.Resolve(input, selectedParser)
 		}
@@ -54,9 +54,9 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 
 	// Automatic detection
 	if !isURL(input) {
-		yt, ok := r.Sources[sources.SourceYouTube]
+		yt, ok := r.Sources[sources.YouTube]
 		if !ok {
-			return nil, errors.New(youtube.SourceYouTube + " source not available for title search")
+			return nil, errors.New(youtube.Name + " source not available for title search")
 		}
 		selectedParser, err := ensureParser(yt, selectedParser)
 		if err != nil {
@@ -66,7 +66,7 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 	}
 
 	for typ, s := range r.Sources {
-		if typ == sources.SourceRadio {
+		if typ == sources.Radio {
 			continue
 		}
 		if s.Match(input) {
@@ -78,7 +78,7 @@ func (r *SourceResolver) Resolve(input, selectedSource, selectedParser string) (
 		}
 	}
 
-	if radioSrc, ok := r.Sources[sources.SourceRadio]; ok {
+	if radioSrc, ok := r.Sources[sources.Radio]; ok {
 		selectedParser, err := ensureParser(radioSrc, selectedParser)
 		if err != nil {
 			return nil, err

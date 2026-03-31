@@ -43,8 +43,8 @@ func UpdateReadme(registry *commandkit.Registry, categoryWeights map[string]int)
 	commands := registry.GetAll()
 
 	sort.Slice(commands, func(i, j int) bool {
-		metaI, _ := commandkit.Root(commands[i]).(command.DiscordMeta)
-		metaJ, _ := commandkit.Root(commands[j]).(command.DiscordMeta)
+		metaI, _ := commandkit.Root(commands[i]).(command.Meta)
+		metaJ, _ := commandkit.Root(commands[j]).(command.Meta)
 
 		catI := ""
 		catJ := ""
@@ -71,7 +71,7 @@ func UpdateReadme(registry *commandkit.Registry, categoryWeights map[string]int)
 	for _, c := range commands {
 		root := commandkit.Root(c)
 
-		meta, _ := root.(command.DiscordMeta)
+		meta, _ := root.(command.Meta)
 		cat := ""
 		if meta != nil {
 			cat = meta.Category()

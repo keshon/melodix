@@ -9,10 +9,10 @@ type AudioSink interface {
 	Stream(stream io.ReadCloser, stop <-chan struct{}) error
 }
 
-// SinkProvider returns an AudioSink for a given target.
+// Provider returns an AudioSink for a given target.
 // For Discord, target is the voice channel ID; for CLI, target is typically "".
-type SinkProvider interface {
-	GetSink(target string) (AudioSink, error)
+type Provider interface {
+	Sink(target string) (AudioSink, error)
 	// ReleaseSink is called when the player disconnects (e.g. Stop(true)).
 	// Discord uses it to leave the voice channel; CLI can no-op.
 	ReleaseSink(target string)

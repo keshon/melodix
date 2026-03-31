@@ -1,4 +1,4 @@
-package command_logger
+package cmdlog
 
 import (
 	"log"
@@ -8,34 +8,34 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 )
 
-// CommandLogger implements command.CommandLogger so middleware can log command
+// Logger implements command.Logger so middleware can log command
 // executions without importing the discord package directly.
 //
 // session and storage are injected once at construction — callers only supply
 // the per-invocation identifiers (guildID, channelID, …).
-type CommandLogger struct {
+type Logger struct {
 	session *discordgo.Session
 	storage *storage.Storage
 }
 
-// NewCommandLogger creates a CommandLogger bound to a Discord session and storage.
-func NewCommandLogger(s *discordgo.Session, store *storage.Storage) *CommandLogger {
-	return &CommandLogger{session: s, storage: store}
+// New creates a Logger bound to a Discord session and storage.
+func New(s *discordgo.Session, store *storage.Storage) *Logger {
+	return &Logger{session: s, storage: store}
 }
 
-// Ensure CommandLogger satisfies the command.CommandLogger interface at compile time.
-var _ command.CommandLogger = (*CommandLogger)(nil)
+// Ensure Logger satisfies the command.Logger interface at compile time.
+var _ command.Logger = (*Logger)(nil)
 
 // LogCommand records a command execution to storage, resolving channel and guild
 // names from Discord state (falling back to an API call when not cached).
-func (l *CommandLogger) LogCommand(guildID, channelID, userID, username, commandName string) error {
+func (l *Logger) LogCommand(guildID, channelID, userID, username, commandName string) error {
 	channelName := l.resolveChannelName(channelID)
 	guildName := l.resolveGuildName(guildID)
 
 	return l.storage.SetCommand(guildID, channelID, channelName, guildName, userID, username, commandName)
 }
 
-func (l *CommandLogger) resolveChannelName(channelID string) string {
+func (l *Logger) resolveChannelName(channelID string) string {
 	ch, err := l.session.State.Channel(channelID)
 	if err != nil {
 		ch, err = l.session.Channel(channelID)
@@ -47,7 +47,7 @@ func (l *CommandLogger) resolveChannelName(channelID string) string {
 	return ch.Name
 }
 
-func (l *CommandLogger) resolveGuildName(guildID string) string {
+func (l *Logger) resolveGuildName(guildID string) string {
 	g, err := l.session.State.Guild(guildID)
 	if err != nil {
 		g, err = l.session.Guild(guildID)

@@ -12,8 +12,8 @@ import (
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/command_logger"
-	"github.com/keshon/melodix/internal/discord/command_manager"
+	"github.com/keshon/melodix/internal/discord/cmdlog"
+	"github.com/keshon/melodix/internal/discord/cmdmanager"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
@@ -28,8 +28,8 @@ type Bot struct {
 	mu        sync.RWMutex
 	voice     *voice.Service
 
-	cmdManager *command_manager.Manager
-	cmdLogger  *command_logger.CommandLogger
+	cmdManager *cmdmanager.Manager
+	cmdLogger  *cmdlog.Logger
 
 	// once ensures one-time background services (purge, shortlink) are not
 	// re-launched on subsequent reconnects.
@@ -63,8 +63,8 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		return s
 	}, b.cfg, b.storage)
 
-	b.cmdLogger = command_logger.NewCommandLogger(dg, b.storage)
-	b.cmdManager = command_manager.NewManager(dg, b.storage, commandkit.DefaultRegistry)
+	b.cmdLogger = cmdlog.New(dg, b.storage)
+	b.cmdManager = cmdmanager.NewManager(dg, b.storage, commandkit.DefaultRegistry)
 
 	b.mu.Unlock()
 
