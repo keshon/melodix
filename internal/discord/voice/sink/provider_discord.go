@@ -95,3 +95,18 @@ func (p *DiscordSinkProvider) ReleaseSink(target string) {
 	p.currentChannelID = ""
 }
 
+// InvalidateSink clears the cached VoiceConnection without requiring a target match.
+// The next Sink(target) will join again (e.g. after voice WebSocket loss while gateway reconnects).
+func (p *DiscordSinkProvider) InvalidateSink() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.vc == nil {
+		return
+	}
+	if err := p.vc.Disconnect(context.Background()); err != nil {
+		log.Printf("[DiscordSink] Invalidate disconnect error: %v", err)
+	}
+	p.vc = nil
+	p.currentChannelID = ""
+}
+

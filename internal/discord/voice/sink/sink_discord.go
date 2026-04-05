@@ -105,9 +105,9 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 	select {
 	case <-stop:
 		return stream.ErrPlaybackStopped
-	default:
+		default:
 		if !safeOpusSend(vc, append([]byte(nil), opusBuf[:n]...)) {
-			return nil
+			return stream.ErrVoiceTransport
 		}
 	}
 
@@ -144,7 +144,7 @@ func streamToDiscord(src io.ReadCloser, stop <-chan struct{}, vc *discordgo.Voic
 				return stream.ErrPlaybackStopped
 			default:
 				if !safeOpusSend(vc, packet) {
-					return nil
+					return stream.ErrVoiceTransport
 				}
 			}
 		}

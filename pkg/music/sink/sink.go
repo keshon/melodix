@@ -16,4 +16,7 @@ type Provider interface {
 	// ReleaseSink is called when the player disconnects (e.g. Stop(true)).
 	// Discord uses it to leave the voice channel; CLI can no-op.
 	ReleaseSink(target string)
+	// InvalidateSink drops any cached voice/transport state so the next Sink re-acquires it
+	// (e.g. after gateway reconnect or Opus send failure).
+	InvalidateSink()
 }

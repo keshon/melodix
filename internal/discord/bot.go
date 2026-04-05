@@ -45,7 +45,8 @@ func NewBot(cfg *config.Config, storage *storage.Storage) *Bot {
 	}
 }
 
-// RunSession opens one Discord session and blocks until ctx is cancelled or the connection is lost.
+// RunSession opens one Discord session and blocks until ctx is cancelled or the API probe
+// decides the session is unhealthy (transient gateway reconnects do not exit this function).
 func (b *Bot) RunSession(ctx context.Context) error {
 	dg, err := discordgo.New("Bot " + b.cfg.DiscordToken)
 	if err != nil {
@@ -56,6 +57,14 @@ func (b *Bot) RunSession(ctx context.Context) error {
 
 	b.mu.Lock()
 	b.dg = dg
+	// Replace voice.Service only on outer restarts (e.g. API probe). Stop old players first so
+	// goroutines and sink providers are not orphaned when a new Service is installed.
+	if b.voice != nil {
+		old := b.voice
+		b.mu.Unlock()
+		old.StopAllPlayers()
+		b.mu.Lock()
+	}
 	b.voice = voice.New(func() *discordgo.Session {
 		b.mu.RLock()
 		s := b.dg
@@ -68,28 +77,18 @@ func (b *Bot) RunSession(ctx context.Context) error {
 
 	b.mu.Unlock()
 
-	// disconnected is closed once — multiple concurrent signals (our handler + discordgo
-	// internal reconnect attempts) collapse into a single restart.
+	// disconnected is closed once when we decide the session is unusable (see API probe below).
+	// We intentionally do not hook discordgo.Disconnect: the library reconnects the gateway on Op7
+	// and similar events; treating every Disconnect as fatal caused dg.Close() to race with that
+	// reconnect and wiped in-memory voice/queue state.
 	disconnected := make(chan struct{})
 	var disconnectOnce sync.Once
 	notifyDisconnect := func() {
 		disconnectOnce.Do(func() {
-			log.Println("[WARN] WebSocket disconnected — will restart session")
+			log.Println("[WARN] Discord session unhealthy — will restart session")
 			close(disconnected)
 		})
 	}
-
-	dg.AddHandler(func(_ *discordgo.Session, _ *discordgo.Disconnect) {
-		// Ignore disconnects caused by intentional shutdown (dg.Close in our
-		// defer) so the auto-recovery loop doesn't log a misleading restart
-		// message or race with the ctx.Done cleanup path.
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			notifyDisconnect()
-		}
-	})
 
 	b.configureIntents()
 	dg.AddHandler(b.onReady)

@@ -4,7 +4,6 @@ package player
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"slices"
 	"sync"
@@ -379,6 +378,9 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 			if errors.Is(err, ErrSinkUnavailable) {
 				return
 			}
+			if errors.Is(err, stream.ErrVoiceTransport) {
+				return
+			}
 			if errors.Is(err, stream.ErrPlaybackStopped) {
 				return
 			}
@@ -395,8 +397,12 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	return nil
 }
 
+// maxVoiceTransportAttempts bounds Sink rejoin + Opus transport retries for one track
+// (Discord gateway/voice), distinct from RecoveryStream media recovery.
+const maxVoiceTransportAttempts = 3
+
 // runPlayback streams to the sink. stopCh and doneCh are for this run only.
-func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) error {
+func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan struct{}) error {
 	defer rs.Close()
 	defer close(doneCh)
 
@@ -411,18 +417,62 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 	}
 	log.Printf("[Player] Running playback for track: %q", title)
 
-	audioSink, err := p.sinkProvider.Sink(target)
-	if err != nil {
-		log.Printf("[Player] Failed to get sink: %v", err)
-		p.mu.Lock()
-		p.playing = false
-		p.currTrack = nil
-		p.mu.Unlock()
-		p.emitStatus(StatusError)
-		return errors.Join(ErrSinkUnavailable, fmt.Errorf("get sink: %w", err))
-	}
+	var err error
+	for attempt := 1; attempt <= maxVoiceTransportAttempts; attempt++ {
+		var audioSink sink.AudioSink
+		audioSink, err = p.sinkProvider.Sink(target)
+		if err != nil {
+			log.Printf("[Player] Failed to get sink (attempt %d/%d): %v", attempt, maxVoiceTransportAttempts, err)
+			p.sinkProvider.InvalidateSink()
+			if attempt == maxVoiceTransportAttempts {
+				p.mu.Lock()
+				p.playing = false
+				p.currTrack = nil
+				p.mu.Unlock()
+				p.emitStatus(StatusError)
+				return errors.Join(ErrSinkUnavailable, fmt.Errorf("get sink: %w", err))
+			}
+			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
+			continue
+		}
 
-	err = audioSink.Stream(rs, stopCh)
+		err = audioSink.Stream(rs, stopCh)
+		if err == nil {
+			break
+		}
+		if errors.Is(err, stream.ErrPlaybackStopped) {
+			p.mu.Lock()
+			p.playing = false
+			p.currTrack = nil
+			p.mu.Unlock()
+			log.Printf("[Player] Playback stopped by user")
+			p.emitStatus(StatusStopped)
+			return err
+		}
+		if errors.Is(err, stream.ErrVoiceTransport) {
+			log.Printf("[Player] Voice transport error (attempt %d/%d): %v", attempt, maxVoiceTransportAttempts, err)
+			p.sinkProvider.InvalidateSink()
+			if reopenErr := rs.ReopenAfterTransportFailure(); reopenErr != nil {
+				p.mu.Lock()
+				p.playing = false
+				p.currTrack = nil
+				p.mu.Unlock()
+				p.emitStatus(StatusError)
+				return fmt.Errorf("voice transport failed, could not reopen stream: %w", reopenErr)
+			}
+			if attempt == maxVoiceTransportAttempts {
+				p.mu.Lock()
+				p.playing = false
+				p.currTrack = nil
+				p.mu.Unlock()
+				p.emitStatus(StatusError)
+				return err
+			}
+			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
+			continue
+		}
+		break
+	}
 
 	p.mu.Lock()
 	p.playing = false
@@ -430,11 +480,6 @@ func (p *Player) runPlayback(rs io.ReadCloser, stopCh, doneCh chan struct{}) err
 	p.mu.Unlock()
 
 	if err != nil {
-		if errors.Is(err, stream.ErrPlaybackStopped) {
-			log.Printf("[Player] Playback stopped by user")
-			p.emitStatus(StatusStopped)
-			return err
-		}
 		p.emitStatus(StatusError)
 		log.Printf("[Player] Playback finished with error: %v", err)
 		return fmt.Errorf("playback error: %w", err)

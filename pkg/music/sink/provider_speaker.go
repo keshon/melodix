@@ -18,6 +18,9 @@ func (p *SpeakerProvider) Sink(target string) (AudioSink, error) {
 // ReleaseSink is a no-op for speaker (no VC to leave).
 func (p *SpeakerProvider) ReleaseSink(target string) {}
 
+// InvalidateSink is a no-op for speaker.
+func (p *SpeakerProvider) InvalidateSink() {}
+
 // Close releases the oto context. Call when the CLI exits.
 func (p *SpeakerProvider) Close() error {
 	return p.sink.Close()

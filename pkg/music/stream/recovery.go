@@ -11,6 +11,8 @@ import (
 const maxRecoveryAttempts = 3
 
 // RecoveryStream wraps a TrackStream and attempts to auto-recover on early stream termination.
+// It covers flaky media (YouTube/ffmpeg reads), not Discord gateway or voice WebSocket loss;
+// voice transport is handled by the player/sink layer (invalidate + rejoin).
 type RecoveryStream struct {
 	track       *parsers.TrackParse
 	parserIndex int            // current parser index
@@ -129,6 +131,20 @@ func (rs *RecoveryStream) reopen() error {
 		rs.stream = nil
 	}
 
+	return rs.Open(rs.seekSec)
+}
+
+// ReopenAfterTransportFailure closes the media stream and reopens at the current approximate seek
+// position (e.g. after Discord voice reconnect). Does not count toward parser EOF recovery limits.
+func (rs *RecoveryStream) ReopenAfterTransportFailure() error {
+	if rs.cleanup != nil {
+		rs.cleanup()
+		rs.cleanup = nil
+	}
+	if rs.stream != nil {
+		_ = rs.stream.Close()
+		rs.stream = nil
+	}
 	return rs.Open(rs.seekSec)
 }
 
