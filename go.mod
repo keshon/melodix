@@ -14,8 +14,8 @@ require (
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
 )
 
 require (
@@ -26,8 +26,8 @@ require (
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/godeps/opus v1.0.3
-	github.com/google/pprof v0.0.0-20260302011040-a15ffb7f9dcc // indirect
-	golang.org/x/text v0.35.0 // indirect
+	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
+	golang.org/x/text v0.36.0 // indirect
 )
 
 require (
@@ -35,7 +35,7 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/joho/godotenv v1.5.1
 	github.com/kkdai/youtube/v2 v2.10.6
-	golang.org/x/net v0.52.0
+	golang.org/x/net v0.53.0
 )
 
 replace github.com/bwmarrin/discordgo => github.com/yeongaori/discordgo-fork v0.0.0-20260315104245-037b0e48bb49
