@@ -73,7 +73,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	}, b.cfg, b.storage)
 
 	b.cmdLogger = cmdlog.New(dg, b.storage)
-	b.cmdManager = cmdmanager.NewManager(dg, b.storage, commandkit.DefaultRegistry)
+	b.cmdManager = cmdmanager.NewManager(dg, commandkit.DefaultRegistry)
 
 	b.mu.Unlock()
 
@@ -119,7 +119,16 @@ func (b *Bot) RunSession(ctx context.Context) error {
 					return
 				}
 				if evt.Type == SystemEventRefreshCommands {
-					go b.cmdManager.RefreshAll()
+					go func() {
+						// Prefer targeted refresh (one guild) when possible.
+						if evt.GuildID != "" {
+							if err := b.cmdManager.RegisterCommands(evt.GuildID); err != nil {
+								log.Printf("[ERR] Failed to refresh commands for guild %s: %v", evt.GuildID, err)
+							}
+							return
+						}
+						b.cmdManager.RefreshAll()
+					}()
 				}
 			}
 		}

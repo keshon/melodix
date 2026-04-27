@@ -9,7 +9,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/storage"
 )
 
 const discordRateLimitDelay = 25 * time.Millisecond
@@ -17,24 +16,23 @@ const discordRateLimitDelay = 25 * time.Millisecond
 // Manager handles registering and syncing slash commands per guild.
 type Manager struct {
 	dg       *discordgo.Session
-	storage  *storage.Storage
 	registry *commandkit.Registry
 
-	// perGuildLocks serializes read-modify-write of command hash cache per guild.
+	// perGuildLocks serializes sync operations per guild.
 	// Kept inside Manager (not global) so multiple Manager instances don't share state.
 	perGuildLocks sync.Map // map[guildID string]*sync.Mutex
 }
 
 // NewManager creates a command manager with a Discord session, storage, and command registry.
-func NewManager(dg *discordgo.Session, storage *storage.Storage, registry *commandkit.Registry) *Manager {
+func NewManager(dg *discordgo.Session, registry *commandkit.Registry) *Manager {
 	return &Manager{
 		dg:       dg,
-		storage:  storage,
 		registry: registry,
 	}
 }
 
-// RegisterCommands syncs commands for a guild: deletes obsolete ones, creates or updates changed ones.
+// RegisterCommands syncs commands for a guild by comparing desired definitions (registry)
+// with actual commands in Discord, then creating, editing, and deleting as needed.
 func (m *Manager) RegisterCommands(guildID string) error {
 	mu := m.guildLock(guildID)
 	mu.Lock()
@@ -45,16 +43,61 @@ func (m *Manager) RegisterCommands(guildID string) error {
 		return err
 	}
 
-	registeredCmds, _ := m.dg.ApplicationCommands(appID, guildID)
-	definedCmds := m.buildCommandDefinitions()
+	existingCmds, err := m.dg.ApplicationCommands(appID, guildID)
+	if err != nil {
+		return fmt.Errorf("failed to list application commands: %w", err)
+	}
+	desiredCmds := m.buildCommandDefinitions()
 
-	cachedHashes, _ := m.storage.CommandHashes(guildID)
-	if cachedHashes == nil {
-		cachedHashes = map[string]string{}
+	existingByKey := make(map[string]*discordgo.ApplicationCommand, len(existingCmds))
+	for _, c := range existingCmds {
+		existingByKey[commandKey(c)] = c
+	}
+	desiredByKey := make(map[string]*discordgo.ApplicationCommand, len(desiredCmds))
+	for _, c := range desiredCmds {
+		desiredByKey[commandKey(c)] = c
 	}
 
-	m.deleteObsoleteCommands(appID, guildID, registeredCmds, definedCmds)
-	m.upsertChangedCommands(appID, guildID, definedCmds, cachedHashes)
+	var created, edited, deleted, unchanged int
+
+	log.Printf("[INFO] [%s] Syncing commands (desired=%d existing=%d)", guildID, len(desiredCmds), len(existingCmds))
+
+	for key, desired := range desiredByKey {
+		if existing, ok := existingByKey[key]; ok {
+			if hashCommand(existing) == hashCommand(desired) {
+				unchanged++
+				continue
+			}
+			if _, err := m.dg.ApplicationCommandEdit(appID, guildID, existing.ID, desired); err != nil {
+				log.Printf("[ERR] [%s] Failed to edit command %q (type %d): %v", guildID, desired.Name, desired.Type, err)
+			} else {
+				edited++
+			}
+			time.Sleep(discordRateLimitDelay)
+			continue
+		}
+
+		if _, err := m.dg.ApplicationCommandCreate(appID, guildID, desired); err != nil {
+			log.Printf("[ERR] [%s] Failed to create command %q (type %d): %v", guildID, desired.Name, desired.Type, err)
+		} else {
+			created++
+		}
+		time.Sleep(discordRateLimitDelay)
+	}
+
+	for key, existing := range existingByKey {
+		if _, ok := desiredByKey[key]; ok {
+			continue
+		}
+		if err := m.dg.ApplicationCommandDelete(appID, guildID, existing.ID); err != nil {
+			log.Printf("[ERR] [%s] Failed to delete obsolete command %q (type %d): %v", guildID, existing.Name, existing.Type, err)
+		} else {
+			deleted++
+		}
+		time.Sleep(discordRateLimitDelay)
+	}
+
+	log.Printf("[DONE] [%s] Commands sync result: created=%d edited=%d deleted=%d unchanged=%d", guildID, created, edited, deleted, unchanged)
 
 	return nil
 }
@@ -88,81 +131,6 @@ func (m *Manager) buildCommandDefinitions() []*discordgo.ApplicationCommand {
 		}
 	}
 	return defs
-}
-
-// deleteObsoleteCommands removes from Discord any commands that are no longer in the local registry.
-func (m *Manager) deleteObsoleteCommands(
-	appID, guildID string,
-	registeredCmds, definedCmds []*discordgo.ApplicationCommand,
-) {
-	definedKeys := make(map[string]struct{}, len(definedCmds))
-	for _, d := range definedCmds {
-		definedKeys[commandKey(d)] = struct{}{}
-	}
-
-	hashes, _ := m.storage.CommandHashes(guildID)
-	if hashes == nil {
-		hashes = map[string]string{}
-	}
-
-	for _, rc := range registeredCmds {
-		if _, stillDefined := definedKeys[commandKey(rc)]; stillDefined {
-			continue
-		}
-		log.Printf("[INFO] [%s] Deleting obsolete command: %s (type %d)", guildID, rc.Name, rc.Type)
-		if err := m.dg.ApplicationCommandDelete(appID, guildID, rc.ID); err != nil {
-			log.Printf("[ERR] [%s] Failed to delete command %q: %v", guildID, rc.Name, err)
-		} else {
-			delete(hashes, rc.Name)
-		}
-	}
-
-	_ = m.storage.SetCommandHashes(guildID, hashes)
-}
-
-// upsertChangedCommands creates or updates commands whose hash differs from the cached value.
-// It receives cachedHashes from the caller to avoid a redundant storage read.
-func (m *Manager) upsertChangedCommands(
-	appID, guildID string,
-	defs []*discordgo.ApplicationCommand,
-	cachedHashes map[string]string,
-) {
-	var changed []*discordgo.ApplicationCommand
-	freshHashes := make(map[string]string, len(defs))
-
-	for _, d := range defs {
-		h := hashCommand(d)
-		freshHashes[d.Name] = h
-		if cachedHashes[d.Name] != h {
-			changed = append(changed, d)
-		}
-	}
-
-	if len(changed) == 0 {
-		return
-	}
-
-	log.Printf("[INFO] [%s] Registering %d changed command(s)...", guildID, len(changed))
-
-	for _, d := range changed {
-		if _, err := m.dg.ApplicationCommandCreate(appID, guildID, d); err != nil {
-			log.Printf("[ERR] [%s] Failed to register command %q: %v", guildID, d.Name, err)
-		} else {
-			log.Printf("[DONE] [%s] Registered command: %q", guildID, d.Name)
-		}
-		time.Sleep(discordRateLimitDelay)
-	}
-
-	// Merge fresh hashes into the stored ones so obsolete entries are preserved
-	// until deleteObsoleteCommands cleans them up.
-	storedHashes, _ := m.storage.CommandHashes(guildID)
-	if storedHashes == nil {
-		storedHashes = map[string]string{}
-	}
-	for k, v := range freshHashes {
-		storedHashes[k] = v
-	}
-	_ = m.storage.SetCommandHashes(guildID, storedHashes)
 }
 
 // --- Command conversion ---

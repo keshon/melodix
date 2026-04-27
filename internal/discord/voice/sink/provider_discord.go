@@ -109,4 +109,3 @@ func (p *DiscordSinkProvider) InvalidateSink() {
 	p.vc = nil
 	p.currentChannelID = ""
 }
-

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -40,6 +41,27 @@ func normalizeOptions(opts []*discordgo.ApplicationCommandOption) []map[string]i
 			"required":    o.Required,
 		}
 
+		// Include "shape-affecting" option fields that Discord uses to validate/interpret input.
+		// We intentionally only persist values that are set (or non-zero) to keep hashes stable
+		// across discordgo versions where default values may differ.
+		if o.Autocomplete {
+			entry["autocomplete"] = true
+		}
+		// Note: discordgo uses plain numeric fields here (not pointers), so we include the values
+		// directly for deterministic comparisons. Defaults (0) are stable across desired/existing.
+		entry["min_value"] = o.MinValue
+		entry["max_value"] = o.MaxValue
+		entry["min_length"] = o.MinLength
+		entry["max_length"] = o.MaxLength
+		if len(o.ChannelTypes) > 0 {
+			cts := make([]int, 0, len(o.ChannelTypes))
+			for _, ct := range o.ChannelTypes {
+				cts = append(cts, int(ct))
+			}
+			sort.Ints(cts)
+			entry["channel_types"] = cts
+		}
+
 		if len(o.Choices) > 0 {
 			choices := make([]map[string]interface{}, len(o.Choices))
 			for j, ch := range o.Choices {
@@ -48,6 +70,15 @@ func normalizeOptions(opts []*discordgo.ApplicationCommandOption) []map[string]i
 					"value": ch.Value,
 				}
 			}
+			// Discord treats choices as a set; order should not affect comparison.
+			sort.Slice(choices, func(i, j int) bool {
+				ni, _ := choices[i]["name"].(string)
+				nj, _ := choices[j]["name"].(string)
+				if ni != nj {
+					return ni < nj
+				}
+				return valueKey(choices[i]["value"]) < valueKey(choices[j]["value"])
+			})
 			entry["choices"] = choices
 		}
 
@@ -63,4 +94,28 @@ func normalizeOptions(opts []*discordgo.ApplicationCommandOption) []map[string]i
 	})
 
 	return out
+}
+
+func valueKey(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return "s:" + t
+	case bool:
+		if t {
+			return "b:1"
+		}
+		return "b:0"
+	case float64:
+		// json.Unmarshal numbers become float64; encode deterministically.
+		return "n:" + strconv.FormatFloat(t, 'g', -1, 64)
+	case int:
+		return "i:" + strconv.Itoa(t)
+	case int64:
+		return "i64:" + strconv.FormatInt(t, 10)
+	case uint64:
+		return "u64:" + strconv.FormatUint(t, 10)
+	default:
+		b, _ := json.Marshal(t)
+		return "j:" + string(b)
+	}
 }
