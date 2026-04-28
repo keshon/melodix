@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/keshon/buildinfo"
+	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command/core/about"
 	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/command/core/help"
@@ -107,69 +108,22 @@ func main() {
 	log.Println("[INFO] Discord bot exited cleanly")
 }
 
-// registerCommands registers all commands with middleware
+// defaultMiddleware is the standard middleware chain applied to all commands.
+var defaultMiddleware = []commandkit.Middleware{
+	middleware.WithGroupAccessCheck(),
+	middleware.WithGuildOnly(),
+	middleware.WithUserPermissionCheck(),
+	middleware.WithCommandLogger(),
+}
+
+// registerCommands registers all bot commands with the default middleware stack.
 func registerCommands(bot *discord.Bot) {
-	command.Register(
-		&commands.Commands{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
-
-	command.Register(
-		&about.About{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
-
-	command.Register(
-		&help.Help{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
-
-	command.Register(
-		&maintenance.Maintenance{},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
-
-	command.Register(
-		&play.Play{Bot: bot},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
-
-	command.Register(
-		&next.Next{Bot: bot},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
-
-	command.Register(
-		&stop.Stop{Bot: bot},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
-
-	command.Register(
-		&history.History{Bot: bot},
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(),
-	)
+	command.Register(&commands.Commands{}, defaultMiddleware...)
+	command.Register(&about.About{}, defaultMiddleware...)
+	command.Register(&help.Help{}, defaultMiddleware...)
+	command.Register(&maintenance.Maintenance{}, defaultMiddleware...)
+	command.Register(&play.Play{Bot: bot}, defaultMiddleware...)
+	command.Register(&next.Next{Bot: bot}, defaultMiddleware...)
+	command.Register(&stop.Stop{Bot: bot}, defaultMiddleware...)
+	command.Register(&history.History{Bot: bot}, defaultMiddleware...)
 }
