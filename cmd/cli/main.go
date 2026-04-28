@@ -5,13 +5,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
 	"github.com/keshon/buildinfo"
+	"github.com/keshon/melodix/internal/applog"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
@@ -20,12 +20,15 @@ import (
 
 func main() {
 	info := buildinfo.Get()
-	log.Printf("[INFO] %v CLI player", info.Project)
 
 	cfg, err := config.New()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		_, _ = os.Stderr.WriteString("failed to load config: " + err.Error() + "\n")
+		os.Exit(1)
 	}
+
+	log := applog.Setup("cli", cfg)
+	log.Info().Str("project", info.Project).Msg("cli_starting")
 
 	provider := sink.NewSpeakerProvider()
 	defer provider.Close()
@@ -153,7 +156,7 @@ func main() {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		log.Printf("Read error: %v", err)
+		log.Error().Err(err).Msg("cli_stdin_error")
 	}
 }
 

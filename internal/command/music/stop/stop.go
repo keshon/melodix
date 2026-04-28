@@ -2,7 +2,6 @@ package stop
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command"
@@ -44,13 +43,13 @@ func (c *Stop) Run(ctx interface{}) error {
 
 	player := c.Bot.GetOrCreatePlayer(e.GuildID)
 	if err := player.Stop(true); err != nil {
-		log.Printf("[WARN] Stop error: %v", err)
+		slashCtx.AppLog.Warn().Err(err).Msg("player_stop_failed")
 	}
 	stopMsg := "Playback stopped. Queue cleared."
 	if err := respond.FollowupEmbed(s, e, &discordgo.MessageEmbed{
 		Description: "⏹️ " + stopMsg,
 	}); err != nil {
-		log.Printf("[WARN] FollowupEmbed failed for /stop: %v", err)
+		slashCtx.AppLog.Warn().Str("command", "stop").Err(err).Msg("followup_embed_failed")
 		_ = respond.EditResponse(s, e, "⏹️ "+stopMsg)
 	}
 	return nil

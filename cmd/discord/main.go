@@ -3,8 +3,8 @@ package main
 
 import (
 	"context"
-	"log"
 	"math/rand/v2"
+	"os"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/commandkit"
+	"github.com/keshon/melodix/internal/applog"
 	"github.com/keshon/melodix/internal/command/core/about"
 	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/command/core/help"
@@ -27,38 +28,38 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/rs/zerolog"
 )
 
 func main() {
 	info := buildinfo.Get()
-	log.Printf("[INFO] Starting %v bot...", info.Project)
 
 	// Root context cancels on SIGINT/SIGTERM.
 	rootCtx, stopSignal := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignal()
 
-	// Load config
 	cfg, err := config.New()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		_, _ = os.Stderr.WriteString("failed to load config: " + err.Error() + "\n")
+		os.Exit(1)
 	}
+
+	log := applog.Setup("discord", cfg)
+	log.Info().Str("project", info.Project).Msg("bot_starting")
+
 	if cfg.DiscordToken == "" {
-		log.Fatal("DISCORD_TOKEN is required for the Discord bot")
+		log.Fatal().Msg("config_missing_token")
 	}
 
-	// Initialize storage
-	store, err := storage.New(rootCtx, cfg.StoragePath)
+	store, err := storage.New(rootCtx, cfg.StoragePath, log)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("storage_init_failed")
 	}
 
-	// Create bot instance
-	bot := discord.NewBot(cfg, store)
+	bot := discord.NewBot(cfg, store, log)
 
-	// Register commands before starting the session
-	registerCommands(bot)
+	registerCommands(bot, log)
 
-	// Start Discord session with auto-reconnect loop
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -67,7 +68,7 @@ func main() {
 			var lastErr error
 			if err := bot.RunSession(rootCtx); err != nil {
 				lastErr = err
-				log.Println("[ERR] Discord session ended:", err)
+				log.Error().Err(err).Msg("discord_session_end")
 			}
 
 			select {
@@ -76,11 +77,9 @@ func main() {
 			default:
 				delay := 5 * time.Second
 				if discord.IsSessionUnhealthyError(lastErr) {
-					// Fast restart for transient unhealthy gateway/API probe conditions.
-					// Add a tiny jitter to avoid tight loops aligning with Discord infra.
 					delay = time.Duration(rand.IntN(200)) * time.Millisecond
 				}
-				log.Printf("[WARN] Restarting session in %v...", delay)
+				log.Warn().Dur("delay", delay).Msg("discord_session_restart")
 				timer := time.NewTimer(delay)
 				select {
 				case <-rootCtx.Done():
@@ -93,37 +92,36 @@ func main() {
 	}()
 
 	<-rootCtx.Done()
-	log.Println("[INFO] Shutdown signal received, stopping bot...")
+	log.Info().Msg("shutdown_signal_received")
 
-	// Wait for the session loop goroutine to exit.
 	wg.Wait()
 
-	// Timebox storage shutdown so Ctrl+C always returns to the shell.
 	closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelClose()
 	if err := store.Close(closeCtx); err != nil {
-		log.Printf("[ERR] Storage close error: %v", err)
+		log.Error().Err(err).Msg("storage_close_failed")
 	}
 
-	log.Println("[INFO] Discord bot exited cleanly")
+	log.Info().Msg("bot_exit")
 }
 
-// defaultMiddleware is the standard middleware chain applied to all commands.
-var defaultMiddleware = []commandkit.Middleware{
-	middleware.WithGroupAccessCheck(),
-	middleware.WithGuildOnly(),
-	middleware.WithUserPermissionCheck(),
-	middleware.WithCommandLogger(),
+func defaultMiddleware(log zerolog.Logger) []commandkit.Middleware {
+	return []commandkit.Middleware{
+		middleware.WithGroupAccessCheck(),
+		middleware.WithGuildOnly(),
+		middleware.WithUserPermissionCheck(),
+		middleware.WithCommandLogger(log),
+	}
 }
 
-// registerCommands registers all bot commands with the default middleware stack.
-func registerCommands(bot *discord.Bot) {
-	command.Register(&commands.Commands{}, defaultMiddleware...)
-	command.Register(&about.About{}, defaultMiddleware...)
-	command.Register(&help.Help{}, defaultMiddleware...)
-	command.Register(&maintenance.Maintenance{}, defaultMiddleware...)
-	command.Register(&play.Play{Bot: bot}, defaultMiddleware...)
-	command.Register(&next.Next{Bot: bot}, defaultMiddleware...)
-	command.Register(&stop.Stop{Bot: bot}, defaultMiddleware...)
-	command.Register(&history.History{Bot: bot}, defaultMiddleware...)
+func registerCommands(bot *discord.Bot, log zerolog.Logger) {
+	mw := defaultMiddleware(log)
+	command.Register(&commands.Commands{}, mw...)
+	command.Register(&about.About{}, mw...)
+	command.Register(&help.Help{}, mw...)
+	command.Register(&maintenance.Maintenance{}, mw...)
+	command.Register(&play.Play{Bot: bot}, mw...)
+	command.Register(&next.Next{Bot: bot}, mw...)
+	command.Register(&stop.Stop{Bot: bot}, mw...)
+	command.Register(&history.History{Bot: bot}, mw...)
 }

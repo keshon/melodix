@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/sources"
+	"github.com/rs/zerolog"
 )
 
 // VoiceAPI is the interface the Discord bot exposes for voice/music commands.
@@ -15,6 +16,7 @@ type VoiceAPI interface {
 	Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error)
 	// UpdateGuildMusicStatus creates or edits the guild's music status message so updates work beyond 15 min token expiry.
 	UpdateGuildMusicStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error
+	AppLog() zerolog.Logger
 }
 
 // UserVoiceState holds minimal voice channel state for a user.
@@ -59,4 +61,9 @@ func (b *Bot) UpdateGuildMusicStatus(s *discordgo.Session, i *discordgo.Interact
 		return nil
 	}
 	return b.voice.UpdateGuildMusicStatus(s, i, guildID, embed)
+}
+
+// AppLog returns the application zerolog logger (structured app logs, not command audit).
+func (b *Bot) AppLog() zerolog.Logger {
+	return b.log
 }

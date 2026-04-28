@@ -2,7 +2,6 @@ package discord
 
 import (
 	"context"
-	"log"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/commandkit"
@@ -18,7 +17,7 @@ func (b *Bot) onInteractionCreate(s *discordgo.Session, i *discordgo.Interaction
 	case discordgo.InteractionMessageComponent:
 		b.onComponentInteraction(s, i)
 	default:
-		log.Printf("[DEBUG] Unhandled interaction type: %d", i.Type)
+		b.log.Debug().Int("interaction_type", int(i.Type)).Msg("interaction_unhandled")
 	}
 }
 
@@ -26,7 +25,7 @@ func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.Interactio
 	name := i.ApplicationCommandData().Name
 	c := commandkit.DefaultRegistry.Get(name)
 	if c == nil {
-		log.Printf("[WARN] Unknown command: %s", name)
+		b.log.Warn().Str("command", name).Msg("command_unknown")
 		return
 	}
 
@@ -40,25 +39,27 @@ func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.Interactio
 		inv = &commandkit.Invocation{Data: &command.MessageApplicationCommandContext{
 			Session: s, Event: i, Storage: b.storage, Target: i.Message,
 			Config: b.cfg, Responder: respond.DefaultResponder, Logger: logger,
+			AppLog: b.log,
 		}}
 	case discordgo.ChatApplicationCommand:
 		inv = &commandkit.Invocation{Data: &command.SlashInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
 			Config: b.cfg, Responder: respond.DefaultResponder, Logger: logger,
+			AppLog:    b.log,
 			SystemBus: b.systemBus,
 		}}
 	default:
 		return
 	}
 
-	b.runGuardedInteraction(s, i, "slash "+name, func(cmdCtx context.Context) error {
+	b.runGuardedInteraction(s, i, "slash", name, func(cmdCtx context.Context) error {
 		return c.Run(cmdCtx, inv)
 	})
 }
 
 func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	customID := i.MessageComponentData().CustomID
-	log.Printf("[DEBUG] Component interaction: %s", customID)
+	b.log.Debug().Str("custom_id", customID).Msg("component_interaction")
 
 	var matched commandkit.Command
 	for _, c := range commandkit.DefaultRegistry.GetAll() {
@@ -68,13 +69,13 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 		}
 	}
 	if matched == nil {
-		log.Printf("[WARN] No component handler for customID: %s", customID)
+		b.log.Warn().Str("custom_id", customID).Msg("component_no_handler")
 		return
 	}
 
 	handler, ok := commandkit.Root(matched).(command.ComponentInteractionHandler)
 	if !ok {
-		log.Printf("[WARN] Command %s does not implement ComponentInteractionHandler", matched.Name())
+		b.log.Warn().Str("command", matched.Name()).Msg("component_handler_missing")
 		return
 	}
 
@@ -82,11 +83,12 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 	logger := b.cmdLogger
 	b.mu.RUnlock()
 
-	b.runGuardedInteraction(s, i, "component "+matched.Name(), func(cmdCtx context.Context) error {
+	b.runGuardedInteraction(s, i, "component", matched.Name(), func(cmdCtx context.Context) error {
 		_ = cmdCtx
 		return handler.Component(&command.ComponentInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
 			Config: b.cfg, Responder: respond.DefaultResponder, Logger: logger,
+			AppLog: b.log,
 		})
 	})
 }

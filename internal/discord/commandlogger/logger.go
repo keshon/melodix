@@ -1,11 +1,10 @@
 package commandlogger
 
 import (
-	"log"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/rs/zerolog"
 )
 
 // Logger implements command.Logger so middleware can log command
@@ -16,11 +15,12 @@ import (
 type Logger struct {
 	session *discordgo.Session
 	storage *storage.Storage
+	log     zerolog.Logger
 }
 
 // New creates a Logger bound to a Discord session and storage.
-func New(s *discordgo.Session, store *storage.Storage) *Logger {
-	return &Logger{session: s, storage: store}
+func New(s *discordgo.Session, store *storage.Storage, log zerolog.Logger) *Logger {
+	return &Logger{session: s, storage: store, log: log}
 }
 
 // Ensure Logger satisfies the command.Logger interface at compile time.
@@ -40,7 +40,7 @@ func (l *Logger) resolveChannelName(channelID string) string {
 	if err != nil {
 		ch, err = l.session.Channel(channelID)
 		if err != nil {
-			log.Printf("[WARN] Failed to resolve channel %s: %v", channelID, err)
+			l.log.Warn().Str("channel_id", channelID).Err(err).Msg("failed to resolve channel name")
 			return ""
 		}
 	}
@@ -52,7 +52,7 @@ func (l *Logger) resolveGuildName(guildID string) string {
 	if err != nil {
 		g, err = l.session.Guild(guildID)
 		if err != nil {
-			log.Printf("[WARN] Failed to resolve guild %s: %v", guildID, err)
+			l.log.Warn().Str("guild_id", guildID).Err(err).Msg("failed to resolve guild name")
 			return ""
 		}
 	}

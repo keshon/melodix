@@ -9,6 +9,7 @@ import (
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sources"
+	"github.com/rs/zerolog"
 )
 
 // Manual verification (Discord):
@@ -20,7 +21,7 @@ func TestAppendGetListMusicPlayback(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
 	ctx := context.Background()
-	s, err := New(ctx, path)
+	s, err := New(ctx, path, zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +76,7 @@ func TestMusicPlaybackTrimKeepsRecent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
 	ctx := context.Background()
-	s, err := New(ctx, path)
+	s, err := New(ctx, path, zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

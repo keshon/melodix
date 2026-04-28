@@ -3,7 +3,6 @@ package readme
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"github.com/keshon/melodix/internal/command"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/rs/zerolog"
 )
 
 // RecommendedBotPermissions is the bitmask for the minimal permissions the bot needs.
@@ -39,7 +39,7 @@ var RecommendedBotPermissionsList = []string{
 
 // UpdateReadme generates README.md from the command registry and category ordering.
 // categoryWeights maps category name to sort order (lower first).
-func UpdateReadme(registry *commandkit.Registry, categoryWeights map[string]int) error {
+func UpdateReadme(registry *commandkit.Registry, categoryWeights map[string]int, log zerolog.Logger) error {
 	commands := registry.GetAll()
 
 	sort.Slice(commands, func(i, j int) bool {
@@ -124,7 +124,7 @@ func UpdateReadme(registry *commandkit.Registry, categoryWeights map[string]int)
 		return err
 	}
 
-	log.Println("[INFO] README.md updated with current commands")
+	log.Info().Msg("readme_updated")
 	return nil
 }
 

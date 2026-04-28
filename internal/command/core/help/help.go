@@ -1,8 +1,6 @@
 package help
 
 import (
-	"log"
-
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord/respond"
@@ -54,7 +52,7 @@ func (c *Help) Run(ctx interface{}) error {
 	event := context.Event
 
 	if err := respond.RespondDeferredEphemeral(session, event); err != nil {
-		log.Println("[ERROR] Failed to defer help interaction:", err)
+		context.AppLog.Error().Err(err).Msg("help_defer_failed")
 		return err
 	}
 

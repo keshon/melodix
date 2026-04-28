@@ -2,7 +2,6 @@ package history
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -188,7 +187,7 @@ func (c *History) Run(ctx interface{}) error {
 		Color: respond.EmbedColor,
 	}
 	if err := respond.FollowupEmbed(s, e, embed); err != nil {
-		log.Printf("[WARN] FollowupEmbed failed for /history: %v", err)
+		slashCtx.AppLog.Warn().Str("command", "history").Err(err).Msg("followup_embed_failed")
 	}
 	return nil
 }

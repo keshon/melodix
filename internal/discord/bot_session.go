@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -18,13 +17,15 @@ import (
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/discord/watchdog"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/rs/zerolog"
 )
 
 // NewBot creates a Bot. Register any bot-dependent commands before calling Run.
-func NewBot(cfg *config.Config, storage *storage.Storage) *Bot {
+func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *Bot {
 	b := &Bot{
 		cfg:       cfg,
 		storage:   storage,
+		log:       log,
 		slashCmds: make(map[string][]*discordgo.ApplicationCommand),
 		systemBus: systemevents.New(32),
 	}
@@ -34,7 +35,7 @@ func NewBot(cfg *config.Config, storage *storage.Storage) *Bot {
 		s := b.dg
 		b.mu.RUnlock()
 		return s
-	}, cfg, storage)
+	}, cfg, storage, log)
 	b.sessionCtx.Store(&sessionCtxHolder{ctx: context.Background()})
 	b.cmdGuard.Store(&cmdGuardHolder{g: disabledGuard})
 	return b
@@ -54,8 +55,9 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	// --- Core services wiring (voice, cmd manager, cmd logger) ---
 	b.mu.Lock()
 	b.dg = dg
-	b.cmdLogger = commandlogger.New(dg, b.storage)
-	b.cmdManager = commandsync.NewSyncer(dg, commandkit.DefaultRegistry)
+	b.cmdLogger = commandlogger.New(dg, b.storage, b.log)
+	b.cmdManager = commandsync.NewSyncer(dg, commandkit.DefaultRegistry, b.log)
+	attachDiscordgoLogger(b.log)
 
 	b.mu.Unlock()
 
@@ -92,7 +94,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		case "restart-session", "":
 			// fallthrough to restart logic
 		default:
-			log.Printf("[WARN] Unknown DISCORD_UNHEALTHY_MODE=%q, falling back to restart-session", mode)
+			b.log.Warn().Str("mode", mode).Msg("discord_unhealthy_mode_unknown")
 		}
 
 		// mode=restart-session: optionally ignore first N signals within a window (still invalidating sinks).
@@ -126,7 +128,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		}
 
 		restartOnce.Do(func() {
-			log.Println("[WARN] Discord session unhealthy — will restart session")
+			b.log.Warn().Msg("discord_session_unhealthy")
 			// Soft-restart path: keep players/queues, but invalidate transport so they recover fast.
 			invalidateSinks()
 			close(disconnected)
@@ -163,7 +165,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		return fmt.Errorf("failed to open Discord session: %w", err)
 	}
 	defer func() {
-		log.Println("[INFO] Closing Discord session...")
+		b.log.Info().Msg("discord_session_close")
 		dg.Close()
 	}()
 
@@ -182,7 +184,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 						// Prefer targeted refresh (one guild) when possible.
 						if evt.GuildID != "" {
 							if err := b.cmdManager.SyncGuildCommands(evt.GuildID); err != nil {
-								log.Printf("[ERR] Failed to refresh commands for guild %s: %v", evt.GuildID, err)
+								b.log.Error().Str("guild_id", evt.GuildID).Err(err).Msg("commands_sync_failed")
 							}
 							return
 						}
@@ -199,7 +201,11 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		b.cfg.WSSilenceTimeout,
 		dg.HeartbeatLatency,
 		func(meta watchdog.WSSilenceMeta) {
-			log.Printf("[WARN] Gateway silent for %v (timeout=%v, heartbeat=%v) — reconnecting", meta.SinceLastWS, meta.Timeout, meta.HeartbeatLatency)
+			b.log.Warn().
+				Dur("since_last_ws", meta.SinceLastWS).
+				Dur("timeout", meta.Timeout).
+				Dur("heartbeat_latency", meta.HeartbeatLatency).
+				Msg("gateway_silent")
 			notifyUnhealthy()
 		},
 		watchdog.WSSilenceOptions{SettleDelay: 15 * time.Second, Tick: 10 * time.Second},
@@ -229,23 +235,23 @@ func (b *Bot) RunSession(ctx context.Context) error {
 				// the send. Skip the probe this tick and let discordgo handle it.
 				lat := dg.HeartbeatLatency()
 				if lat < 0 {
-					log.Printf("[DEBUG] Heartbeat latency negative (%v), skipping probe this tick", lat)
+					b.log.Debug().Dur("heartbeat_latency", lat).Msg("heartbeat_latency_skipped")
 					continue
 				}
 				if _, err := dg.User("@me"); err != nil {
 					fails++
-					log.Printf("[WARN] API probe failed (%d/3): %v", fails, err)
+					b.log.Warn().Int("fails", fails).Err(err).Msg("api_probe_failed")
 					if fails >= 3 {
-						log.Println("[WARN] 3 consecutive API probe failures — reconnecting")
+						b.log.Warn().Int("fails", fails).Msg("api_probe_threshold")
 						notifyUnhealthy()
 						return
 					}
 				} else {
 					if fails > 0 {
-						log.Printf("[INFO] API probe recovered after %d failure(s)", fails)
+						b.log.Info().Int("fails", fails).Msg("api_probe_recovered")
 					}
 					fails = 0
-					log.Printf("[DEBUG] Heartbeat latency: %v", lat)
+					b.log.Debug().Dur("heartbeat_latency", lat).Msg("heartbeat_latency")
 				}
 			}
 		}
@@ -253,7 +259,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		log.Println("[INFO] ❎ Shutdown signal received. Cleaning up...")
+		b.log.Info().Msg("shutdown_signal_received")
 		b.stopAllPlayers()
 		return nil
 	case <-disconnected:
@@ -266,7 +272,7 @@ func (b *Bot) stopAllPlayers() {
 	if b.voice != nil {
 		b.voice.StopAllPlayers()
 	}
-	log.Println("[INFO] All players stopped")
+	b.log.Info().Msg("players_all_stopped")
 }
 
 func (b *Bot) configureIntents() {

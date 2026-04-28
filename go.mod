@@ -8,11 +8,15 @@ require (
 	github.com/keshon/buildinfo v0.1.0
 	github.com/keshon/commandkit v0.1.0
 	github.com/keshon/datastore v0.1.1
+	github.com/rs/zerolog v1.34.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect

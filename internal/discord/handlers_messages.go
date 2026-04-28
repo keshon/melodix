@@ -3,7 +3,6 @@ package discord
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/commandkit"
@@ -29,20 +28,20 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
-			log.Printf("[WARN] Command slot acquire failed (message): %v", err)
+			b.log.Warn().Str("kind", "message").Err(err).Msg("command_slot_busy")
 		},
 	}, func(cmdCtx context.Context) error {
 		inv := &commandkit.Invocation{Data: &command.MessageContext{Session: s, Event: m, Storage: b.storage, Config: b.cfg}}
 		for _, c := range commandkit.DefaultRegistry.GetAll() {
 			if err := c.Run(cmdCtx, inv); err != nil {
 				if cmdCtx.Err() == context.DeadlineExceeded {
-					log.Printf("[WARN] Message command timed out: %v", err)
+					b.log.Warn().Str("kind", "message").Err(err).Msg("command_timeout")
 					_ = respond.MessageEmbed(s, m.ChannelID, &discordgo.MessageEmbed{
 						Description: "Timed out running command.",
 					})
 					continue
 				}
-				log.Println("[ERR] Error running message command:", err)
+				b.log.Error().Str("kind", "message").Err(err).Msg("command_run_error")
 				_ = respond.MessageEmbed(s, m.ChannelID, &discordgo.MessageEmbed{
 					Description: fmt.Sprintf("Error: %v", err),
 				})
@@ -60,7 +59,7 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
-			log.Printf("[WARN] Command slot acquire failed (reaction): %v", err)
+			b.log.Warn().Str("kind", "reaction").Err(err).Msg("command_slot_busy")
 		},
 	}, func(cmdCtx context.Context) error {
 		inv := &commandkit.Invocation{Data: &command.MessageReactionContext{
@@ -72,10 +71,10 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 			}
 			if err := c.Run(cmdCtx, inv); err != nil {
 				if cmdCtx.Err() == context.DeadlineExceeded {
-					log.Printf("[WARN] Reaction command timed out: %v", err)
+					b.log.Warn().Str("kind", "reaction").Err(err).Msg("command_timeout")
 					continue
 				}
-				log.Println("[ERR] Error running reaction command:", err)
+				b.log.Error().Str("kind", "reaction").Err(err).Msg("command_run_error")
 				_ = respond.MessageEmbed(s, r.ChannelID, &discordgo.MessageEmbed{
 					Description: fmt.Sprintf("Error: %v", err),
 				})

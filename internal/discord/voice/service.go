@@ -1,7 +1,6 @@
 package voice
 
 import (
-	"log"
 	"sync"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
 	"github.com/keshon/melodix/pkg/music/sources"
+	"github.com/rs/zerolog"
 )
 
 // SessionGetter returns the current Discord session (used so providers stay valid across reconnects).
@@ -32,6 +32,7 @@ type Service struct {
 	getSession    SessionGetter
 	cfg           *config.Config
 	store         *storage.Storage
+	log           zerolog.Logger
 	mu            sync.RWMutex
 	players       map[string]*player.Player
 	sinkProviders map[string]*sink.DiscordSinkProvider
@@ -42,11 +43,12 @@ type Service struct {
 }
 
 // New creates a voice service for the given session getter and config.
-func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage) *Service {
+func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage, log zerolog.Logger) *Service {
 	return &Service{
 		getSession:       getSession,
 		cfg:              cfg,
 		store:            store,
+		log:              log,
 		players:          make(map[string]*player.Player),
 		sinkProviders:    make(map[string]*sink.DiscordSinkProvider),
 		guildMusicStatus: make(map[string]guildMusicStatus),
@@ -55,6 +57,7 @@ func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage) *
 
 type playbackRecorder struct {
 	store *storage.Storage
+	log   zerolog.Logger
 }
 
 func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parsers.TrackParse) {
@@ -62,7 +65,7 @@ func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parse
 		return
 	}
 	if _, err := r.store.AppendMusicPlayback(guildID, track, playedAt); err != nil {
-		log.Printf("[music] append playback history: %v", err)
+		r.log.Warn().Str("guild_id", guildID).Err(err).Msg("playback_history_append_failed")
 	}
 }
 
@@ -77,7 +80,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	if p, ok := s.players[guildID]; ok {
 		p.SetGuildID(guildID)
 		if s.store != nil {
-			p.SetRecorder(playbackRecorder{store: s.store})
+			p.SetRecorder(playbackRecorder{store: s.store, log: s.log})
 		}
 		return p
 	}
@@ -87,7 +90,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	provider, ok := s.sinkProviders[guildID]
 	if !ok {
 		voiceDelay := time.Duration(s.cfg.VoiceReadyDelayMs) * time.Millisecond
-		provider = sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay)
+		provider = sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay, s.log)
 		s.sinkProviders[guildID] = provider
 	}
 	p := player.NewWithOptions(provider, s.resolver, player.Options{
@@ -96,7 +99,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	})
 	p.SetGuildID(guildID)
 	if s.store != nil {
-		p.SetRecorder(playbackRecorder{store: s.store})
+		p.SetRecorder(playbackRecorder{store: s.store, log: s.log})
 	}
 	s.players[guildID] = p
 	return p

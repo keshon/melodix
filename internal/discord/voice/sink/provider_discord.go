@@ -3,12 +3,12 @@ package sink
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	musicsink "github.com/keshon/melodix/pkg/music/sink"
+	"github.com/rs/zerolog"
 )
 
 // SessionGetter returns the current Discord session (used so providers stay valid across reconnects).
@@ -19,13 +19,14 @@ type DiscordSinkProvider struct {
 	getSession       SessionGetter
 	guildID          string
 	voiceReadyDelay  time.Duration
+	log              zerolog.Logger
 	mu               sync.Mutex
 	vc               *discordgo.VoiceConnection
 	currentChannelID string
 }
 
 // NewDiscordSinkProvider creates a sink provider for the given session getter and guild.
-func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReadyDelay time.Duration) *DiscordSinkProvider {
+func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReadyDelay time.Duration, log zerolog.Logger) *DiscordSinkProvider {
 	if voiceReadyDelay <= 0 {
 		voiceReadyDelay = 500 * time.Millisecond
 	}
@@ -33,6 +34,7 @@ func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReady
 		getSession:      getSession,
 		guildID:         guildID,
 		voiceReadyDelay: voiceReadyDelay,
+		log:             log.With().Str("component", "DiscordSink").Logger(),
 	}
 }
 
@@ -48,12 +50,12 @@ func (p *DiscordSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 	defer p.mu.Unlock()
 
 	if p.vc != nil && p.currentChannelID == target {
-		return &DiscordSink{vc: p.vc}, nil
+		return &DiscordSink{vc: p.vc, log: p.log}, nil
 	}
 
 	if p.vc != nil {
 		if err := p.vc.Disconnect(context.Background()); err != nil {
-			log.Printf("[DiscordSink] Disconnect error: %v", err)
+			p.log.Warn().Str("phase", "rejoin").Err(err).Msg("voice_disconnect_failed")
 		}
 		p.vc = nil
 		p.currentChannelID = ""
@@ -71,11 +73,11 @@ func (p *DiscordSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 	}
 	p.vc = vc
 	p.currentChannelID = target
-	log.Printf("[DiscordSink] Joined voice channel %s on guild %s", target, p.guildID)
+	p.log.Info().Str("channel_id", target).Str("guild_id", p.guildID).Msg("voice_joined")
 
 	time.Sleep(p.voiceReadyDelay)
 
-	return &DiscordSink{vc: vc}, nil
+	return &DiscordSink{vc: vc, log: p.log}, nil
 }
 
 // ReleaseSink disconnects from the voice channel for the given target.
@@ -89,7 +91,7 @@ func (p *DiscordSinkProvider) ReleaseSink(target string) {
 		return
 	}
 	if err := p.vc.Disconnect(context.Background()); err != nil {
-		log.Printf("[DiscordSink] Disconnect error: %v", err)
+		p.log.Warn().Str("phase", "release").Err(err).Msg("voice_disconnect_failed")
 	}
 	p.vc = nil
 	p.currentChannelID = ""
@@ -104,7 +106,7 @@ func (p *DiscordSinkProvider) InvalidateSink() {
 		return
 	}
 	if err := p.vc.Disconnect(context.Background()); err != nil {
-		log.Printf("[DiscordSink] Invalidate disconnect error: %v", err)
+		p.log.Warn().Str("phase", "invalidate").Err(err).Msg("voice_disconnect_failed")
 	}
 	p.vc = nil
 	p.currentChannelID = ""

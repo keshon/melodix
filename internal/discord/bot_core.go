@@ -14,6 +14,7 @@ import (
 	"github.com/keshon/melodix/internal/discord/systemevents"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/rs/zerolog"
 )
 
 // Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired in run.
@@ -24,6 +25,7 @@ type Bot struct {
 	cfg       *config.Config
 	mu        sync.RWMutex
 	voice     *voice.Service
+	log       zerolog.Logger
 
 	cmdManager *commandsync.Syncer
 	cmdLogger  *commandlogger.Logger

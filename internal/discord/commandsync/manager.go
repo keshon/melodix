@@ -2,13 +2,13 @@ package commandsync
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
+	"github.com/rs/zerolog"
 )
 
 const discordRateLimitDelay = 25 * time.Millisecond
@@ -17,6 +17,7 @@ const discordRateLimitDelay = 25 * time.Millisecond
 type Syncer struct {
 	dg       *discordgo.Session
 	registry *commandkit.Registry
+	log      zerolog.Logger
 
 	// perGuildLocks serializes sync operations per guild.
 	// Kept inside Syncer (not global) so multiple Syncer instances don't share state.
@@ -24,10 +25,11 @@ type Syncer struct {
 }
 
 // NewSyncer creates a command syncer with a Discord session and command registry.
-func NewSyncer(dg *discordgo.Session, registry *commandkit.Registry) *Syncer {
+func NewSyncer(dg *discordgo.Session, registry *commandkit.Registry, log zerolog.Logger) *Syncer {
 	return &Syncer{
 		dg:       dg,
 		registry: registry,
+		log:      log,
 	}
 }
 
@@ -60,7 +62,7 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 
 	var created, edited, deleted, unchanged int
 
-	log.Printf("[INFO] [%s] Syncing commands (desired=%d existing=%d)", guildID, len(desiredCmds), len(existingCmds))
+	m.log.Info().Str("guild_id", guildID).Int("desired", len(desiredCmds)).Int("existing", len(existingCmds)).Msg("commands_sync_start")
 
 	for key, desired := range desiredByKey {
 		if existing, ok := existingByKey[key]; ok {
@@ -69,7 +71,7 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 				continue
 			}
 			if _, err := m.dg.ApplicationCommandEdit(appID, guildID, existing.ID, desired); err != nil {
-				log.Printf("[ERR] [%s] Failed to edit command %q (type %d): %v", guildID, desired.Name, desired.Type, err)
+				m.log.Error().Str("guild_id", guildID).Str("command", desired.Name).Int("type", int(desired.Type)).Err(err).Msg("command_edit_failed")
 			} else {
 				edited++
 			}
@@ -78,7 +80,7 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 		}
 
 		if _, err := m.dg.ApplicationCommandCreate(appID, guildID, desired); err != nil {
-			log.Printf("[ERR] [%s] Failed to create command %q (type %d): %v", guildID, desired.Name, desired.Type, err)
+			m.log.Error().Str("guild_id", guildID).Str("command", desired.Name).Int("type", int(desired.Type)).Err(err).Msg("command_create_failed")
 		} else {
 			created++
 		}
@@ -90,14 +92,14 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 			continue
 		}
 		if err := m.dg.ApplicationCommandDelete(appID, guildID, existing.ID); err != nil {
-			log.Printf("[ERR] [%s] Failed to delete obsolete command %q (type %d): %v", guildID, existing.Name, existing.Type, err)
+			m.log.Error().Str("guild_id", guildID).Str("command", existing.Name).Int("type", int(existing.Type)).Err(err).Msg("command_delete_failed")
 		} else {
 			deleted++
 		}
 		time.Sleep(discordRateLimitDelay)
 	}
 
-	log.Printf("[DONE] [%s] Commands sync result: created=%d edited=%d deleted=%d unchanged=%d", guildID, created, edited, deleted, unchanged)
+	m.log.Info().Str("guild_id", guildID).Int("created", created).Int("edited", edited).Int("deleted", deleted).Int("unchanged", unchanged).Msg("commands_sync_done")
 
 	return nil
 }
@@ -109,7 +111,7 @@ func (m *Syncer) SyncAllGuilds() {
 	}
 	for _, g := range m.dg.State.Guilds {
 		if err := m.SyncGuildCommands(g.ID); err != nil {
-			log.Printf("[ERR] Failed to sync commands for guild %s: %v", g.ID, err)
+			m.log.Error().Str("guild_id", g.ID).Err(err).Msg("commands_sync_failed")
 		}
 	}
 }

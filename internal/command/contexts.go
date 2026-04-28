@@ -5,6 +5,7 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/systemevents"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/rs/zerolog"
 )
 
 type SlashInteractionContext struct {
@@ -15,6 +16,7 @@ type SlashInteractionContext struct {
 	Config    *config.Config
 	Responder Responder
 	Logger    Logger
+	AppLog    zerolog.Logger
 	SystemBus *systemevents.Bus
 }
 
@@ -25,6 +27,7 @@ type ComponentInteractionContext struct {
 	Config    *config.Config
 	Responder Responder
 	Logger    Logger
+	AppLog    zerolog.Logger
 }
 
 type MessageReactionContext struct {
@@ -43,6 +46,7 @@ type MessageApplicationCommandContext struct {
 	Config    *config.Config
 	Responder Responder
 	Logger    Logger
+	AppLog    zerolog.Logger
 }
 
 type MessageContext struct {

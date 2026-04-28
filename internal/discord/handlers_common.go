@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/respond"
@@ -42,31 +41,34 @@ func (b *Bot) runWithCommandContext(opts commandRunOptions, fn func(cmdCtx conte
 	}
 }
 
+// runGuardedInteraction runs a slash/component interaction under the bot's command guard.
+// kind is the dispatch kind ("slash" or "component"); name is the resolved command name.
+// Both end up as structured fields ("kind", "command") on every emitted log event.
 func (b *Bot) runGuardedInteraction(
 	s *discordgo.Session,
 	i *discordgo.InteractionCreate,
-	label string,
+	kind string,
+	name string,
 	fn func(cmdCtx context.Context) error,
 ) {
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
-			log.Printf("[WARN] Command slot acquire failed (%s): %v", label, err)
+			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_slot_busy")
 			_ = respond.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
 				Description: "Bot is busy right now. Please try again in a moment.",
 			})
 		},
 		onTimeout: func(err error) {
-			log.Printf("[WARN] Command timed out (%s): %v", label, err)
+			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_timeout")
 			_ = respond.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
 				Description: "Timed out running command.",
 			})
 		},
 		onError: func(err error) {
-			log.Printf("[ERR] Error running command %s: %v", label, err)
+			b.log.Error().Str("kind", kind).Str("command", name).Err(err).Msg("command_run_error")
 			_ = respond.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
 				Description: fmt.Sprintf("Error running command: %v", err),
 			})
 		},
 	}, fn)
 }
-

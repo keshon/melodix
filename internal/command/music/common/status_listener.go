@@ -3,7 +3,6 @@ package common
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -18,6 +17,7 @@ const StatusListenTimeout = 15 * time.Minute
 
 func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.VoiceAPI, guildID string) {
 	go func() {
+		appLog := bot.AppLog()
 		ctx, cancel := context.WithTimeout(context.Background(), StatusListenTimeout)
 		defer cancel()
 
@@ -56,7 +56,7 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 						Description: desc,
 						Color:       respond.EmbedColor,
 					}); err != nil {
-						log.Printf("[WARN] UpdateGuildMusicStatus: %v", err)
+						appLog.Warn().Str("status", "playing").Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 					}
 					return
 
@@ -66,7 +66,7 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 						Description: "Added to queue",
 						Color:       respond.EmbedColor,
 					}); err != nil {
-						log.Printf("[WARN] UpdateGuildMusicStatus: %v", err)
+						appLog.Warn().Str("status", "added").Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 					}
 					return
 				}

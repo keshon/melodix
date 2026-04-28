@@ -3,21 +3,22 @@ package storage
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/keshon/melodix/internal/domain"
 
 	"github.com/keshon/datastore"
+	"github.com/rs/zerolog"
 )
 
 const commandHistoryLimit int = 50
 
 type Storage struct {
-	ds *datastore.DataStore
+	ds  *datastore.DataStore
+	log zerolog.Logger
 }
 
-func New(ctx context.Context, filePath string) (*Storage, error) {
+func New(ctx context.Context, filePath string, log zerolog.Logger) (*Storage, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -25,7 +26,7 @@ func New(ctx context.Context, filePath string) (*Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Storage{ds: ds}, nil
+	return &Storage{ds: ds, log: log}, nil
 }
 
 func (s *Storage) Close(ctx context.Context) error {
@@ -50,7 +51,7 @@ func (s *Storage) Close(ctx context.Context) error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		log.Printf("[ERR] datastore close timed out: %v", ctx.Err())
+		s.log.Error().Err(ctx.Err()).Msg("storage_close_timeout")
 		return ctx.Err()
 	}
 }
@@ -86,7 +87,7 @@ func (s *Storage) Records() map[string]domain.Record {
 		var record domain.Record
 		exists, err := s.ds.Get(key, &record)
 		if err != nil {
-			log.Printf("error getting record for key %q: %v", key, err)
+			s.log.Warn().Str("key", key).Err(err).Msg("storage_record_get_failed")
 			continue
 		}
 		if !exists {
