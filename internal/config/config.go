@@ -23,6 +23,15 @@ type Config struct {
 	CommandParallelism int `env:"COMMAND_PARALLELISM" envDefault:"16"`
 	// WSSilenceTimeout triggers a session restart if no gateway messages are received.
 	WSSilenceTimeout time.Duration `env:"WS_SILENCE_TIMEOUT" envDefault:"2m"`
+
+	// DiscordUnhealthyMode controls what happens when watchdogs/API probe decide the session is unhealthy.
+	// Supported: restart|invalidate-only|ignore.
+	DiscordUnhealthyMode string `env:"DISCORD_UNHEALTHY_MODE" envDefault:"restart"`
+	// DiscordUnhealthyGrace allows ignoring the first N unhealthy signals within DiscordUnhealthyWindow
+	// (still invalidating sinks), before triggering a session restart. Applies to mode=restart only.
+	DiscordUnhealthyGrace int `env:"DISCORD_UNHEALTHY_GRACE" envDefault:"0"`
+	// DiscordUnhealthyWindow is the counting window for DiscordUnhealthyGrace.
+	DiscordUnhealthyWindow time.Duration `env:"DISCORD_UNHEALTHY_WINDOW" envDefault:"1m"`
 }
 
 // IsDeveloper reports whether userID is the configured developer (avoids discord import in middleware).

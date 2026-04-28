@@ -70,14 +70,65 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	// and similar events; treating every Disconnect as fatal caused dg.Close() to race with that
 	// reconnect and wiped in-memory voice/queue state.
 	disconnected := make(chan struct{})
-	var disconnectOnce sync.Once
-	notifyDisconnect := func() {
-		disconnectOnce.Do(func() {
+	var restartOnce sync.Once
+	var unhealthyMu sync.Mutex
+	var unhealthyCount int
+	var unhealthyWindowStart time.Time
+
+	invalidateSinks := func() {
+		if b.voice != nil {
+			b.voice.InvalidateAllSinks()
+		}
+	}
+
+	notifyUnhealthy := func() {
+		mode := b.cfg.DiscordUnhealthyMode
+		switch mode {
+		case "ignore":
+			return
+		case "invalidate-only":
+			invalidateSinks()
+			return
+		case "restart", "":
+			// fallthrough to restart logic
+		default:
+			log.Printf("[WARN] Unknown DISCORD_UNHEALTHY_MODE=%q, falling back to restart", mode)
+		}
+
+		// mode=restart: optionally ignore first N signals within a window (still invalidating sinks).
+		grace := b.cfg.DiscordUnhealthyGrace
+		if grace < 0 {
+			grace = 0
+		}
+		window := b.cfg.DiscordUnhealthyWindow
+		if window <= 0 {
+			window = time.Minute
+		}
+
+		shouldRestart := true
+		if grace > 0 {
+			now := time.Now()
+			unhealthyMu.Lock()
+			if unhealthyWindowStart.IsZero() || now.Sub(unhealthyWindowStart) > window {
+				unhealthyWindowStart = now
+				unhealthyCount = 0
+			}
+			unhealthyCount++
+			if unhealthyCount <= grace {
+				shouldRestart = false
+			}
+			unhealthyMu.Unlock()
+		}
+
+		if !shouldRestart {
+			invalidateSinks()
+			return
+		}
+
+		restartOnce.Do(func() {
 			log.Println("[WARN] Discord session unhealthy — will restart session")
 			// Soft-restart path: keep players/queues, but invalidate transport so they recover fast.
-			if b.voice != nil {
-				b.voice.InvalidateAllSinks()
-			}
+			invalidateSinks()
 			close(disconnected)
 		})
 	}
@@ -149,7 +200,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		dg.HeartbeatLatency,
 		func(meta watchdog.WSSilenceMeta) {
 			log.Printf("[WARN] Gateway silent for %v (timeout=%v, heartbeat=%v) — reconnecting", meta.SinceLastWS, meta.Timeout, meta.HeartbeatLatency)
-			notifyDisconnect()
+			notifyUnhealthy()
 		},
 		watchdog.WSSilenceOptions{SettleDelay: 15 * time.Second, Tick: 10 * time.Second},
 	).Run(sessionCtx)
@@ -186,7 +237,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 					log.Printf("[WARN] API probe failed (%d/3): %v", fails, err)
 					if fails >= 3 {
 						log.Println("[WARN] 3 consecutive API probe failures — reconnecting")
-						notifyDisconnect()
+						notifyUnhealthy()
 						return
 					}
 				} else {
