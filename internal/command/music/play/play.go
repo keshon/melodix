@@ -8,11 +8,13 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/perm"
+	"github.com/keshon/melodix/internal/discord/respond"
 	"github.com/keshon/melodix/internal/storage"
 )
 
 type Play struct {
-	Bot discord.BotVoice
+	Bot discord.VoiceAPI
 }
 
 func (c *Play) Name() string             { return "play" }
@@ -81,7 +83,7 @@ func (c *Play) Run(ctx interface{}) error {
 	}
 
 	if input == "" {
-		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Input is required.",
 		})
@@ -90,12 +92,12 @@ func (c *Play) Run(ctx interface{}) error {
 	parsed, err := common.ParsePlayInput(input)
 	if err != nil {
 		if errors.Is(err, common.ErrPlayInputTooManyItems) {
-			return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Error",
 				Description: "Too many tracks in one command.",
 			})
 		}
-		return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Invalid input: %v", err),
 		})
@@ -112,16 +114,16 @@ func (c *Play) Run(ctx interface{}) error {
 
 	voiceState, err := c.Bot.FindUserVoiceState(guildID, member.User.ID)
 	if err != nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Voice Error",
 			Description: fmt.Sprintf("%v", err),
 		})
 		return nil
 	}
 
-	permOK, err := discord.CheckBotVoicePermissions(s, voiceState.ChannelID)
+	permOK, err := perm.CheckBotVoicePermissions(s, voiceState.ChannelID)
 	if err != nil || !permOK {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Voice Error",
 			Description: "I don't have permission to join or speak in that voice channel.",
 		})
@@ -130,7 +132,7 @@ func (c *Play) Run(ctx interface{}) error {
 
 	p := c.Bot.GetOrCreatePlayer(guildID)
 	if p == nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -140,7 +142,7 @@ func (c *Play) Run(ctx interface{}) error {
 	switch parsed.Kind {
 	case common.PlayInputKindHistoryIDs:
 		if store == nil {
-			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Error",
 				Description: "Music history storage is not available.",
 			})
@@ -150,12 +152,12 @@ func (c *Play) Run(ctx interface{}) error {
 			mp, gerr := store.MusicPlayback(guildID, hid)
 			if gerr != nil {
 				if errors.Is(gerr, storage.ErrMusicPlaybackNotFound) {
-					discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 						Title:       "🎵 History",
 						Description: "Unknown history id. It may have been removed when the list was trimmed, or the id is wrong.",
 					})
 				} else {
-					discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 						Title:       "🎵 History",
 						Description: fmt.Sprintf("Could not load history entry: %v", gerr),
 					})
@@ -164,7 +166,7 @@ func (c *Play) Run(ctx interface{}) error {
 			}
 			ti := storage.TrackInfoFromMusicPlayback(mp)
 			if err := p.EnqueueTrackInfo(ti); err != nil {
-				discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 					Title:       "🎵 Queue Error",
 					Description: fmt.Sprintf("%v", err),
 				})
@@ -176,14 +178,14 @@ func (c *Play) Run(ctx interface{}) error {
 		for _, u := range parsed.URLs {
 			tracks, resErr := c.Bot.Resolve(guildID, u, source, parser)
 			if resErr != nil || len(tracks) == 0 {
-				discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 					Title:       "🎵 Error",
 					Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
 				})
 				return nil
 			}
 			if err := p.EnqueueTrackInfo(tracks[0]); err != nil {
-				discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 					Title:       "🎵 Queue Error",
 					Description: fmt.Sprintf("%v", err),
 				})
@@ -194,14 +196,14 @@ func (c *Play) Run(ctx interface{}) error {
 	case common.PlayInputKindQuery:
 		tracks, resErr := c.Bot.Resolve(guildID, parsed.Query, source, parser)
 		if resErr != nil || len(tracks) == 0 {
-			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Error",
 				Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
 			})
 			return nil
 		}
 		if err := p.EnqueueTrackInfo(tracks[0]); err != nil {
-			discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Queue Error",
 				Description: fmt.Sprintf("%v", err),
 			})

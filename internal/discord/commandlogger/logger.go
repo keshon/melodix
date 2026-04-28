@@ -1,4 +1,4 @@
-package cmdlog
+package commandlogger
 
 import (
 	"log"

@@ -3,6 +3,7 @@ package command
 import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/systemevents"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -14,6 +15,7 @@ type SlashInteractionContext struct {
 	Config    *config.Config
 	Responder Responder
 	Logger    Logger
+	SystemBus *systemevents.Bus
 }
 
 type ComponentInteractionContext struct {

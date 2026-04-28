@@ -1,4 +1,4 @@
-package cmdmanager
+package commandsync
 
 import (
 	"crypto/sha1"
@@ -10,10 +10,10 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// hashCommand produces a stable SHA-1 fingerprint of the fields that matter for
+// commandFingerprint produces a stable SHA-1 fingerprint of the fields that matter for
 // command registration. Changing name, description, type, or options will produce
 // a different hash and trigger an upsert.
-func hashCommand(c *discordgo.ApplicationCommand) string {
+func commandFingerprint(c *discordgo.ApplicationCommand) string {
 	stable := map[string]interface{}{
 		"name":        c.Name,
 		"description": c.Description,
@@ -41,14 +41,9 @@ func normalizeOptions(opts []*discordgo.ApplicationCommandOption) []map[string]i
 			"required":    o.Required,
 		}
 
-		// Include "shape-affecting" option fields that Discord uses to validate/interpret input.
-		// We intentionally only persist values that are set (or non-zero) to keep hashes stable
-		// across discordgo versions where default values may differ.
 		if o.Autocomplete {
 			entry["autocomplete"] = true
 		}
-		// Note: discordgo uses plain numeric fields here (not pointers), so we include the values
-		// directly for deterministic comparisons. Defaults (0) are stable across desired/existing.
 		entry["min_value"] = o.MinValue
 		entry["max_value"] = o.MaxValue
 		entry["min_length"] = o.MinLength
@@ -70,7 +65,6 @@ func normalizeOptions(opts []*discordgo.ApplicationCommandOption) []map[string]i
 					"value": ch.Value,
 				}
 			}
-			// Discord treats choices as a set; order should not affect comparison.
 			sort.Slice(choices, func(i, j int) bool {
 				ni, _ := choices[i]["name"].(string)
 				nj, _ := choices[j]["name"].(string)
@@ -106,7 +100,6 @@ func valueKey(v interface{}) string {
 		}
 		return "b:0"
 	case float64:
-		// json.Unmarshal numbers become float64; encode deterministically.
 		return "n:" + strconv.FormatFloat(t, 'g', -1, 64)
 	case int:
 		return "i:" + strconv.Itoa(t)
@@ -119,3 +112,4 @@ func valueKey(v interface{}) string {
 		return "j:" + string(b)
 	}
 }
+

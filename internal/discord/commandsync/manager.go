@@ -1,4 +1,4 @@
-package cmdmanager
+package commandsync
 
 import (
 	"fmt"
@@ -13,27 +13,27 @@ import (
 
 const discordRateLimitDelay = 25 * time.Millisecond
 
-// Manager handles registering and syncing slash commands per guild.
-type Manager struct {
+// Syncer handles registering and syncing slash commands per guild.
+type Syncer struct {
 	dg       *discordgo.Session
 	registry *commandkit.Registry
 
 	// perGuildLocks serializes sync operations per guild.
-	// Kept inside Manager (not global) so multiple Manager instances don't share state.
+	// Kept inside Syncer (not global) so multiple Syncer instances don't share state.
 	perGuildLocks sync.Map // map[guildID string]*sync.Mutex
 }
 
-// NewManager creates a command manager with a Discord session, storage, and command registry.
-func NewManager(dg *discordgo.Session, registry *commandkit.Registry) *Manager {
-	return &Manager{
+// NewSyncer creates a command syncer with a Discord session and command registry.
+func NewSyncer(dg *discordgo.Session, registry *commandkit.Registry) *Syncer {
+	return &Syncer{
 		dg:       dg,
 		registry: registry,
 	}
 }
 
-// RegisterCommands syncs commands for a guild by comparing desired definitions (registry)
+// SyncGuildCommands syncs commands for a guild by comparing desired definitions (registry)
 // with actual commands in Discord, then creating, editing, and deleting as needed.
-func (m *Manager) RegisterCommands(guildID string) error {
+func (m *Syncer) SyncGuildCommands(guildID string) error {
 	mu := m.guildLock(guildID)
 	mu.Lock()
 	defer mu.Unlock()
@@ -64,7 +64,7 @@ func (m *Manager) RegisterCommands(guildID string) error {
 
 	for key, desired := range desiredByKey {
 		if existing, ok := existingByKey[key]; ok {
-			if hashCommand(existing) == hashCommand(desired) {
+			if commandFingerprint(existing) == commandFingerprint(desired) {
 				unchanged++
 				continue
 			}
@@ -102,28 +102,26 @@ func (m *Manager) RegisterCommands(guildID string) error {
 	return nil
 }
 
-// RefreshAll syncs commands for every guild the bot is currently in.
-func (m *Manager) RefreshAll() {
+// SyncAllGuilds syncs commands for every guild the bot is currently in.
+func (m *Syncer) SyncAllGuilds() {
 	if m.dg == nil {
 		return
 	}
 	for _, g := range m.dg.State.Guilds {
-		if err := m.RegisterCommands(g.ID); err != nil {
-			log.Printf("[ERR] Failed to refresh commands for guild %s: %v", g.ID, err)
+		if err := m.SyncGuildCommands(g.ID); err != nil {
+			log.Printf("[ERR] Failed to sync commands for guild %s: %v", g.ID, err)
 		}
 	}
 }
 
 // --- Internal helpers ---
 
-// guildLock returns (creating if needed) a per-guild mutex for hash cache operations.
-func (m *Manager) guildLock(guildID string) *sync.Mutex {
+func (m *Syncer) guildLock(guildID string) *sync.Mutex {
 	v, _ := m.perGuildLocks.LoadOrStore(guildID, &sync.Mutex{})
 	return v.(*sync.Mutex)
 }
 
-// buildCommandDefinitions converts all registered commands into Discord ApplicationCommand definitions.
-func (m *Manager) buildCommandDefinitions() []*discordgo.ApplicationCommand {
+func (m *Syncer) buildCommandDefinitions() []*discordgo.ApplicationCommand {
 	var defs []*discordgo.ApplicationCommand
 	for _, c := range m.registry.GetAll() {
 		if def := toApplicationCommand(c); def != nil {
@@ -135,8 +133,6 @@ func (m *Manager) buildCommandDefinitions() []*discordgo.ApplicationCommand {
 
 // --- Command conversion ---
 
-// toApplicationCommand converts a commandkit.Command into a Discord ApplicationCommand definition.
-// Returns nil if the command does not expose a slash or context-menu definition.
 func toApplicationCommand(c commandkit.Command) *discordgo.ApplicationCommand {
 	root := commandkit.Root(c)
 
@@ -161,13 +157,11 @@ func toApplicationCommand(c commandkit.Command) *discordgo.ApplicationCommand {
 	return nil
 }
 
-// commandKey returns a unique string key for a command based on its name and type.
 func commandKey(c *discordgo.ApplicationCommand) string {
 	return fmt.Sprintf("%s:%d", c.Name, c.Type)
 }
 
-// appID returns the bot's application ID, using the cached state when available.
-func (m *Manager) appID() (string, error) {
+func (m *Syncer) appID() (string, error) {
 	if id := m.dg.State.User.ID; id != "" {
 		return id, nil
 	}
@@ -177,3 +171,4 @@ func (m *Manager) appID() (string, error) {
 	}
 	return u.ID, nil
 }
+

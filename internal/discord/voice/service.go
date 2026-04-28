@@ -156,3 +156,21 @@ func (s *Service) StopAllPlayers() {
 		_ = p.Stop(true)
 	}
 }
+
+// InvalidateAllSinks disconnects and forgets current voice connections for all guilds,
+// without stopping players or clearing queues. Intended for session restarts.
+func (s *Service) InvalidateAllSinks() {
+	s.mu.RLock()
+	providers := make([]*sink.DiscordSinkProvider, 0, len(s.sinkProviders))
+	for _, p := range s.sinkProviders {
+		providers = append(providers, p)
+	}
+	s.mu.RUnlock()
+
+	for _, p := range providers {
+		if p == nil {
+			continue
+		}
+		p.InvalidateSink()
+	}
+}

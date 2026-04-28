@@ -6,7 +6,7 @@ import (
 
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -113,11 +113,11 @@ func (c *Commands) Run(ctx interface{}) error {
 	case "status":
 		return c.runCmdStatus(session, event, *storage)
 	case "toggle":
-		return c.runCmdToggle(session, event, *storage)
+		return c.runCmdToggle(session, event, *storage, context.SystemBus)
 	case "update":
-		return c.runCmdUpdate(session, event)
+		return c.runCmdUpdate(session, event, context.SystemBus)
 	default:
-		return discord.RespondEmbedEphemeral(session, event, &discordgo.MessageEmbed{
+		return respond.RespondEmbedEphemeral(session, event, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

@@ -8,17 +8,17 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-// BotVoice is the interface the Discord bot exposes for voice/music commands.
-type BotVoice interface {
+// VoiceAPI is the interface the Discord bot exposes for voice/music commands.
+type VoiceAPI interface {
 	GetOrCreatePlayer(guildID string) *player.Player
-	FindUserVoiceState(guildID, userID string) (*VoiceState, error)
+	FindUserVoiceState(guildID, userID string) (*UserVoiceState, error)
 	Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error)
 	// UpdateGuildMusicStatus creates or edits the guild's music status message so updates work beyond 15 min token expiry.
 	UpdateGuildMusicStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error
 }
 
-// VoiceState holds minimal voice channel state for a user.
-type VoiceState struct {
+// UserVoiceState holds minimal voice channel state for a user.
+type UserVoiceState struct {
 	ChannelID string
 	UserID    string
 }
@@ -32,14 +32,14 @@ func (b *Bot) GetOrCreatePlayer(guildID string) *player.Player {
 }
 
 // FindUserVoiceState returns the voice channel a user is currently in, or an error if none.
-func (b *Bot) FindUserVoiceState(guildID, userID string) (*VoiceState, error) {
+func (b *Bot) FindUserVoiceState(guildID, userID string) (*UserVoiceState, error) {
 	guild, err := b.dg.State.Guild(guildID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving guild: %w", err)
 	}
 	for _, vs := range guild.VoiceStates {
 		if vs.UserID == userID {
-			return &VoiceState{ChannelID: vs.ChannelID, UserID: vs.UserID}, nil
+			return &UserVoiceState{ChannelID: vs.ChannelID, UserID: vs.UserID}, nil
 		}
 	}
 	return nil, fmt.Errorf("user not in any voice channel")

@@ -8,6 +8,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
 	"github.com/keshon/melodix/pkg/music/player"
 )
 
@@ -15,7 +16,7 @@ import (
 // Updates after the first use the guild's stored message (edit), so they work beyond token expiry.
 const StatusListenTimeout = 15 * time.Minute
 
-func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.BotVoice, guildID string) {
+func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.VoiceAPI, guildID string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), StatusListenTimeout)
 		defer cancel()
@@ -53,7 +54,7 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 					if err := bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
 						Title:       player.StatusPlaying.StringEmoji() + " Now Playing",
 						Description: desc,
-						Color:       discord.EmbedColor,
+						Color:       respond.EmbedColor,
 					}); err != nil {
 						log.Printf("[WARN] UpdateGuildMusicStatus: %v", err)
 					}
@@ -63,7 +64,7 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 					if err := bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
 						Title:       player.StatusAdded.StringEmoji() + " Track(s) Added",
 						Description: "Added to queue",
-						Color:       discord.EmbedColor,
+						Color:       respond.EmbedColor,
 					}); err != nil {
 						log.Printf("[WARN] UpdateGuildMusicStatus: %v", err)
 					}

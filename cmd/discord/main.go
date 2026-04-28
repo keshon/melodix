@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand/v2"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -62,7 +63,9 @@ func main() {
 	go func() {
 		defer wg.Done()
 		for {
+			var lastErr error
 			if err := bot.RunSession(rootCtx); err != nil {
+				lastErr = err
 				log.Println("[ERR] Discord session ended:", err)
 			}
 
@@ -70,8 +73,14 @@ func main() {
 			case <-rootCtx.Done():
 				return
 			default:
-				log.Println("[WARN] Restarting session in 5s...")
-				timer := time.NewTimer(5 * time.Second)
+				delay := 5 * time.Second
+				if discord.IsSessionUnhealthyError(lastErr) {
+					// Fast restart for transient unhealthy gateway/API probe conditions.
+					// Add a tiny jitter to avoid tight loops aligning with Discord infra.
+					delay = time.Duration(rand.IntN(200)) * time.Millisecond
+				}
+				log.Printf("[WARN] Restarting session in %v...", delay)
+				timer := time.NewTimer(delay)
 				select {
 				case <-rootCtx.Done():
 					timer.Stop()

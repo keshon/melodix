@@ -7,10 +7,12 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/perm"
+	"github.com/keshon/melodix/internal/discord/respond"
 )
 
 type Next struct {
-	Bot discord.BotVoice
+	Bot discord.VoiceAPI
 }
 
 func (c *Next) Name() string             { return "next" }
@@ -46,16 +48,16 @@ func (c *Next) Run(ctx interface{}) error {
 
 	voiceState, err := c.Bot.FindUserVoiceState(guildID, member.User.ID)
 	if err != nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Voice Channel Error",
 			Description: fmt.Sprintf("Join a voice channel first.\n\n**Error:** %v", err),
 		})
 		return nil
 	}
 
-	permOK, err := discord.CheckBotVoicePermissions(s, voiceState.ChannelID)
+	permOK, err := perm.CheckBotVoicePermissions(s, voiceState.ChannelID)
 	if err != nil || !permOK {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Voice Error",
 			Description: "I don't have permission to join or speak in that voice channel.",
 		})
@@ -65,7 +67,7 @@ func (c *Next) Run(ctx interface{}) error {
 	player := c.Bot.GetOrCreatePlayer(guildID)
 	queue := player.Queue()
 	if len(queue) == 0 {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Queue Empty",
 			Description: "No tracks left to skip.",
 		})
@@ -74,7 +76,7 @@ func (c *Next) Run(ctx interface{}) error {
 
 	player.Stop(false)
 	if err = player.PlayNext(voiceState.ChannelID); err != nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Playback Error",
 			Description: fmt.Sprintf("Failed to play next track.\n\n**Error:** %v", err),
 		})

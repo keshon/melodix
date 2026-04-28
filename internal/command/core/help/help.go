@@ -5,7 +5,7 @@ import (
 
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -53,14 +53,14 @@ func (c *Help) Run(ctx interface{}) error {
 	session := context.Session
 	event := context.Event
 
-	if err := discord.RespondDeferredEphemeral(session, event); err != nil {
+	if err := respond.RespondDeferredEphemeral(session, event); err != nil {
 		log.Println("[ERROR] Failed to defer help interaction:", err)
 		return err
 	}
 
 	data := event.ApplicationCommandData()
 	if len(data.Options) == 0 {
-		return discord.FollowupEmbedEphemeral(session, event, &discordgo.MessageEmbed{
+		return respond.FollowupEmbedEphemeral(session, event, &discordgo.MessageEmbed{
 			Description: "No subcommand provided. Use `category`, `group`, or `flat`.",
 		})
 	}
@@ -79,8 +79,8 @@ func (c *Help) Run(ctx interface{}) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       info.Project + " Help",
 		Description: output,
-		Color:       discord.EmbedColor,
+		Color:       respond.EmbedColor,
 	}
 
-	return discord.FollowupEmbedEphemeral(session, event, embed)
+	return respond.FollowupEmbedEphemeral(session, event, embed)
 }

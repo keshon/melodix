@@ -7,7 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
 )
 
 type About struct{}
@@ -58,7 +58,7 @@ func (c *About) Run(ctx interface{}) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "ℹ️ About " + info.Project,
 		Description: info.Description,
-		Color:       discord.EmbedColor,
+		Color:       respond.EmbedColor,
 		Fields:      fields,
 	}
 
@@ -68,11 +68,11 @@ func (c *About) Run(ctx interface{}) error {
 		defer f.Close()
 		imageName := filepath.Base(imagePath)
 		embed.Image = &discordgo.MessageEmbedImage{URL: "attachment://" + imageName}
-		return discord.RespondEmbedEphemeralWithFile(session, event, embed, f, imageName)
+		return respond.RespondEmbedEphemeralWithFile(session, event, embed, f, imageName)
 	}
 
 	// Just embed if no banner
-	discord.RespondEmbedEphemeral(session, event, embed)
+	respond.RespondEmbedEphemeral(session, event, embed)
 
 	return nil
 }

@@ -1,8 +1,9 @@
-package discord
+package respond
 
 import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/discord/perm"
 )
 
 const EmbedColor = 0xb01e66
@@ -18,7 +19,7 @@ func (responder) RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCrea
 	return RespondEmbed(s, e, embed)
 }
 func (responder) CheckBotPermissions(s *discordgo.Session, channelID string) bool {
-	return CheckBotPermissions(s, channelID)
+	return perm.CheckBotPermissions(s, channelID)
 }
 func (responder) EmbedColor() int { return EmbedColor }
 
@@ -140,3 +141,4 @@ func MessageEmbed(s *discordgo.Session, channelID string, embed *discordgo.Messa
 	_, err := s.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }
+

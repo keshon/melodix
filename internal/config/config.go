@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
@@ -15,6 +16,13 @@ type Config struct {
 	DeveloperID           string   `env:"DEVELOPER_ID"`
 	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"false"`
 	VoiceReadyDelayMs     int      `env:"VOICE_READY_DELAY_MS" envDefault:"500"` // VoiceReadyDelayMs is the delay in ms after joining VC before sending opus (discordgo op 4 race). Default 500.
+
+	// CommandTimeout is a hard timebox for command execution.
+	CommandTimeout time.Duration `env:"COMMAND_TIMEOUT" envDefault:"30s"`
+	// CommandParallelism limits concurrently running command handlers.
+	CommandParallelism int `env:"COMMAND_PARALLELISM" envDefault:"16"`
+	// WSSilenceTimeout triggers a session restart if no gateway messages are received.
+	WSSilenceTimeout time.Duration `env:"WS_SILENCE_TIMEOUT" envDefault:"2m"`
 }
 
 // IsDeveloper reports whether userID is the configured developer (avoids discord import in middleware).

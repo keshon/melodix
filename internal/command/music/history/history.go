@@ -9,11 +9,12 @@ import (
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
 	"github.com/keshon/melodix/internal/domain"
 )
 
 type History struct {
-	Bot discord.BotVoice
+	Bot discord.VoiceAPI
 }
 
 func (c *History) Name() string             { return "history" }
@@ -86,7 +87,7 @@ func (c *History) Run(ctx interface{}) error {
 
 	guildID := e.GuildID
 	if c.Bot.GetOrCreatePlayer(guildID) == nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -94,7 +95,7 @@ func (c *History) Run(ctx interface{}) error {
 	}
 
 	if store == nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Music history storage is not available.",
 		})
@@ -103,7 +104,7 @@ func (c *History) Run(ctx interface{}) error {
 
 	rows, err := store.ListMusicPlaybackTimeline(guildID)
 	if err != nil {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 History",
 			Description: fmt.Sprintf("Could not load history: %v", err),
 		})
@@ -111,10 +112,10 @@ func (c *History) Run(ctx interface{}) error {
 	}
 
 	if len(rows) == 0 {
-		discord.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		respond.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 History",
 			Description: "No playback history yet. Use `/play` first. History is stored per server; very old entries may be removed when the list is trimmed.",
-			Color:       discord.EmbedColor,
+			Color:       respond.EmbedColor,
 		})
 		return nil
 	}
@@ -184,9 +185,9 @@ func (c *History) Run(ctx interface{}) error {
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),
 		},
-		Color: discord.EmbedColor,
+		Color: respond.EmbedColor,
 	}
-	if err := discord.FollowupEmbed(s, e, embed); err != nil {
+	if err := respond.FollowupEmbed(s, e, embed); err != nil {
 		log.Printf("[WARN] FollowupEmbed failed for /history: %v", err)
 	}
 	return nil

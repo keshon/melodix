@@ -2,10 +2,11 @@ package commands
 
 import (
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/systemevents"
 )
 
-func (c *Commands) runCmdUpdate(s *discordgo.Session, e *discordgo.InteractionCreate) error {
+func (c *Commands) runCmdUpdate(s *discordgo.Session, e *discordgo.InteractionCreate, bus *systemevents.Bus) error {
 	subOptions := e.ApplicationCommandData().Options[0].Options
 
 	var target string
@@ -13,13 +14,26 @@ func (c *Commands) runCmdUpdate(s *discordgo.Session, e *discordgo.InteractionCr
 		target = subOptions[0].StringValue()
 	}
 
-	discord.PublishSystemEvent(discord.SystemEvent{
-		Type:    discord.SystemEventRefreshCommands,
-		GuildID: e.GuildID,
-		Target:  target,
-	})
+	if bus != nil {
+		bus.Emit(systemevents.Event{
+			Type:    systemevents.EventRefreshCommands,
+			GuildID: e.GuildID,
+			Target:  target,
+		})
+	}
 
-	return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+	return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 		Description: "Command update requested — it may take some time to apply.",
+	})
+}
+
+func emitRefreshCommands(bus *systemevents.Bus, guildID, target string) {
+	if bus == nil {
+		return
+	}
+	bus.Emit(systemevents.Event{
+		Type:    systemevents.EventRefreshCommands,
+		GuildID: guildID,
+		Target:  target,
 	})
 }

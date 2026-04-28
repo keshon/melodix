@@ -7,10 +7,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
 )
 
 type Stop struct {
-	Bot discord.BotVoice
+	Bot discord.VoiceAPI
 }
 
 func (c *Stop) Name() string             { return "stop" }
@@ -46,11 +47,11 @@ func (c *Stop) Run(ctx interface{}) error {
 		log.Printf("[WARN] Stop error: %v", err)
 	}
 	stopMsg := "Playback stopped. Queue cleared."
-	if err := discord.FollowupEmbed(s, e, &discordgo.MessageEmbed{
+	if err := respond.FollowupEmbed(s, e, &discordgo.MessageEmbed{
 		Description: "⏹️ " + stopMsg,
 	}); err != nil {
 		log.Printf("[WARN] FollowupEmbed failed for /stop: %v", err)
-		_ = discord.EditResponse(s, e, "⏹️ "+stopMsg)
+		_ = respond.EditResponse(s, e, "⏹️ "+stopMsg)
 	}
 	return nil
 }

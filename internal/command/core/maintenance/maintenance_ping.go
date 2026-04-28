@@ -4,15 +4,15 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/respond"
 )
 
 func runPing(s *discordgo.Session, e *discordgo.InteractionCreate) error {
 
 	latency := s.HeartbeatLatency().Milliseconds()
-	return discord.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+	return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 		Title:       "Pong! 🏓",
 		Description: fmt.Sprintf("Latency: %dms", latency),
-		Color:       discord.EmbedColor,
+		Color:       respond.EmbedColor,
 	})
 }
