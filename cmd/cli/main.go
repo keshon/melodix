@@ -26,13 +26,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	_ = cfg // reserved for future CLI-specific config
 
 	provider := sink.NewSpeakerProvider()
 	defer provider.Close()
 
 	res := resolve.New()
-	p := player.New(provider, res)
+	p := player.NewWithOptions(provider, res, player.Options{
+		TransportRecoveryMode: cfg.PlayerTransportRecoveryMode,
+		TransportSoftAttempts: cfg.PlayerTransportSoftAttempts,
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

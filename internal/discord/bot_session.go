@@ -86,16 +86,16 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		switch mode {
 		case "ignore":
 			return
-		case "invalidate-only":
+		case "restart-voice":
 			invalidateSinks()
 			return
-		case "restart", "":
+		case "restart-session", "":
 			// fallthrough to restart logic
 		default:
-			log.Printf("[WARN] Unknown DISCORD_UNHEALTHY_MODE=%q, falling back to restart", mode)
+			log.Printf("[WARN] Unknown DISCORD_UNHEALTHY_MODE=%q, falling back to restart-session", mode)
 		}
 
-		// mode=restart: optionally ignore first N signals within a window (still invalidating sinks).
+		// mode=restart-session: optionally ignore first N signals within a window (still invalidating sinks).
 		grace := b.cfg.DiscordUnhealthyGrace
 		if grace < 0 {
 			grace = 0

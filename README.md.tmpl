@@ -167,6 +167,15 @@ Optional variables (you can add these to `.env` if needed):
 | `INIT_SLASH_COMMANDS`     | Set to `true` to register slash commands on every startup. | `false`                 |
 | `DEVELOPER_ID`            | Your Discord user ID for developer-only commands.          | (none)                  |
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave.              | (none)                  |
+| `VOICE_READY_DELAY_MS`    | Delay after joining VC before sending Opus (avoids OP4 race). | `500`                 |
+| `WS_SILENCE_TIMEOUT`      | Treat gateway as unhealthy after this long without messages. | `2m`                  |
+| `DISCORD_UNHEALTHY_MODE`  | Action on unhealthy: `restart-session`, `restart-voice`, `ignore`. | `restart-session` |
+| `DISCORD_UNHEALTHY_GRACE` | In `restart-session`: ignore first N unhealthy signals within window (still invalidates sinks). | `0` |
+| `DISCORD_UNHEALTHY_WINDOW`| Window for `DISCORD_UNHEALTHY_GRACE` counting.             | `1m`                    |
+| `PLAYER_TRANSPORT_RECOVERY_MODE` | On voice transport failure: `hard` (rejoin VC) or `soft` (reopen stream first, then hard fallback). | `hard` |
+| `PLAYER_TRANSPORT_SOFT_ATTEMPTS` | In `soft` mode: how many soft retries before hard fallback. | `1` |
+| `COMMAND_TIMEOUT`         | Hard timeout for a single command execution.               | `30s`                   |
+| `COMMAND_PARALLELISM`     | Max number of concurrently running command handlers.       | `16`                    |
 
 **Run the Discord bot:**
 

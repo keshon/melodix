@@ -94,10 +94,36 @@ type Player struct {
 	playbackDone chan struct{}
 	// PlayerStatus receives playback lifecycle updates for UI (buffered; drops if full).
 	PlayerStatus chan Status
+
+	transportRecoveryMode  string
+	transportSoftAttempts  int
+}
+
+type Options struct {
+	// TransportRecoveryMode controls behavior on stream.ErrVoiceTransport.
+	// Supported: "hard" (default), "soft".
+	TransportRecoveryMode string
+	// TransportSoftAttempts bounds how many soft retries we do before falling back to hard recovery.
+	// Applies to mode="soft" only. Default 1.
+	TransportSoftAttempts int
 }
 
 // New creates a new Player. target is set per playback via PlayNext(target).
 func New(sinkProvider sink.Provider, res Resolver) *Player {
+	return NewWithOptions(sinkProvider, res, Options{})
+}
+
+// NewWithOptions creates a new Player with custom options.
+func NewWithOptions(sinkProvider sink.Provider, res Resolver, opts Options) *Player {
+	mode := opts.TransportRecoveryMode
+	if mode == "" {
+		mode = "hard"
+	}
+	softAttempts := opts.TransportSoftAttempts
+	if softAttempts <= 0 {
+		softAttempts = 1
+	}
+
 	return &Player{
 		resolver:     res,
 		sinkProvider: sinkProvider,
@@ -105,6 +131,8 @@ func New(sinkProvider sink.Provider, res Resolver) *Player {
 		stopPlayback: make(chan struct{}),
 		playbackDone: make(chan struct{}),
 		PlayerStatus: make(chan Status, 10),
+		transportRecoveryMode: mode,
+		transportSoftAttempts: softAttempts,
 	}
 }
 
@@ -409,6 +437,8 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 	p.mu.Lock()
 	ct := p.currTrack
 	target := p.target
+	recoveryMode := p.transportRecoveryMode
+	softAttempts := p.transportSoftAttempts
 	p.mu.Unlock()
 
 	title := "(unknown)"
@@ -418,6 +448,7 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 	log.Printf("[Player] Running playback for track: %q", title)
 
 	var err error
+	softUsed := 0
 	for attempt := 1; attempt <= maxVoiceTransportAttempts; attempt++ {
 		var audioSink sink.AudioSink
 		audioSink, err = p.sinkProvider.Sink(target)
@@ -451,7 +482,16 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 		}
 		if errors.Is(err, stream.ErrVoiceTransport) {
 			log.Printf("[Player] Voice transport error (attempt %d/%d): %v", attempt, maxVoiceTransportAttempts, err)
-			p.sinkProvider.InvalidateSink()
+
+			softTry := recoveryMode == "soft" && softUsed < softAttempts
+			if softTry {
+				softUsed++
+				log.Printf("[Player] Transport recovery mode=soft (%d/%d): reopening stream without voice reconnect", softUsed, softAttempts)
+			} else {
+				log.Printf("[Player] Transport recovery: invalidating voice sink (hard fallback)")
+				p.sinkProvider.InvalidateSink()
+			}
+
 			if reopenErr := rs.ReopenAfterTransportFailure(); reopenErr != nil {
 				p.mu.Lock()
 				p.playing = false

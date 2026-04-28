@@ -90,7 +90,10 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		provider = sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay)
 		s.sinkProviders[guildID] = provider
 	}
-	p := player.New(provider, s.resolver)
+	p := player.NewWithOptions(provider, s.resolver, player.Options{
+		TransportRecoveryMode: s.cfg.PlayerTransportRecoveryMode,
+		TransportSoftAttempts: s.cfg.PlayerTransportSoftAttempts,
+	})
 	p.SetGuildID(guildID)
 	if s.store != nil {
 		p.SetRecorder(playbackRecorder{store: s.store})
