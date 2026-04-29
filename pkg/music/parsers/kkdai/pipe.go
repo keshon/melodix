@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os/exec"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
@@ -38,7 +37,7 @@ func kkdaiPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		return nil, nil, fmt.Errorf("get stream error: %w", err)
 	}
 
-	log.Printf("[kkdai-pipe] stream size: unknown (piping)\n") // size not used
+	log.Debug().Msg("stream_size_unknown_piping")
 
 	ffmpeg := exec.Command("ffmpeg",
 		"-ss", fmt.Sprintf("%.3f", seekSec),

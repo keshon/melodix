@@ -4,13 +4,13 @@ package stream
 import (
 	"fmt"
 	"io"
-	"log"
 	"strings"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
 	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -47,6 +47,11 @@ var Registry = map[string]parsers.Streamer{
 
 // OpenTrack attempts to open a stream for a track, trying parsers in order
 func OpenTrack(track *parsers.TrackParse, seekSec float64) (*TrackStream, func(), string, error) {
+	return OpenTrackWithLogger(zerolog.Nop(), track, seekSec)
+}
+
+// OpenTrackWithLogger is like OpenTrack but logs parser fallbacks using the provided logger.
+func OpenTrackWithLogger(log zerolog.Logger, track *parsers.TrackParse, seekSec float64) (*TrackStream, func(), string, error) {
 	var errs []error
 	var cleanup func()
 	var lastParser string
@@ -60,7 +65,7 @@ func OpenTrack(track *parsers.TrackParse, seekSec float64) (*TrackStream, func()
 
 		errs = append(errs, fmt.Errorf("[%s] %w", parser, err))
 		cleanup = c
-		log.Printf("Parser %s failed for track %s: %v, trying next parser...", parser, track.Title, err)
+		log.Warn().Str("parser", parser).Str("title", track.Title).Err(err).Msg("parser_failed_try_next")
 	}
 
 	// Combine all parser errors

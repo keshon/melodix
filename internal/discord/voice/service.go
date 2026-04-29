@@ -94,6 +94,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		s.sinkProviders[guildID] = provider
 	}
 	p := player.NewWithOptions(provider, s.resolver, player.Options{
+		Logger:               s.log,
 		TransportRecoveryMode: s.cfg.PlayerTransportRecoveryMode,
 		TransportSoftAttempts: s.cfg.PlayerTransportSoftAttempts,
 	})

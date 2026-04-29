@@ -2,12 +2,12 @@ package sink
 
 import (
 	"io"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/ebitengine/oto/v3"
 	"github.com/keshon/melodix/pkg/music/stream"
+	"github.com/rs/zerolog"
 )
 
 // SpeakerSink plays PCM (48kHz, 2ch, 16-bit LE) to the default audio device.
@@ -15,11 +15,20 @@ type SpeakerSink struct {
 	ctx       *oto.Context
 	readyChan <-chan struct{}
 	contextMu sync.Mutex
+	log       zerolog.Logger
 }
 
 // NewSpeakerSink creates a new speaker sink. The oto context is created lazily on first Stream().
 func NewSpeakerSink() *SpeakerSink {
-	return &SpeakerSink{}
+	return NewSpeakerSinkWithLogger(zerolog.Nop())
+}
+
+// NewSpeakerSinkWithLogger creates a new speaker sink with optional logging.
+func NewSpeakerSinkWithLogger(log zerolog.Logger) *SpeakerSink {
+	if log.GetLevel() == zerolog.NoLevel {
+		log = zerolog.Nop()
+	}
+	return &SpeakerSink{log: log}
 }
 
 // ensureContext creates the oto context once.
@@ -97,7 +106,7 @@ func (s *SpeakerSink) Close() error {
 	if s.ctx != nil {
 		err := s.ctx.Suspend()
 		if err != nil {
-			log.Printf("[speaker] Suspend: %v", err)
+			s.log.Warn().Err(err).Msg("speaker_suspend_failed")
 		}
 		s.ctx = nil
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os/exec"
 	"sync"
 
@@ -99,7 +98,7 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 	go func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
-			log.Printf("[kkdai-link] ffmpeg: %s", sc.Text())
+			log.Info().Str("raw", sc.Text()).Msg("ffmpeg_stderr")
 		}
 	}()
 

@@ -3,9 +3,9 @@ package stream
 import (
 	"errors"
 	"io"
-	"log"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
+	"github.com/rs/zerolog"
 )
 
 const maxRecoveryAttempts = 3
@@ -21,14 +21,21 @@ type RecoveryStream struct {
 	seekSec     float64        // approximate playback position
 	retries     map[string]int // parser => recovery attempts
 	firstRead   bool           // used to detect immediate EOF at start
+	log         zerolog.Logger
 }
 
 // NewRecoveryStream creates a new resilient wrapper for a track
 func NewRecoveryStream(track *parsers.TrackParse) *RecoveryStream {
+	return NewRecoveryStreamWithLogger(track, zerolog.Nop())
+}
+
+// NewRecoveryStreamWithLogger creates a new resilient wrapper for a track using the provided logger.
+func NewRecoveryStreamWithLogger(track *parsers.TrackParse, log zerolog.Logger) *RecoveryStream {
 	return &RecoveryStream{
 		track:     track,
 		retries:   make(map[string]int),
 		firstRead: true,
+		log:       log,
 	}
 }
 
@@ -38,13 +45,13 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		parser := rs.track.SourceInfo.AvailableParsers[i]
 
 		if rs.retries[parser] >= maxRecoveryAttempts {
-			log.Printf("[RecoveryStream] Parser %s exceeded max recovery attempts", parser)
+			rs.log.Warn().Str("parser", parser).Msg("parser_exceeded_recovery_attempts")
 			continue
 		}
 
 		stream, cleanup, err := openWithParser(rs.track, parser, seek)
 		if err != nil {
-			log.Printf("[RecoveryStream] Failed to open stream with parser %s: %v", parser, err)
+			rs.log.Warn().Str("parser", parser).Err(err).Msg("stream_open_failed")
 			rs.retries[parser]++
 			continue
 		}
@@ -55,7 +62,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		rs.seekSec = seek
 		rs.track.CurrentParser = parser
 		rs.firstRead = true
-		log.Printf("[RecoveryStream] Opened stream with parser %s at seek %.2f", parser, seek)
+		rs.log.Info().Str("parser", parser).Float64("seek", seek).Msg("stream_opened")
 		return nil
 	}
 
@@ -77,7 +84,7 @@ func (rs *RecoveryStream) Read(p []byte) (int, error) {
 		if rs.firstRead && err != nil {
 			prevParser := rs.track.CurrentParser
 			rs.retries[prevParser]++
-			log.Printf("[RecoveryStream] Immediate failure on parser %s: %v; switching parser", prevParser, err)
+			rs.log.Warn().Str("parser", prevParser).Err(err).Msg("immediate_failure_switching_parser")
 
 			if rs.cleanup != nil {
 				rs.cleanup()
@@ -113,7 +120,7 @@ func (rs *RecoveryStream) shouldRecover() bool {
 
 	// Already exceeded max attempts
 	if rs.retries[parser] >= maxRecoveryAttempts {
-		log.Printf("[RecoveryStream] Max recovery attempts reached for parser %s", parser)
+		rs.log.Warn().Str("parser", parser).Msg("max_recovery_attempts_reached")
 		return false
 	}
 
@@ -125,7 +132,7 @@ func (rs *RecoveryStream) shouldRecover() bool {
 
 	if durSec > 0 {
 		if rs.seekSec < 0.95*durSec {
-			log.Printf("[RecoveryStream] Early EOF detected (%.2f/%.2f), will attempt recovery", rs.seekSec, durSec)
+			rs.log.Warn().Float64("seek", rs.seekSec).Float64("duration", durSec).Msg("early_eof_detected")
 			return true
 		}
 		return false
@@ -133,7 +140,7 @@ func (rs *RecoveryStream) shouldRecover() bool {
 
 	// No duration: only recover on immediate EOF
 	if rs.firstRead || rs.seekSec < 1.0 {
-		log.Printf("[RecoveryStream] Early EOF detected without duration, attempting recovery")
+		rs.log.Warn().Float64("seek", rs.seekSec).Msg("early_eof_no_duration")
 		return true
 	}
 
@@ -144,7 +151,7 @@ func (rs *RecoveryStream) shouldRecover() bool {
 func (rs *RecoveryStream) reopen() error {
 	parser := rs.track.CurrentParser
 	rs.retries[parser]++
-	log.Printf("[RecoveryStream] Recovering stream for parser %s (attempt %d)...", parser, rs.retries[parser])
+	rs.log.Warn().Str("parser", parser).Int("attempt", rs.retries[parser]).Msg("recovering_stream")
 
 	if rs.cleanup != nil {
 		rs.cleanup()

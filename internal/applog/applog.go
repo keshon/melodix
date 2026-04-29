@@ -14,15 +14,21 @@ import (
 // Setup builds a zerolog.Logger: pretty JSON lines to stderr via ConsoleWriter, and if cfg.LogFile
 // is set, the same JSON events to a rotated file. service is stored on every event (e.g. discord, cli).
 func Setup(service string, cfg *config.Config) zerolog.Logger {
+	_ = service
 	level, err := zerolog.ParseLevel(cfg.LogLevel)
 	if err != nil {
 		level = zerolog.InfoLevel
 	}
 
+	// JSON-only caller field (console hides it below).
+	zerolog.CallerFieldName = "at"
+
 	console := zerolog.ConsoleWriter{
 		Out:        os.Stderr,
 		TimeFormat: time.RFC3339,
 	}
+	// Console: keep it focused — msg + useful fields. Hide at/service.
+	console.FieldsExclude = []string{"service", "at"}
 
 	var writers []io.Writer
 	writers = append(writers, console)
@@ -52,6 +58,6 @@ func Setup(service string, cfg *config.Config) zerolog.Logger {
 		Level(level).
 		With().
 		Timestamp().
-		Str("service", service).
+		Caller().
 		Logger()
 }

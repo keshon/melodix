@@ -4,7 +4,6 @@ package player
 import (
 	"errors"
 	"fmt"
-	"log"
 	"slices"
 	"sync"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/keshon/melodix/pkg/music/stream"
+	"github.com/rs/zerolog"
 )
 
 type Status string
@@ -76,6 +76,8 @@ type Player struct {
 	// recorder persists successful starts (nil for CLI).
 	recorder PlaybackRecorder
 
+	log zerolog.Logger
+
 	// stopOnce closes stopPlayback at most once per playback run.
 	stopOnce sync.Once
 	// stopPlayback signals the active Stream loop to stop (skip, stop, or starting a new track).
@@ -90,6 +92,8 @@ type Player struct {
 }
 
 type Options struct {
+	// Logger is optional. If zero, the player logs nothing.
+	Logger zerolog.Logger
 	// TransportRecoveryMode controls behavior on stream.ErrVoiceTransport.
 	// Supported: "hard" (default), "soft".
 	TransportRecoveryMode string
@@ -114,6 +118,11 @@ func NewWithOptions(sinkProvider sink.Provider, res Resolver, opts Options) *Pla
 		softAttempts = 1
 	}
 
+	l := opts.Logger
+	if l.GetLevel() == zerolog.NoLevel {
+		l = zerolog.Nop()
+	}
+
 	return &Player{
 		resolver:              res,
 		sinkProvider:          sinkProvider,
@@ -123,6 +132,7 @@ func NewWithOptions(sinkProvider sink.Provider, res Resolver, opts Options) *Pla
 		PlayerStatus:          make(chan Status, 10),
 		transportRecoveryMode: mode,
 		transportSoftAttempts: softAttempts,
+		log:                   l,
 	}
 }
 
@@ -142,10 +152,10 @@ func (p *Player) SetRecorder(r PlaybackRecorder) {
 
 // Enqueue adds tracks to the queue
 func (p *Player) Enqueue(input string, source string, parser string) error {
-	log.Printf("[Player] Enqueue called | input=%q source=%q parser=%q", input, source, parser)
+	p.log.Info().Str("input", input).Str("source", source).Str("parser", parser).Msg("enqueue_called")
 	tracksInfo, err := p.resolver.Resolve(input, source, parser)
 	if err != nil {
-		log.Printf("[Player] Failed to resolve tracks: %v", err)
+		p.log.Warn().Err(err).Msg("resolve_tracks_failed")
 		p.emitStatus(StatusError)
 		return err
 	}
@@ -156,7 +166,7 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 	tracksParse := make([]parsers.TrackParse, 0, len(tracksInfo))
 	for _, trackInfo := range tracksInfo {
 		if len(trackInfo.AvailableParsers) == 0 {
-			log.Printf("[Player] Skipping track with no available parsers: %q", trackInfo.Title)
+			p.log.Warn().Str("title", trackInfo.Title).Msg("track_skipped_no_parsers")
 			continue
 		}
 		tracksParse = append(tracksParse, parsers.TrackParse{
@@ -172,7 +182,7 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 	}
 
 	p.queue = append(p.queue, tracksParse...)
-	log.Printf("[Player] Added %d track(s) to queue | QueueLen=%d", len(tracksParse), len(p.queue))
+	p.log.Info().Int("added", len(tracksParse)).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
 	if p.currTrack != nil {
 		p.emitStatus(StatusAdded)
 	}
@@ -193,7 +203,7 @@ func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
 		CurrentParser: trackInfo.AvailableParsers[0],
 		SourceInfo:    trackInfo,
 	})
-	log.Printf("[Player] Added 1 track(s) to queue | QueueLen=%d", len(p.queue))
+	p.log.Info().Int("added", 1).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
 	if p.currTrack != nil {
 		p.emitStatus(StatusAdded)
 	}
@@ -203,10 +213,10 @@ func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
 // PlayNext stops current track (if any) and plays the next in queue.
 // target is the voice channel ID for Discord, or "" for CLI.
 func (p *Player) PlayNext(target string) error {
-	log.Printf("[Player] PlayNext called | QueueLen=%d", len(p.queue))
+	p.log.Info().Int("queue_len", len(p.queue)).Msg("play_next_called")
 	for {
 		if p.IsPlaying() {
-			log.Printf("[Player] Stopping current track before playing next")
+			p.log.Info().Msg("stopping_current_before_next")
 			_ = p.Stop(false)
 		}
 
@@ -215,7 +225,7 @@ func (p *Player) PlayNext(target string) error {
 		if len(p.queue) == 0 {
 			p.mu.Unlock()
 			p.playNextMu.Unlock()
-			log.Printf("[Player] Queue is empty, nothing to play")
+			p.log.Info().Msg("queue_empty")
 			return ErrNoTracksInQueue
 		}
 
@@ -224,13 +234,13 @@ func (p *Player) PlayNext(target string) error {
 		p.target = target
 		p.mu.Unlock()
 
-		log.Printf("[Player] Attempting to play track %q (%s)", track.Title, track.URL)
+		p.log.Info().Str("title", track.Title).Str("url", track.URL).Msg("track_attempt_play")
 
 		err := p.startTrack(&track, false)
 		p.playNextMu.Unlock()
 
 		if err != nil {
-			log.Printf("[Player] Skipping track %q due to error: %v", track.Title, err)
+			p.log.Warn().Str("title", track.Title).Err(err).Msg("track_skipped_error")
 			continue
 		}
 
@@ -244,14 +254,14 @@ func (p *Player) PlayNext(target string) error {
 			rec.Record(gid, playedAt, cloneTrackParse(track))
 		}
 
-		log.Printf("[Player] Now playing track %q | QueueLen=%d", track.Title, len(p.Queue()))
+		p.log.Info().Str("title", track.Title).Int("queue_len", len(p.Queue())).Msg("track_now_playing")
 		return nil
 	}
 }
 
 // Stop safely stops current playback. When disconnect is true, clears queue and releases the sink (e.g. leave VC).
 func (p *Player) Stop(disconnect bool) error {
-	log.Printf("[Player] Stop called | disconnect=%v", disconnect)
+	p.log.Info().Bool("disconnect", disconnect).Msg("stop_called")
 
 	var doneCh chan struct{}
 	p.mu.Lock()
@@ -265,9 +275,9 @@ func (p *Player) Stop(disconnect bool) error {
 	if p.IsPlaying() && doneCh != nil {
 		select {
 		case <-doneCh:
-			log.Printf("[Player] Playback goroutine finished")
+			p.log.Info().Msg("playback_goroutine_done")
 		case <-time.After(10 * time.Second):
-			log.Printf("[Player] Stop timed out waiting for playback goroutine; cleaning up anyway")
+			p.log.Warn().Msg("stop_timeout_waiting_playback")
 		}
 	}
 
@@ -277,7 +287,7 @@ func (p *Player) Stop(disconnect bool) error {
 	p.currTrack = nil
 
 	if disconnect {
-		log.Printf("[Player] Disconnecting and clearing queue")
+		p.log.Info().Msg("disconnect_and_clear_queue")
 		p.queue = nil
 		p.target = ""
 		p.sinkProvider.ReleaseSink(target)
@@ -289,7 +299,7 @@ func (p *Player) Stop(disconnect bool) error {
 	p.emitStatus(StatusStopped)
 	p.mu.Unlock()
 
-	log.Printf("[Player] Stop finished")
+	p.log.Info().Msg("stop_finished")
 	return nil
 }
 
@@ -334,8 +344,12 @@ func cloneTrackParse(tp parsers.TrackParse) parsers.TrackParse {
 
 // startTrack launches playback goroutine
 func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
-	log.Printf("[Player] Preparing playback for track: %q (%s) | CurrentParser=%s | QueueLen=%d",
-		track.Title, track.URL, track.CurrentParser, len(p.queue))
+	p.log.Info().
+		Str("title", track.Title).
+		Str("url", track.URL).
+		Str("parser", track.CurrentParser).
+		Int("queue_len", len(p.queue)).
+		Msg("playback_preparing")
 
 	p.mu.Lock()
 	p.stopPlayback = make(chan struct{})
@@ -346,9 +360,9 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	p.currTrack = track
 	p.mu.Unlock()
 
-	rs := stream.NewRecoveryStream(track)
+	rs := stream.NewRecoveryStreamWithLogger(track, p.log)
 	if err := rs.Open(0); err != nil {
-		log.Printf("[Player] Failed to open resilient stream: %v", err)
+		p.log.Error().Err(err).Msg("stream_open_failed")
 		p.mu.Lock()
 		p.starting = false
 		p.currTrack = nil
@@ -358,10 +372,10 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 
 	if resumed {
 		p.emitStatus(StatusResumed)
-		log.Printf("[Player] Resuming track %q", track.Title)
+		p.log.Info().Str("title", track.Title).Msg("track_resuming")
 	} else {
 		p.emitStatus(StatusPlaying)
-		log.Printf("[Player] Starting track %q", track.Title)
+		p.log.Info().Str("title", track.Title).Msg("track_starting")
 	}
 
 	p.mu.Lock()
@@ -374,7 +388,7 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 
 	go func() {
 		if err := p.runPlayback(rs, stopCh, doneCh); err != nil {
-			log.Printf("[Player] Playback error for track %q: %v", track.Title, err)
+			p.log.Warn().Str("title", track.Title).Err(err).Msg("playback_error")
 			if errors.Is(err, ErrSinkUnavailable) {
 				return
 			}
@@ -389,8 +403,13 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 		p.mu.Lock()
 		target := p.target
 		p.mu.Unlock()
-		if nextErr := p.PlayNext(target); nextErr != nil && !errors.Is(nextErr, ErrNoTracksInQueue) {
-			log.Printf("[Player] PlayNext after track failed: %v", nextErr)
+		nextErr := p.PlayNext(target)
+		if errors.Is(nextErr, ErrNoTracksInQueue) {
+			_ = p.Stop(true)
+			return
+		}
+		if nextErr != nil {
+			p.log.Warn().Err(nextErr).Msg("play_next_after_track_failed")
 		}
 	}()
 
@@ -417,7 +436,7 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 	if ct != nil {
 		title = ct.Title
 	}
-	log.Printf("[Player] Running playback for track: %q", title)
+	p.log.Info().Str("title", title).Msg("playback_running")
 
 	var err error
 	softUsed := 0
@@ -425,7 +444,7 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 		var audioSink sink.AudioSink
 		audioSink, err = p.sinkProvider.Sink(target)
 		if err != nil {
-			log.Printf("[Player] Failed to get sink (attempt %d/%d): %v", attempt, maxVoiceTransportAttempts, err)
+			p.log.Warn().Int("attempt", attempt).Int("max", maxVoiceTransportAttempts).Err(err).Msg("sink_get_failed")
 			p.sinkProvider.InvalidateSink()
 			if attempt == maxVoiceTransportAttempts {
 				p.mu.Lock()
@@ -448,19 +467,19 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 			p.playing = false
 			p.currTrack = nil
 			p.mu.Unlock()
-			log.Printf("[Player] Playback stopped by user")
+			p.log.Info().Msg("playback_stopped_by_user")
 			p.emitStatus(StatusStopped)
 			return err
 		}
 		if errors.Is(err, stream.ErrVoiceTransport) {
-			log.Printf("[Player] Voice transport error (attempt %d/%d): %v", attempt, maxVoiceTransportAttempts, err)
+			p.log.Warn().Int("attempt", attempt).Int("max", maxVoiceTransportAttempts).Err(err).Msg("voice_transport_error")
 
 			softTry := recoveryMode == "soft" && softUsed < softAttempts
 			if softTry {
 				softUsed++
-				log.Printf("[Player] Transport recovery mode=soft (%d/%d): reopening stream without voice reconnect", softUsed, softAttempts)
+				p.log.Info().Int("used", softUsed).Int("max", softAttempts).Msg("transport_recovery_soft_reopen_stream")
 			} else {
-				log.Printf("[Player] Transport recovery: invalidating voice sink (hard fallback)")
+				p.log.Info().Msg("transport_recovery_hard_invalidate_sink")
 				p.sinkProvider.InvalidateSink()
 			}
 
@@ -493,14 +512,14 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 
 	if err != nil {
 		p.emitStatus(StatusError)
-		log.Printf("[Player] Playback finished with error: %v", err)
+		p.log.Warn().Err(err).Msg("playback_finished_error")
 		return fmt.Errorf("playback error: %w", err)
 	}
-	log.Printf("[Player] Playback stopped")
+	p.log.Info().Msg("playback_stopped")
 	p.emitStatus(StatusStopped)
 
 	if len(p.Queue()) == 0 {
-		log.Printf("[Player] Queue empty after track, auto-stopping player")
+		p.log.Info().Msg("queue_empty_auto_stop")
 		_ = p.Stop(true)
 	}
 
@@ -511,7 +530,7 @@ func (p *Player) emitStatus(status Status) {
 	select {
 	case p.PlayerStatus <- status:
 	default:
-		log.Printf("[Player] Player status signal dropped (channel full) - %s", status)
+		p.log.Debug().Str("status", string(status)).Msg("player_status_dropped")
 	}
 }
 

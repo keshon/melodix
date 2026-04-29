@@ -30,11 +30,12 @@ func main() {
 	log := applog.Setup("cli", cfg)
 	log.Info().Str("project", info.Project).Msg("cli_starting")
 
-	provider := sink.NewSpeakerProvider()
+	provider := sink.NewSpeakerProviderWithLogger(log)
 	defer provider.Close()
 
 	res := resolve.New()
 	p := player.NewWithOptions(provider, res, player.Options{
+		Logger:               log,
 		TransportRecoveryMode: cfg.PlayerTransportRecoveryMode,
 		TransportSoftAttempts: cfg.PlayerTransportSoftAttempts,
 	})
