@@ -14,25 +14,25 @@ At runtime the system is a pipeline:
 
 ```mermaid
 flowchart TD
-  A[User input<br/>URL / search] --> B[Resolver<br/>Resolve()]
-  B --> C[TrackInfo + AvailableParsers]
-  C --> D[Player.Enqueue()]
-  D --> E[Player.PlayNext()]
-  E --> F[RecoveryStream.Open()]
-  F --> G{Open ok?}
+  A["User input<br/>URL / search"] --> B["Resolver<br/>Resolve()"]
+  B --> C["TrackInfo + AvailableParsers"]
+  C --> D["Player.Enqueue()"]
+  D --> E["Player.PlayNext()"]
+  E --> F["RecoveryStream.Open()"]
+  F --> G{"Open ok?"}
   G -- no --> F
-  G -- yes --> H[Sink.Stream(rs)]
-  H --> I{Read error?}
+  G -- yes --> H["Sink.Stream(rs)"]
+  H --> I{"Read error?"}
   I -- no --> H
-  I -- io.EOF early --> J[RecoveryStream.reopen()]
+  I -- io.EOF early --> J["RecoveryStream.reopen()"]
   J --> F
-  I -- instant fail (first read) --> K[Advance parserIndex]
+  I -- instant fail (first read) --> K["Advance parserIndex"]
   K --> F
-  I -- voice transport error --> L[ReopenAfterTransportFailure()]
+  I -- voice transport error --> L["ReopenAfterTransportFailure()"]
   L --> F
-  I -- other error --> M[Stop track + PlayNext()]
+  I -- other error --> M["Stop track + PlayNext()"]
   M --> E
-  H --> N[Track ended]
+  H --> N["Track ended"]
   N --> M
 ```
 

@@ -34,7 +34,7 @@ func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReady
 		getSession:      getSession,
 		guildID:         guildID,
 		voiceReadyDelay: voiceReadyDelay,
-		log:             log.With().Str("component", "DiscordSink").Logger(),
+		log:             log.With().Str("component", "DiscordSinkProvider").Logger(),
 	}
 }
 

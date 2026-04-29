@@ -107,7 +107,7 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		return nil, nil, fmt.Errorf("command start error: %w", err)
 	}
 
-	pr := ffmpegparser.NewProcessReadCloser(ffmpeg, reader)
+	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
 	cleanup := func() {
 		_ = ffmpeg.Process.Kill()
 		_ = pr.WaitErr()
