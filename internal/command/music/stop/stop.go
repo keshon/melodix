@@ -6,7 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 )
 
 type Stop struct {
@@ -46,11 +46,11 @@ func (c *Stop) Run(ctx interface{}) error {
 		slashCtx.AppLog.Warn().Err(err).Msg("player_stop_failed")
 	}
 	stopMsg := "Playback stopped. Queue cleared."
-	if err := respond.FollowupEmbed(s, e, &discordgo.MessageEmbed{
+	if err := discordreply.FollowupEmbed(s, e, &discordgo.MessageEmbed{
 		Description: "⏹️ " + stopMsg,
 	}); err != nil {
 		slashCtx.AppLog.Warn().Str("command", "stop").Err(err).Msg("followup_embed_failed")
-		_ = respond.EditResponse(s, e, "⏹️ "+stopMsg)
+		_ = discordreply.EditResponse(s, e, "⏹️ "+stopMsg)
 	}
 	return nil
 }

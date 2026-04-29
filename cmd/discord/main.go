@@ -38,7 +38,7 @@ func main() {
 	rootCtx, stopSignal := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignal()
 
-	cfg, err := config.New()
+	cfg, err := config.NewConfig()
 	if err != nil {
 		_, _ = os.Stderr.WriteString("failed to load config: " + err.Error() + "\n")
 		os.Exit(1)
@@ -51,7 +51,7 @@ func main() {
 		log.Fatal().Msg("config_missing_token")
 	}
 
-	store, err := storage.New(rootCtx, cfg.StoragePath, log)
+	store, err := storage.NewStorage(rootCtx, cfg.StoragePath, log)
 	if err != nil {
 		log.Fatal().Err(err).Msg("storage_init_failed")
 	}

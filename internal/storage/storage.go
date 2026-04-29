@@ -18,7 +18,7 @@ type Storage struct {
 	log zerolog.Logger
 }
 
-func New(ctx context.Context, filePath string, log zerolog.Logger) (*Storage, error) {
+func NewStorage(ctx context.Context, filePath string, log zerolog.Logger) (*Storage, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

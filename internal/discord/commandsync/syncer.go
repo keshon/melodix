@@ -116,8 +116,6 @@ func (m *Syncer) SyncAllGuilds() {
 	}
 }
 
-// --- Internal helpers ---
-
 func (m *Syncer) guildLock(guildID string) *sync.Mutex {
 	v, _ := m.perGuildLocks.LoadOrStore(guildID, &sync.Mutex{})
 	return v.(*sync.Mutex)
@@ -132,8 +130,6 @@ func (m *Syncer) buildCommandDefinitions() []*discordgo.ApplicationCommand {
 	}
 	return defs
 }
-
-// --- Command conversion ---
 
 func toApplicationCommand(c commandkit.Command) *discordgo.ApplicationCommand {
 	root := commandkit.Root(c)
@@ -173,4 +169,3 @@ func (m *Syncer) appID() (string, error) {
 	}
 	return u.ID, nil
 }
-

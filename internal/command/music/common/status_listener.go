@@ -7,17 +7,17 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/pkg/music/player"
+	"github.com/rs/zerolog"
 )
 
 // StatusListenTimeout limits how long we listen for status so the goroutine does not leak.
 // Updates after the first use the guild's stored message (edit), so they work beyond token expiry.
 const StatusListenTimeout = 15 * time.Minute
 
-func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.VoiceAPI, guildID string) {
+func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.VoiceAPI, guildID string, appLog zerolog.Logger) {
 	go func() {
-		appLog := bot.AppLog()
 		ctx, cancel := context.WithTimeout(context.Background(), StatusListenTimeout)
 		defer cancel()
 
@@ -33,7 +33,7 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 				case player.StatusPlaying:
 					track := p.CurrentTrack()
 					if track == nil {
-						_ = bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
+						_ = bot.UpdatePlaybackStatus(session, event, guildID, &discordgo.MessageEmbed{
 							Title:       "⚠️ Error",
 							Description: "Failed to get current track",
 						})
@@ -51,20 +51,20 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 						desc = "🎶 Unknown track"
 					}
 
-					if err := bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
+					if err := bot.UpdatePlaybackStatus(session, event, guildID, &discordgo.MessageEmbed{
 						Title:       player.StatusPlaying.StringEmoji() + " Now Playing",
 						Description: desc,
-						Color:       respond.EmbedColor,
+						Color:       discordreply.EmbedColor,
 					}); err != nil {
 						appLog.Warn().Str("status", "playing").Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 					}
 					return
 
 				case player.StatusAdded:
-					if err := bot.UpdateGuildMusicStatus(session, event, guildID, &discordgo.MessageEmbed{
+					if err := bot.UpdatePlaybackStatus(session, event, guildID, &discordgo.MessageEmbed{
 						Title:       player.StatusAdded.StringEmoji() + " Track(s) Added",
 						Description: "Added to queue",
-						Color:       respond.EmbedColor,
+						Color:       discordreply.EmbedColor,
 					}); err != nil {
 						appLog.Warn().Str("status", "added").Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 					}

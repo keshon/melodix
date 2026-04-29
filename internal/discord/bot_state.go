@@ -11,7 +11,6 @@ import (
 	"github.com/keshon/melodix/internal/discord/commandlogger"
 	"github.com/keshon/melodix/internal/discord/commandsync"
 	"github.com/keshon/melodix/internal/discord/execguard"
-	"github.com/keshon/melodix/internal/discord/systemevents"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
@@ -27,15 +26,13 @@ type Bot struct {
 	voice     *voice.Service
 	log       zerolog.Logger
 
-	cmdManager *commandsync.Syncer
-	cmdLogger  *commandlogger.Logger
-
-	systemBus *systemevents.Bus
+	cmdSyncer *commandsync.Syncer
+	cmdLogger *commandlogger.Logger
 
 	sessionCtx atomic.Value // *sessionCtxHolder
 	cmdGuard   atomic.Value // *cmdGuardHolder
 
-	// once ensures one-time background services (purge, shortlink) are not
+	// once ensures one-time background services (e.g. /internal/readme) are not
 	// re-launched on subsequent reconnects.
 	once sync.Once
 }

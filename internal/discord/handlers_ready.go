@@ -24,7 +24,7 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 			continue
 		}
 		if b.cfg.InitSlashCommands {
-			if err := b.cmdManager.SyncGuildCommands(g.ID); err != nil {
+			if err := b.cmdSyncer.SyncGuildCommands(g.ID); err != nil {
 				b.log.Error().Str("guild_id", g.ID).Err(err).Msg("commands_sync_failed")
 			}
 		}
@@ -52,7 +52,7 @@ func (b *Bot) onGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
 		return
 	}
 	if b.cfg.InitSlashCommands {
-		if err := b.cmdManager.SyncGuildCommands(g.Guild.ID); err != nil {
+		if err := b.cmdSyncer.SyncGuildCommands(g.Guild.ID); err != nil {
 			b.log.Error().Str("guild_id", g.Guild.ID).Err(err).Msg("commands_sync_failed")
 		}
 	}

@@ -1,4 +1,4 @@
-package respond
+package discordreply
 
 import (
 	"github.com/bwmarrin/discordgo"
@@ -25,8 +25,6 @@ func (responder) EmbedColor() int { return EmbedColor }
 
 // DefaultResponder is injected into command contexts so commands never import discord directly.
 var DefaultResponder command.Responder = responder{}
-
-// --- Interaction responses ---
 
 // Respond sends a public message response to an interaction.
 func Respond(s *discordgo.Session, i *discordgo.InteractionCreate, content string) error {
@@ -98,8 +96,6 @@ func EditResponse(s *discordgo.Session, i *discordgo.InteractionCreate, content 
 	return err
 }
 
-// --- Followup messages ---
-
 // Followup sends a public followup message.
 func Followup(s *discordgo.Session, i *discordgo.InteractionCreate, content string) error {
 	_, err := s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{Content: content})
@@ -128,8 +124,6 @@ func FollowupEmbedEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate
 	return err
 }
 
-// --- Channel messages (non-interaction) ---
-
 // Message sends a plain text message to a channel.
 func Message(s *discordgo.Session, channelID, content string) error {
 	_, err := s.ChannelMessageSend(channelID, content)
@@ -141,4 +135,3 @@ func MessageEmbed(s *discordgo.Session, channelID string, embed *discordgo.Messa
 	_, err := s.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }
-

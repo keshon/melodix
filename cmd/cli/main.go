@@ -21,7 +21,7 @@ import (
 func main() {
 	info := buildinfo.Get()
 
-	cfg, err := config.New()
+	cfg, err := config.NewConfig()
 	if err != nil {
 		_, _ = os.Stderr.WriteString("failed to load config: " + err.Error() + "\n")
 		os.Exit(1)

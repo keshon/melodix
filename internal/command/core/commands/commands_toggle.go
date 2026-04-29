@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord/respond"
-	"github.com/keshon/melodix/internal/discord/systemevents"
+	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
-func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage, bus *systemevents.Bus) error {
+func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage, syncer command.CommandSyncer) error {
 	data := e.ApplicationCommandData()
 
 	subOptions := data.Options[0].Options
@@ -25,7 +25,7 @@ func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCr
 	}
 
 	if group == "core" && state == "disable" {
-		return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "You can't disable the `core` group. It's the backbone of the discord.",
 		})
 	}
@@ -39,20 +39,21 @@ func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCr
 		err = storage.DisableGroup(e.GuildID, group)
 		if err != nil {
 			embed.Description = "Failed to disable the group."
-			return respond.RespondEmbedEphemeral(s, e, embed)
+			return discordreply.RespondEmbedEphemeral(s, e, embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` disabled.", group)
 	} else {
 		err = storage.EnableGroup(e.GuildID, group)
 		if err != nil {
 			embed.Description = "Failed to enable the group."
-			return respond.RespondEmbedEphemeral(s, e, embed)
+			return discordreply.RespondEmbedEphemeral(s, e, embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` enabled.", group)
 	}
 
-	// Publish event to refresh commands
-	emitRefreshCommands(bus, e.GuildID, "group:"+group)
+	if syncer != nil {
+		_ = syncer.SyncGuildCommands(e.GuildID)
+	}
 
-	return respond.RespondEmbedEphemeral(s, e, embed)
+	return discordreply.RespondEmbedEphemeral(s, e, embed)
 }

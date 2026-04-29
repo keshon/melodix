@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -56,7 +56,7 @@ func (c *Maintenance) Run(ctx interface{}) error {
 	options := e.ApplicationCommandData().Options
 
 	if len(options) == 0 {
-		return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "No subcommand provided.",
 		})
 	}
@@ -70,7 +70,7 @@ func (c *Maintenance) Run(ctx interface{}) error {
 	case "status":
 		return runStatus(s, e, *storage)
 	default:
-		return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

@@ -6,7 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 )
 
 // onInteractionCreate dispatches slash commands, context menu commands, and component interactions.
@@ -38,15 +38,15 @@ func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.Interactio
 	case discordgo.MessageApplicationCommand:
 		inv = &commandkit.Invocation{Data: &command.MessageApplicationCommandContext{
 			Session: s, Event: i, Storage: b.storage, Target: i.Message,
-			Config: b.cfg, Responder: respond.DefaultResponder, Logger: logger,
+			Config: b.cfg, Responder: discordreply.DefaultResponder, Logger: logger,
 			AppLog: b.log,
 		}}
 	case discordgo.ChatApplicationCommand:
 		inv = &commandkit.Invocation{Data: &command.SlashInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
-			Config: b.cfg, Responder: respond.DefaultResponder, Logger: logger,
+			Config: b.cfg, Responder: discordreply.DefaultResponder, Logger: logger,
 			AppLog:    b.log,
-			SystemBus: b.systemBus,
+			Syncer:    b.cmdSyncer,
 		}}
 	default:
 		return
@@ -87,7 +87,7 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 		_ = cmdCtx
 		return handler.Component(&command.ComponentInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
-			Config: b.cfg, Responder: respond.DefaultResponder, Logger: logger,
+			Config: b.cfg, Responder: discordreply.DefaultResponder, Logger: logger,
 			AppLog: b.log,
 		})
 	})

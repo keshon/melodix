@@ -3,10 +3,13 @@ package command
 import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/systemevents"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
 )
+
+type CommandSyncer interface {
+	SyncGuildCommands(guildID string) error
+}
 
 type SlashInteractionContext struct {
 	Session   *discordgo.Session
@@ -17,7 +20,7 @@ type SlashInteractionContext struct {
 	Responder Responder
 	Logger    Logger
 	AppLog    zerolog.Logger
-	SystemBus *systemevents.Bus
+	Syncer    CommandSyncer
 }
 
 type ComponentInteractionContext struct {

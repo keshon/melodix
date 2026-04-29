@@ -6,17 +6,21 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/sources"
-	"github.com/rs/zerolog"
 )
 
 // VoiceAPI is the interface the Discord bot exposes for voice/music commands.
 type VoiceAPI interface {
+	// GetOrCreatePlayer returns an existing player for the guild or creates a new one.
 	GetOrCreatePlayer(guildID string) *player.Player
+
+	// FindUserVoiceState returns the voice channel a user is currently in, or an error if none.
 	FindUserVoiceState(guildID, userID string) (*UserVoiceState, error)
-	Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error)
-	// UpdateGuildMusicStatus creates or edits the guild's music status message so updates work beyond 15 min token expiry.
-	UpdateGuildMusicStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error
-	AppLog() zerolog.Logger
+
+	// Resolve resolves input to tracks using the bot's shared resolver.
+	ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error)
+
+	// UpdatePlaybackStatus creates or edits the guild's music status message so updates work beyond 15 min token expiry.
+	UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error
 }
 
 // UserVoiceState holds minimal voice channel state for a user.
@@ -47,23 +51,18 @@ func (b *Bot) FindUserVoiceState(guildID, userID string) (*UserVoiceState, error
 	return nil, fmt.Errorf("user not in any voice channel")
 }
 
-// Resolve resolves input to tracks using the bot's shared resolver (delegates to voice service).
-func (b *Bot) Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
+// ResolveTracks resolves input to tracks using the bot's shared resolver (delegates to voice service).
+func (b *Bot) ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
 	if b.voice == nil {
 		return nil, fmt.Errorf("voice service not available")
 	}
-	return b.voice.Resolve(guildID, input, source, parser)
+	return b.voice.ResolveTracks(guildID, input, source, parser)
 }
 
-// UpdateGuildMusicStatus creates or edits the guild's music status message (delegates to voice service).
-func (b *Bot) UpdateGuildMusicStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
+// UpdatePlaybackStatus creates or edits the guild's music status message (delegates to voice service).
+func (b *Bot) UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
 	if b.voice == nil {
 		return nil
 	}
-	return b.voice.UpdateGuildMusicStatus(s, i, guildID, embed)
-}
-
-// AppLog returns the application zerolog logger (structured app logs, not command audit).
-func (b *Bot) AppLog() zerolog.Logger {
-	return b.log
+	return b.voice.UpdatePlaybackStatus(s, i, guildID, embed)
 }

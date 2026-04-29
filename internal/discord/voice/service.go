@@ -43,7 +43,7 @@ type Service struct {
 }
 
 // New creates a voice service for the given session getter and config.
-func New(getSession SessionGetter, cfg *config.Config, store *storage.Storage, log zerolog.Logger) *Service {
+func NewVoiceService(getSession SessionGetter, cfg *config.Config, store *storage.Storage, log zerolog.Logger) *Service {
 	return &Service{
 		getSession:       getSession,
 		cfg:              cfg,
@@ -105,8 +105,8 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	return p
 }
 
-// Resolve resolves input to tracks using the service's shared resolver.
-func (s *Service) Resolve(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
+// ResolveTracks resolves input to tracks using the service's shared resolver.
+func (s *Service) ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
 	s.mu.Lock()
 	if s.resolver == nil {
 		s.resolver = resolve.New()
@@ -116,8 +116,8 @@ func (s *Service) Resolve(guildID, input, source, parser string) ([]sources.Trac
 	return r.Resolve(input, source, parser)
 }
 
-// UpdateGuildMusicStatus creates or edits the guild's music status message.
-func (s *Service) UpdateGuildMusicStatus(session *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
+// UpdatePlaybackStatus creates or edits the guild's music status message.
+func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
 	s.guildMusicStatusMu.RLock()
 	msg, ok := s.guildMusicStatus[guildID]
 	s.guildMusicStatusMu.RUnlock()

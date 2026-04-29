@@ -42,12 +42,12 @@ type Config struct {
 	PlayerTransportSoftAttempts int `env:"PLAYER_TRANSPORT_SOFT_ATTEMPTS" envDefault:"1"`
 
 	// Logging (applog / zerolog). LOG_FILE empty = stderr only (pretty console).
-	LogLevel       string `env:"LOG_LEVEL" envDefault:"info"`
-	LogFile        string `env:"LOG_FILE"`
-	LogMaxSizeMB   int    `env:"LOG_MAX_SIZE_MB" envDefault:"10"`
-	LogMaxBackups  int    `env:"LOG_MAX_BACKUPS" envDefault:"3"`
-	LogMaxAgeDays  int    `env:"LOG_MAX_AGE_DAYS" envDefault:"0"`
-	LogCompress    bool   `env:"LOG_COMPRESS" envDefault:"false"`
+	LogLevel      string `env:"LOG_LEVEL" envDefault:"info"`
+	LogFile       string `env:"LOG_FILE"`
+	LogMaxSizeMB  int    `env:"LOG_MAX_SIZE_MB" envDefault:"10"`
+	LogMaxBackups int    `env:"LOG_MAX_BACKUPS" envDefault:"3"`
+	LogMaxAgeDays int    `env:"LOG_MAX_AGE_DAYS" envDefault:"0"`
+	LogCompress   bool   `env:"LOG_COMPRESS" envDefault:"false"`
 }
 
 // IsDeveloper reports whether userID is the configured developer (avoids discord import in middleware).
@@ -56,7 +56,7 @@ func IsDeveloper(cfg *Config, userID string) bool {
 }
 
 // New returns a new Config.
-func New() (*Config, error) {
+func NewConfig() (*Config, error) {
 	if err := godotenv.Load(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "No .env file found, falling back to system environment variables")
 	}

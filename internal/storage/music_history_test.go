@@ -21,7 +21,7 @@ func TestAppendGetListMusicPlayback(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
 	ctx := context.Background()
-	s, err := New(ctx, path, zerolog.Nop())
+	s, err := NewStorage(ctx, path, zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestMusicPlaybackTrimKeepsRecent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ds.json")
 	ctx := context.Background()
-	s, err := New(ctx, path, zerolog.Nop())
+	s, err := NewStorage(ctx, path, zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

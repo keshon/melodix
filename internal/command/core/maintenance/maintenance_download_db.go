@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -14,26 +14,26 @@ func runDownloadDB(s *discordgo.Session, e *discordgo.InteractionCreate, storage
 	guildID := e.GuildID
 	record, err := storage.GuildRecord(guildID)
 	if err != nil {
-		return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Failed to fetch record: ```%v```", err),
-			Color:       respond.EmbedColor,
+			Color:       discordreply.EmbedColor,
 		})
 	}
 
 	jsonBytes, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
-		return respond.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("JSON encode failed: ```%v```", err),
-			Color:       respond.EmbedColor,
+			Color:       discordreply.EmbedColor,
 		})
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "🧠 Database Dump",
 		Description: "Here’s your current in-memory datastore snapshot.",
-		Color:       respond.EmbedColor,
+		Color:       discordreply.EmbedColor,
 	}
 
 	fileName := fmt.Sprintf("%s_database_dump.json", guildID)
-	return respond.RespondEmbedEphemeralWithFile(s, e, embed, bytes.NewReader(jsonBytes), fileName)
+	return discordreply.RespondEmbedEphemeralWithFile(s, e, embed, bytes.NewReader(jsonBytes), fileName)
 }

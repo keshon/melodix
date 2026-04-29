@@ -6,7 +6,7 @@ import (
 
 	"github.com/keshon/commandkit"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -78,14 +78,6 @@ func (c *Commands) SlashDefinition() *discordgo.ApplicationCommand {
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Name:        "update",
 				Description: "Re-register or update slash commands",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type:        discordgo.ApplicationCommandOptionString,
-						Name:        "target",
-						Description: "Command name, 'sync' to sync commands, or 'purge' to remove all in this server and re-register",
-						Required:    true,
-					},
-				},
 			},
 		},
 	}
@@ -113,11 +105,11 @@ func (c *Commands) Run(ctx interface{}) error {
 	case "status":
 		return c.runCmdStatus(session, event, *storage)
 	case "toggle":
-		return c.runCmdToggle(session, event, *storage, context.SystemBus)
+		return c.runCmdToggle(session, event, *storage, context.Syncer)
 	case "update":
-		return c.runCmdUpdate(session, event, context.SystemBus)
+		return c.runCmdUpdate(session, event, context.Syncer)
 	default:
-		return respond.RespondEmbedEphemeral(session, event, &discordgo.MessageEmbed{
+		return discordreply.RespondEmbedEphemeral(session, event, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

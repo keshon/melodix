@@ -3,7 +3,7 @@ package help
 import (
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/command"
-	"github.com/keshon/melodix/internal/discord/respond"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -51,14 +51,14 @@ func (c *Help) Run(ctx interface{}) error {
 	session := context.Session
 	event := context.Event
 
-	if err := respond.RespondDeferredEphemeral(session, event); err != nil {
+	if err := discordreply.RespondDeferredEphemeral(session, event); err != nil {
 		context.AppLog.Error().Err(err).Msg("help_defer_failed")
 		return err
 	}
 
 	data := event.ApplicationCommandData()
 	if len(data.Options) == 0 {
-		return respond.FollowupEmbedEphemeral(session, event, &discordgo.MessageEmbed{
+		return discordreply.FollowupEmbedEphemeral(session, event, &discordgo.MessageEmbed{
 			Description: "No subcommand provided. Use `category`, `group`, or `flat`.",
 		})
 	}
@@ -77,8 +77,8 @@ func (c *Help) Run(ctx interface{}) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       info.Project + " Help",
 		Description: output,
-		Color:       respond.EmbedColor,
+		Color:       discordreply.EmbedColor,
 	}
 
-	return respond.FollowupEmbedEphemeral(session, event, embed)
+	return discordreply.FollowupEmbedEphemeral(session, event, embed)
 }

@@ -19,7 +19,7 @@ type Logger struct {
 }
 
 // New creates a Logger bound to a Discord session and storage.
-func New(s *discordgo.Session, store *storage.Storage, log zerolog.Logger) *Logger {
+func NewLogger(s *discordgo.Session, store *storage.Storage, log zerolog.Logger) *Logger {
 	return &Logger{session: s, storage: store, log: log}
 }
 
