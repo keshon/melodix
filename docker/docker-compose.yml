@@ -20,6 +20,11 @@ services:
       - PLAYER_TRANSPORT_SOFT_ATTEMPTS=${PLAYER_TRANSPORT_SOFT_ATTEMPTS:-1}
       - COMMAND_TIMEOUT=${COMMAND_TIMEOUT:-30s}
       - COMMAND_PARALLELISM=${COMMAND_PARALLELISM:-16}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_MAX_SIZE_MB=${LOG_MAX_SIZE_MB:-10}
+      - LOG_MAX_BACKUPS=${LOG_MAX_BACKUPS:-3}
+      - LOG_MAX_AGE_DAYS=${LOG_MAX_AGE_DAYS:-0}
+      - LOG_COMPRESS=${LOG_COMPRESS:-false}
     entrypoint: ["/usr/project/app"]
     networks:
       - proxy
