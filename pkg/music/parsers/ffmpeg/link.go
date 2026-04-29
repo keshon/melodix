@@ -28,10 +28,11 @@ func ffmpegLink(url string) (io.ReadCloser, func(), error) {
 		return nil, nil, fmt.Errorf("command start error: %w", err)
 	}
 
+	pr := NewProcessReadCloser(cmd, reader)
 	cleanup := func() {
 		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+		_ = pr.WaitErr()
 	}
 
-	return reader, cleanup, nil
+	return pr, cleanup, nil
 }

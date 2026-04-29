@@ -10,17 +10,17 @@ import (
 const Name = "radio"
 
 type Source struct {
-	resolver *Resolver
+	validator *Validator
 }
 
 func New() *Source {
 	return &Source{
-		resolver: NewResolver(),
+		validator: NewValidator(),
 	}
 }
 
 func (r *Source) Match(input string) bool {
-	ok, _, err := r.resolver.IsValidURL(input)
+	ok, _, err := r.validator.IsValidURL(input)
 	return err == nil && ok
 }
 
@@ -38,7 +38,7 @@ func (r *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 		return nil, errors.New(Name + " source does not support " + selectedParser + " parser")
 	}
 
-	ok, _, err := r.resolver.IsValidURL(input)
+	ok, _, err := r.validator.IsValidURL(input)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (r *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 			URL:              input,
 			Title:            "", // maybe later via icy-* headers
 			SourceName:       Name,
-			AvailableParsers: MoveToFront(parsers, selectedParser),
+			AvailableParsers: source.PreferParser(parsers, selectedParser),
 		},
 	}, nil
 }

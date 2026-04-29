@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
+	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 
 	"github.com/kkdai/youtube/v2"
 )
@@ -106,10 +107,11 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		return nil, nil, fmt.Errorf("command start error: %w", err)
 	}
 
+	pr := ffmpegparser.NewProcessReadCloser(ffmpeg, reader)
 	cleanup := func() {
 		_ = ffmpeg.Process.Kill()
-		_ = ffmpeg.Wait()
+		_ = pr.WaitErr()
 	}
 
-	return reader, cleanup, nil
+	return pr, cleanup, nil
 }

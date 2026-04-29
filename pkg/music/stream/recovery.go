@@ -53,6 +53,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		rs.stream = stream
 		rs.cleanup = cleanup
 		rs.seekSec = seek
+		rs.track.CurrentParser = parser
 		rs.firstRead = true
 		log.Printf("[RecoveryStream] Opened stream with parser %s at seek %.2f", parser, seek)
 		return nil
@@ -70,6 +71,29 @@ func (rs *RecoveryStream) Read(p []byte) (int, error) {
 
 		n, err := rs.stream.Read(p)
 		rs.seekSec += float64(n) / (SampleRate * Channels * 2)
+
+		// "Instant fail": stream opened but immediately errored/EOFs on first read.
+		// In that case we advance to the next parser instead of retrying the same one.
+		if rs.firstRead && err != nil {
+			prevParser := rs.track.CurrentParser
+			rs.retries[prevParser]++
+			log.Printf("[RecoveryStream] Immediate failure on parser %s: %v; switching parser", prevParser, err)
+
+			if rs.cleanup != nil {
+				rs.cleanup()
+				rs.cleanup = nil
+			}
+			if rs.stream != nil {
+				_ = rs.stream.Close()
+				rs.stream = nil
+			}
+
+			rs.parserIndex++
+			if reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
+				return 0, err
+			}
+			continue
+		}
 
 		if err == io.EOF && n == 0 && rs.shouldRecover() {
 			if reopenErr := rs.reopen(); reopenErr != nil {
@@ -96,7 +120,7 @@ func (rs *RecoveryStream) shouldRecover() bool {
 	// Normalize duration (seconds)
 	var durSec float64
 	if rs.track.Duration > 0 {
-		durSec = float64(rs.track.Duration) / float64(1e9) // if stored in ns
+		durSec = rs.track.Duration.Seconds()
 	}
 
 	if durSec > 0 {

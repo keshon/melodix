@@ -2,6 +2,40 @@
 
 Queue-based music playback library for Go with pluggable audio sinks and track resolvers. Resolves URLs and search queries (YouTube, SoundCloud, radio), opens PCM streams via multiple parsers (yt-dlp, kkdai, ffmpeg), and plays through a sink of your choice (e.g. speaker or custom Discord voice).
 
+## How it works (high level)
+
+At runtime the system is a pipeline:
+
+- **Resolve** user input → `sources.TrackInfo` (URL, title, available parsers)
+- **Enqueue** resolved tracks into a FIFO queue
+- **Open stream** using one of the available parsers (PCM `s16le` @ 48kHz stereo)
+- **Stream to sink** (speaker / Discord / custom) until the track ends or fails
+- **Recover** when possible (parser fallback on instant-open failures; reopen on early EOF; special handling for voice transport)
+
+```mermaid
+flowchart TD
+  A[User input<br/>URL / search] --> B[Resolver<br/>Resolve()]
+  B --> C[TrackInfo + AvailableParsers]
+  C --> D[Player.Enqueue()]
+  D --> E[Player.PlayNext()]
+  E --> F[RecoveryStream.Open()]
+  F --> G{Open ok?}
+  G -- no --> F
+  G -- yes --> H[Sink.Stream(rs)]
+  H --> I{Read error?}
+  I -- no --> H
+  I -- io.EOF early --> J[RecoveryStream.reopen()]
+  J --> F
+  I -- instant fail (first read) --> K[Advance parserIndex]
+  K --> F
+  I -- voice transport error --> L[ReopenAfterTransportFailure()]
+  L --> F
+  I -- other error --> M[Stop track + PlayNext()]
+  M --> E
+  H --> N[Track ended]
+  N --> M
+```
+
 ## Install
 
 ```bash
@@ -16,7 +50,7 @@ Create a sink provider (e.g. speaker for local playback), a resolver, and a play
 provider := sink.NewSpeakerProvider()
 defer provider.Close()
 
-res := resolver.New()
+res := resolve.New()
 p := player.New(provider, res)
 
 // Enqueue a URL or search query, then start playback
@@ -24,7 +58,88 @@ _ = p.Enqueue("https://www.youtube.com/watch?v=...", "", "")
 _ = p.PlayNext("")  // "" for local; use voice channel ID for Discord
 ```
 
-Listen to `p.PlayerStatus` for status updates (Playing, Added, Stopped, Error). See [examples/cli_speaker](examples/cli_speaker) for a full runnable CLI.
+Listen to `p.PlayerStatus` for status updates (Playing, Added, Stopped, Error). See [examples/clispeaker](examples/clispeaker) for a full runnable CLI.
+
+## Algorithms (by stage)
+
+### 1) Resolve (input → TrackInfo)
+
+Goal: convert user input into canonical metadata + a parser preference list.
+
+- **Input**: URL or search query + optional `source`/`parser` hints.
+- **Output**: `[]sources.TrackInfo` where `TrackInfo.AvailableParsers` is ordered by preference.
+
+The resolver is intentionally pluggable; the player does not care *how* a track was discovered, only that it has a URL + parsers list.
+
+### 2) Enqueue (TrackInfo → queue)
+
+Goal: turn `TrackInfo` into `parsers.TrackParse` and append to the FIFO queue.
+
+- Tracks without `AvailableParsers` are rejected/skipped.
+- `CurrentParser` starts as the first entry in `AvailableParsers` (will be updated later by recovery/open logic).
+
+### 3) Start playback (dequeue → open resilient stream)
+
+Performed by `Player.PlayNext()`:
+
+- If something is playing, stop it.
+- Pop the next track from the queue.
+- Create `stream.RecoveryStream(track)` and call `rs.Open(seek=0)`.
+- If open fails for all parsers, skip the track and try the next.
+
+### 4) Open stream (choose parser)
+
+Performed inside `RecoveryStream.Open(seek)`:
+
+- Starting at `parserIndex`, iterate through `track.SourceInfo.AvailableParsers`.
+- For each parser:
+  - if `retries[parser] >= maxRecoveryAttempts` → skip
+  - try `openWithParser(track, parser, seek)`
+  - on success:
+    - set `parserIndex` to that parser’s index
+    - set `track.CurrentParser = parser`
+    - reset `firstRead = true`
+    - store cleanup + current seek
+
+### 5) Media recovery (parser/ffmpeg level)
+
+Recovery is intentionally conservative to avoid false-positive “fallback” when a track naturally ends.
+
+**A) Instant failure right after open**
+
+If the very first `Read()` on the opened stream returns any error (including an EOF-like failure from ffmpeg), it is treated as an *instant fail*:
+
+- close/cleanup current stream
+- `parserIndex++`
+- open again at the current `seekSec` using the next parser
+
+This is designed for cases like “ffmpeg opened, then immediately 403/forbidden and closed stdout”.
+
+**B) Early EOF (mid-track)**
+
+If `Read()` returns `io.EOF` with `n==0` and the track is far from its expected duration, recovery attempts to reopen:
+
+- close/cleanup current stream
+- reopen at the current approximate `seekSec`
+- retries are bounded by `maxRecoveryAttempts` per parser
+
+If duration is unknown, early-EOF recovery is only attempted at the beginning (`firstRead` or `seekSec < 1.0`).
+
+### 6) Sink streaming + voice transport recovery
+
+The sink drives the read loop via `AudioSink.Stream(reader, stopCh)`:
+
+- On normal completion: the track ends → player advances to the next track.
+- On `stream.ErrVoiceTransport` (Discord transport issues):
+  - the player can invalidate/rejoin the sink (hard) or retry without rejoin (soft mode)
+  - then calls `rs.ReopenAfterTransportFailure()` to reopen media at the current seek
+- On user stop/skip: playback stops cleanly.
+
+## Key extension points
+
+- **Custom resolver**: implement `player.Resolver` to support new sources or search.
+- **Custom sink**: implement `sink.AudioSink` / `sink.Provider` to support new outputs.
+- **New parser**: implement `parsers.Streamer` and register it in `stream.Registry`.
 
 ## Requirements
 
@@ -35,7 +150,7 @@ Listen to `p.PlayerStatus` for status updates (Playing, Added, Stopped, Error). 
 ## Documentation
 
 - [player](player) — Queue-based playback engine
-- [resolver](resolver) — Resolve URLs and search to track metadata
+- [resolve](resolve) — Resolve URLs and search to track metadata
 - [sink](sink) — Audio sink interfaces and speaker implementation
 - [sources](sources) — Source interface and track types
 - [parsers](parsers) — Streamer interface and track type

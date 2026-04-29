@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
@@ -82,7 +83,7 @@ func openWithParser(track *parsers.TrackParse, parser string, seekSec float64) (
 	var cleanup func()
 	var err error
 
-	if streamer.SupportsPipe() && isPipeParser(parser) {
+	if streamer.SupportsPipe() && strings.HasSuffix(parser, "-pipe") {
 		r, cleanup, err = streamer.PipeStream(track, seekSec)
 	} else {
 		r, cleanup, err = streamer.LinkStream(track, seekSec)
@@ -98,9 +99,4 @@ func openWithParser(track *parsers.TrackParse, parser string, seekSec float64) (
 		parser:     parser,
 	}
 	return ts, cleanup, nil
-}
-
-// isPipeParser returns true if the parser is a pipe parser
-func isPipeParser(parser string) bool {
-	return parser == "ytdlp-pipe" || parser == "kkdai-pipe"
 }

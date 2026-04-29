@@ -11,12 +11,12 @@ import (
 const Name string = "soundcloud"
 
 type Source struct {
-	resolver *Resolver
+	searcher *Searcher
 }
 
 func New() *Source {
 	return &Source{
-		resolver: NewResolver(),
+		searcher: NewSearcher(),
 	}
 }
 
@@ -41,19 +41,19 @@ func (s *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 	input = strings.TrimSpace(input)
 
 	// if it's a url, just return it as-is
-	if isURL(input) {
+	if source.IsURL(input) {
 		return []source.TrackInfo{
 			{
 				URL:              input,
 				Title:            "",
 				SourceName:       Name,
-				AvailableParsers: MoveToFront(parsers, selectedParser),
+				AvailableParsers: source.PreferParser(parsers, selectedParser),
 			},
 		}, nil
 	}
 
 	// otherwise, search by title
-	trackURL, err := s.resolver.SearchFirstTrackURL(input)
+	trackURL, err := s.searcher.SearchFirstTrackURL(input)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 			URL:              trackURL,
 			Title:            input,
 			SourceName:       Name,
-			AvailableParsers: MoveToFront(parsers, selectedParser),
+			AvailableParsers: source.PreferParser(parsers, selectedParser),
 		},
 	}, nil
 }

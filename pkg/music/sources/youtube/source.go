@@ -11,12 +11,12 @@ import (
 const Name string = "youtube"
 
 type Source struct {
-	resolver *Resolver
+	searcher *Searcher
 }
 
 func New() *Source {
 	return &Source{
-		resolver: NewResolver(),
+		searcher: NewSearcher(),
 	}
 }
 
@@ -48,17 +48,17 @@ func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 				URL:              input,
 				Title:            "",
 				SourceName:       Name,
-				AvailableParsers: MoveToFront(parsers, selectedParser),
+				AvailableParsers: source.PreferParser(parsers, selectedParser),
 			},
 		}, nil
 	}
 
-	if isURL(input) {
+	if source.IsURL(input) {
 		return nil, errors.New("invalid YouTube URL format")
 	}
 
 	// by title
-	videoURL, err := y.resolver.SearchFirstVideoURL(input)
+	videoURL, err := y.searcher.SearchFirstVideoURL(input)
 	if err != nil {
 		return nil, errors.New("could not find YouTube video for query")
 	}
@@ -68,7 +68,7 @@ func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 			URL:              videoURL,
 			Title:            input,
 			SourceName:       Name,
-			AvailableParsers: MoveToFront(parsers, selectedParser),
+			AvailableParsers: source.PreferParser(parsers, selectedParser),
 		},
 	}, nil
 }

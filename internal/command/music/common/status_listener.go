@@ -16,6 +16,25 @@ import (
 // Updates after the first use the guild's stored message (edit), so they work beyond token expiry.
 const StatusListenTimeout = 15 * time.Minute
 
+func statusEmoji(status player.Status) string {
+	switch status {
+	case player.StatusPlaying:
+		return "▶️"
+	case player.StatusAdded:
+		return "🎶"
+	case player.StatusStopped:
+		return "⏹"
+	case player.StatusPaused:
+		return "⏸"
+	case player.StatusResumed:
+		return "▶️"
+	case player.StatusError:
+		return "❌"
+	default:
+		return ""
+	}
+}
+
 func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.InteractionCreate, p *player.Player, bot discord.VoiceAPI, guildID string, appLog zerolog.Logger) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), StatusListenTimeout)
@@ -52,7 +71,7 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 					}
 
 					if err := bot.UpdatePlaybackStatus(session, event, guildID, &discordgo.MessageEmbed{
-						Title:       player.StatusPlaying.StringEmoji() + " Now Playing",
+						Title:       statusEmoji(player.StatusPlaying) + " Now Playing",
 						Description: desc,
 						Color:       discordreply.EmbedColor,
 					}); err != nil {
@@ -62,7 +81,7 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 
 				case player.StatusAdded:
 					if err := bot.UpdatePlaybackStatus(session, event, guildID, &discordgo.MessageEmbed{
-						Title:       player.StatusAdded.StringEmoji() + " Track(s) Added",
+						Title:       statusEmoji(player.StatusAdded) + " Track(s) Added",
 						Description: "Added to queue",
 						Color:       discordreply.EmbedColor,
 					}); err != nil {
@@ -74,4 +93,3 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 		}
 	}()
 }
-

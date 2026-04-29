@@ -26,22 +26,12 @@ const (
 	StatusError   Status = "Error"
 )
 
-func (status Status) StringEmoji() string {
-	m := map[Status]string{
-		StatusPlaying: "▶️",
-		StatusAdded:   "🎶",
-		StatusStopped: "⏹",
-		StatusPaused:  "⏸",
-		StatusResumed: "▶️",
-		StatusError:   "❌",
-	}
-	return m[status]
-}
-
 var (
-	ErrNoTrackPlaying    = errors.New("no track is currently playing")
-	ErrNoTracksInQueue   = errors.New("no tracks in queue")
-	ErrNoParsersForTrack = errors.New("track has no available parsers")
+	ErrNoTrackPlaying     = errors.New("no track is currently playing")
+	ErrNoTracksInQueue    = errors.New("no tracks in queue")
+	ErrNoParsersForTrack  = errors.New("track has no available parsers")
+	ErrPauseNotSupported  = errors.New("pause is not supported")
+	ErrResumeNotSupported = errors.New("resume is not supported")
 	// ErrSinkUnavailable indicates voice/sink could not be obtained (e.g. join timeout or no permission).
 	// When runPlayback returns this, the player skips calling PlayNext to avoid spinning through the queue.
 	ErrSinkUnavailable = errors.New("sink unavailable")
@@ -95,8 +85,8 @@ type Player struct {
 	// PlayerStatus receives playback lifecycle updates for UI (buffered; drops if full).
 	PlayerStatus chan Status
 
-	transportRecoveryMode  string
-	transportSoftAttempts  int
+	transportRecoveryMode string
+	transportSoftAttempts int
 }
 
 type Options struct {
@@ -125,12 +115,12 @@ func NewWithOptions(sinkProvider sink.Provider, res Resolver, opts Options) *Pla
 	}
 
 	return &Player{
-		resolver:     res,
-		sinkProvider: sinkProvider,
-		queue:        make([]parsers.TrackParse, 0),
-		stopPlayback: make(chan struct{}),
-		playbackDone: make(chan struct{}),
-		PlayerStatus: make(chan Status, 10),
+		resolver:              res,
+		sinkProvider:          sinkProvider,
+		queue:                 make([]parsers.TrackParse, 0),
+		stopPlayback:          make(chan struct{}),
+		playbackDone:          make(chan struct{}),
+		PlayerStatus:          make(chan Status, 10),
 		transportRecoveryMode: mode,
 		transportSoftAttempts: softAttempts,
 	}
@@ -303,32 +293,14 @@ func (p *Player) Stop(disconnect bool) error {
 	return nil
 }
 
-// Pause pauses playback. Note: Not wired to actual streaming — only sets playing=false and emits StatusPaused.
+// Pause is currently not supported (the sink owns the read loop).
 func (p *Player) Pause() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if !p.playing {
-		return ErrNoTrackPlaying
-	}
-	p.playing = false
-	p.emitStatus(StatusPaused)
-	return nil
+	return ErrPauseNotSupported
 }
 
-// Resume resumes playback.
+// Resume is currently not supported.
 func (p *Player) Resume() error {
-	p.mu.Lock()
-	if p.currTrack == nil {
-		p.mu.Unlock()
-		return ErrNoTrackPlaying
-	}
-	track := p.currTrack
-	p.mu.Unlock()
-
-	p.playNextMu.Lock()
-	defer p.playNextMu.Unlock()
-	return p.startTrack(track, true)
+	return ErrResumeNotSupported
 }
 
 // IsPlaying returns true while a track is opening or actively playing (excludes paused state where playing is false).

@@ -16,13 +16,14 @@ var (
 	ErrEmptyPlaylist = errors.New("no video URLs found in the playlist")
 )
 
-type Resolver struct {
+// Searcher turns a text query into a YouTube watch URL.
+type Searcher struct {
 	BaseURL string
 	Client  *http.Client
 }
 
-func NewResolver() *Resolver {
-	return &Resolver{
+func NewSearcher() *Searcher {
+	return &Searcher{
 		BaseURL: "https://www.youtube.com",
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
@@ -30,7 +31,7 @@ func NewResolver() *Resolver {
 	}
 }
 
-func (r *Resolver) SearchFirstVideoURL(query string) (string, error) {
+func (r *Searcher) SearchFirstVideoURL(query string) (string, error) {
 	searchURL := fmt.Sprintf("%s/results?search_query=%s", r.BaseURL, url.QueryEscape(query))
 
 	resp, err := r.Client.Get(searchURL)

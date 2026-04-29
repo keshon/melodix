@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
+	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 )
 
 func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
@@ -73,11 +74,12 @@ func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		return nil, nil, fmt.Errorf("ffmpeg start error: %w", err)
 	}
 
+	pr := ffmpegparser.NewProcessReadCloser(ffmpeg, reader)
 	cleanup := func() {
 		_ = ffmpeg.Process.Kill()
 		_ = ytdlp.Process.Kill()
-		_, _ = ffmpeg.Wait(), ytdlp.Wait()
+		_, _ = pr.WaitErr(), ytdlp.Wait()
 	}
 
-	return reader, cleanup, nil
+	return pr, cleanup, nil
 }

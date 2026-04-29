@@ -15,13 +15,14 @@ var (
 	ErrNoTrackMatch = errors.New("no track found for the given query")
 )
 
-type Resolver struct {
+// Searcher turns a text query into a SoundCloud track URL.
+type Searcher struct {
 	BaseURL string
 	Client  *http.Client
 }
 
-func NewResolver() *Resolver {
-	return &Resolver{
+func NewSearcher() *Searcher {
+	return &Searcher{
 		BaseURL: "https://soundcloud.com",
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
@@ -29,7 +30,7 @@ func NewResolver() *Resolver {
 	}
 }
 
-func (r *Resolver) SearchFirstTrackURL(query string) (string, error) {
+func (r *Searcher) SearchFirstTrackURL(query string) (string, error) {
 	searchURL := fmt.Sprintf("https://duckduckgo.com/html/?q=site:soundcloud.com+%s", url.QueryEscape(query))
 
 	req, err := http.NewRequest("GET", searchURL, nil)
