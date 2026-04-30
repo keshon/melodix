@@ -54,7 +54,7 @@ go build -o melodix-cli ./cmd/cli
 
 Try the bot in [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server: 
 enter voice channel and use slash commands in `#bot-music-spam`.
-a 
+
 ---
 
 ### Download a release
