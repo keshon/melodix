@@ -1,4 +1,4 @@
-// cmd/discord/main.go
+// cmd/discord/main.go — Discord music player bot.
 package main
 
 import (

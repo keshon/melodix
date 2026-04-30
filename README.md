@@ -1,65 +1,60 @@
+
 ![# Header](https://raw.githubusercontent.com/keshon/melodix/master/assets/readme-banner.webp)
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/keshon/melodix.svg)](https://pkg.go.dev/github.com/keshon/melodix) [![Go Report Card](https://goreportcard.com/badge/github.com/keshon/melodix)](https://goreportcard.com/report/github.com/keshon/melodix) [![Release](https://img.shields.io/github/v/release/keshon/melodix)](https://github.com/keshon/melodix/releases) [![License](https://img.shields.io/github/license/keshon/melodix)](LICENSE)
 
-# Melodix — Self-hosted Discord music bot & CLI player
 
-> Presented by Señor Mega.
-> Powered by Go, FFmpeg, and several questionable engineering decisions.
+# Melodix
 
-Self-hosted music player written in Go that can run either as:
+Self-hosted Discord music bot with a CLI player, built in Go.
 
-- a **Discord music bot** for voice channels
-- a **CLI player** that plays music directly from your terminal
-
-Melodix supports **YouTube, SoundCloud and internet radio**, using multiple parsers with automatic fallback for resilience.
+Designed to run for long sessions with minimal failure rate.
 
 ---
 
-## Table of contents
+## Quick start
 
-* [Features](#features)
-* [Try Melodix without installing](#try-melodix-without-installing)
-* [Commands](#commands)
-* [How-to's](#how-tos)
-* [Running Melodix yourself](#running-melodix-yourself)
-* [How it works](#how-it-works)
-* [Music package overview](#music-package-overview)
-* [Why Melodix?](#why-melodix)
-* [Support](#support)
-* [FAQ](#faq)
-* [Contributing](#contributing)
-* [License](#license)
+### Run Discord bot
+
+1. Create a bot in Discord Developer Portal
+2. Get your token
+3. Run:
+
+```bash
+go build -o melodix-discord ./cmd/discord
+DISCORD_TOKEN=your-token ./melodix-discord
+````
+
+Full setup guide: see `docs/running.md`
+
+---
+
+### Run CLI player
+
+```bash
+go build -o melodix-cli ./cmd/cli
+./melodix-cli
+```
 
 ---
 
 ## Features
 
-* **Discord bot** — Slash commands, voice channel playback, one bot for many servers.
-* **Voice support** — Compatible with Discord's current voice protocol (DAVE).
-* **CLI player** — Same engine as the bot: play, next, stop, queue, status. No Discord token required.
-* **Sources** — YouTube (link or search query), SoundCloud, internet radio (direct stream URLs). Input is auto-detected.
-* **Parsers and resilience** — Multiple parsers per track ([yt-dlp](https://github.com/yt-dlp/yt-dlp), [kkdai](https://github.com/kkdai/youtube), [ffmpeg](https://github.com/FFmpeg/FFmpeg)); automatic fallback if one fails.
-* **Recovery streams** — Stream retries on early termination (e.g. network hiccups).
-* **Queue system** — One queue per guild (Discord) or per process (CLI).
-* **Playback controls** — Play, skip, stop, clear, queue status.
-
-**Limitations**
-
-* YouTube live streams are not supported.
-* Region-locked videos may fail.
-* Some radio stream formats are unsupported.
-* Stream recovery may cause short pauses.
+* Discord bot and CLI player share the same playback engine
+* Multiple parsers with automatic fallback (yt-dlp, kkdai, ffmpeg)
+* Recovery streams for unstable or broken sources
+* Queue system per guild (Discord) or per process (CLI)
+* Fully self-hosted
 
 ---
 
-## Try Melodix without installing
+## Try Melodix
 
 ### Use the official server
 
 Try the bot in [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server: 
-enter a voice channel and use slash commands in `#bot-music-spam`.
-
+enter voice channel and use slash commands in `#bot-music-spam`.
+a 
 ---
 
 ### Download a release
@@ -68,15 +63,9 @@ Download pre-built binaries:
 
 https://github.com/keshon/melodix/releases
 
-Each archive contains:
-
-* `melodix-discord` — Discord bot
-* `melodix-cli` — terminal player
-
 ---
 
-## Commands
-
+## Commands (Discord)
 
 <!-- generated -->
 
@@ -110,22 +99,9 @@ Each archive contains:
 
 <!-- /generated -->
 
-#### Music slash commands — usage
-
-Commands are summarized in the list above; this section expands the main playback flow.
-
-- **`/play`** — Enter a **URL** (YouTube, SoundCloud, or a direct radio/stream link), a **search query**, or one or more **history ids** (the numbers shown in `/history`) to queue that track again without a full resolve. Optional **`source`** and **`parser`** override autodetection. You can separate several ids or URLs with spaces, commas, or semicolons (there is a per-command batch limit).
-- **`/history`** — **`view`**: 
-**Timeline** lists each play in order with a short date; 
-**By URL** merges identical links and shows a **×** multiplier for how often each was played. 
-Use **`page`** to move through long lists. Each row includes an **id** you can pass to **`/play`**. 
-History is stored per server; very old rows may be removed when the persisted list is trimmed.
-- **`/next`** — Skip to the next track in the queue.
-- **`/stop`** — Stop playback and clear the queue.
-
 Example usage:
 
-```
+```bash
 /play Never Gonna Give You Up
 /play https://www.youtube.com/watch?v=dQw4w9WgXcQ
 /play http://stream-uk1.radioparadise.com/aac-320
@@ -133,210 +109,24 @@ Example usage:
 /history
 ```
 
-You must be in a voice channel to use `/play`.
+---
+
+## Running
+
+Requirements:
+
+* FFmpeg in PATH
+* yt-dlp (optional, recommended)
+
+For full setup (Discord bot, env config, Docker):
+see `docs/running.md`
 
 ---
 
-## How-to's
+## Documentation
 
-* **How to add Melodix to your Discord server** — Use the OAuth2 invite link (see [Discord bot — Step 1](#discord-bot--step-1-create-the-bot-in-discord)); replace `YOUR_APPLICATION_ID` with your app ID, open the URL, choose your server, and authorize. Then use slash commands. To self-host the bot, see [Running Melodix yourself](#running-melodix-yourself).
-* **How to play your first track** — (Discord) Join a voice channel, then run `/play` with a link or search term (e.g., `/play Never Gonna Give You Up`).
-* **How to self-host the bot** — Install FFmpeg (and optionally yt-dlp) on your PATH, create a bot in the [Discord Developer Portal](https://discord.com/developers/applications), set `DISCORD_TOKEN` in `.env`, and run the Discord binary. Full steps: [Discord bot — Step 2](#discord-bot--step-2-configure-and-run).
-* **How to run the CLI player** — Build with `go build -o melodix-cli ./cmd/cli` or use the `melodix-cli` binary from [releases](https://github.com/keshon/melodix/releases). No Discord token needed. Commands: `play`, `next`, `stop`, `queue`, `status`, `quit`. See [CLI player](#cli-player).
-* **How to try without installing** — Join the [official support server](https://discord.gg/uDnTenPxAY) and use the bot in a voice channel, or download a [release](https://github.com/keshon/melodix/releases) and run the binaries. See [Try Melodix without installing](#try-melodix-without-installing).
-
----
-
-## Running Melodix yourself
-
-You can run the **Discord bot** (voice channels) or the **CLI player** (local playback). Both use the same sources and queue logic.
-
-### What you need (both modes)
-
-* **FFmpeg** on your system PATH. [FFmpeg download page](https://ffmpeg.org/download.html) or [repo](https://ffmpeg.org/download.html)
-* **yt-dlp** (optional but recommended) on your PATH for better YouTube support. [YT-dlp repo](https://github.com/yt-dlp/yt-dlp)
-
-For the **Discord bot** you also need a **Discord bot token** from the [Discord Developer Portal](https://discord.com/developers/applications).
-
-### Discord bot — Step 1: Create the bot in Discord
-
-1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and create a new application. Note the **Application ID**.
-
-2. Go to the **Bot** section and create a bot. Copy the **token** (you will use it as `DISCORD_TOKEN`).
-
-3. Under **Privileged Gateway Intents**, enable:
-
-   * Presence Intent
-   * Server Members Intent
-   * Message Content Intent
-
-4. Invite the bot to your server using this URL (replace `YOUR_APPLICATION_ID` with your Application ID from step 1):
-
-   `https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&permissions=3238912`
-
-5. Open the URL in your browser, choose your server, and authorize. Grant the requested permissions when asked.
-
-### Discord bot — Step 2: Configure and run
-
-Create a `.env` file in the folder where you run the bot (or set the same variables in your environment):
-
-```env
-# Required for the Discord bot
-DISCORD_TOKEN=your-discord-bot-token
-```
-
-Optional variables (you can add these to `.env` if needed):
-
-| Variable                  | Description                                                | Default                 |
-| ------------------------- | ---------------------------------------------------------- | ----------------------- |
-| `STORAGE_PATH`            | Path for bot data (e.g. command state).                    | `./data/datastore.json` |
-| `INIT_SLASH_COMMANDS`     | Set to `true` to register slash commands on every startup. | `false`                 |
-| `DEVELOPER_ID`            | Your Discord user ID for developer-only commands.          | (none)                  |
-| `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave.              | (none)                  |
-| `VOICE_READY_DELAY_MS`    | Delay after joining VC before sending Opus (avoids OP4 race). | `500`                 |
-| `WS_SILENCE_TIMEOUT`      | Treat gateway as unhealthy after this long without messages. | `2m`                  |
-| `DISCORD_UNHEALTHY_MODE`  | Action on unhealthy: `restart-session`, `restart-voice`, `ignore`. | `restart-session` |
-| `DISCORD_UNHEALTHY_GRACE` | In `restart-session`: ignore first N unhealthy signals within window (still invalidates sinks). | `0` |
-| `DISCORD_UNHEALTHY_WINDOW`| Window for `DISCORD_UNHEALTHY_GRACE` counting.             | `1m`                    |
-| `PLAYER_TRANSPORT_RECOVERY_MODE` | On voice transport failure: `hard` (rejoin VC) or `soft` (reopen stream first, then hard fallback). | `hard` |
-| `PLAYER_TRANSPORT_SOFT_ATTEMPTS` | In `soft` mode: how many soft retries before hard fallback. | `1` |
-| `COMMAND_TIMEOUT`         | Hard timeout for a single command execution.               | `30s`                   |
-| `COMMAND_PARALLELISM`     | Max number of concurrently running command handlers.       | `16`                    |
-
-**Run the Discord bot:**
-
-* **From source:** `go build -o melodix-discord ./cmd/discord` then run the binary. Ensure `DISCORD_TOKEN` is set (e.g., in `.env`).
-* **From a release:** Use the `melodix-discord` binary from the [releases](https://github.com/keshon/melodix/releases) archive.
-* **With Docker:** See [docker/README.md](docker/README.md) for Docker and Docker Compose instructions.
-
-After the bot is running and invited to your server, use slash commands in any channel. For music, be in a voice channel and use `/play` with a link or search term.
-
-### CLI player
-
-The CLI player uses the same playback engine but runs in your terminal and plays through your speakers. No Discord token or server setup required.
-
-**Run the CLI player:**
-
-* **From source:** `go build -o melodix-cli ./cmd/cli` then run the binary.
-* **From a release:** Use the `melodix-cli` binary from the [releases](https://github.com/keshon/melodix/releases) archive.
-
-**CLI commands** (at the `> ` prompt):
-
-| Command                                 | Description                          |
-| --------------------------------------- | ------------------------------------ |
-| `play <url or query> [source] [parser]` | Add and play a track.                |
-| `next`                                  | Skip to the next track.              |
-| `stop`                                  | Stop playback and clear the queue.   |
-| `queue`                                 | Show now playing and the queue.      |
-| `status`                                | Show current track and queue length. |
-| `quit`                                  | Exit.                                |
-
-Example:
-
-```
-> play Never Gonna Give You Up
-> queue
-> next
-> quit
-```
-
----
-
-## How it works
-
-High level flow:
-
-* **Discord app** — The bot connects to Discord, registers slash commands, and handles interactions. For music, it resolves the user's voice channel, gets or creates a **player** for the guild, and forwards play/next/stop to that player.
-* **CLI app** — Uses the same **player** and **resolver**; a **speaker sink** instead of a Discord voice sink; same queue and controls.
-* **Shared core** — The [pkg/music](pkg/music) library provides the player, resolver, stream opening, and sink abstraction. Both the Discord bot and the CLI are thin layers on top.
-
-```mermaid
-flowchart TB
-  User["User"]
-  DiscordBot["Discord bot"]
-  CLI["CLI"]
-  MusicPlayer["Player (pkg/music)"]
-  Resolver["Resolver"]
-  Sink["Sink (Discord VC or speaker)"]
-  User -->|"slash / play"| DiscordBot
-  User -->|"play command"| CLI
-  DiscordBot --> MusicPlayer
-  CLI --> MusicPlayer
-  MusicPlayer --> Resolver
-  MusicPlayer --> Sink
-```
-
----
-
-## Music package overview
-
-The [pkg/music](pkg/music) package is the core of the bot. It implements the entire playback pipeline: resolving tracks, managing the queue, opening audio streams, and delivering PCM audio to different sinks (Discord voice or local playback).
-
-The playback pipeline works as follows:
-
-1. **Resolve** — User input (URL or search) goes to the **resolver**. Sources (YouTube, SoundCloud, radio) match the input and return **track metadata** (URL, title, list of available parsers). No streaming yet.
-
-2. **Enqueue** — The **player** enqueues one or more tracks (metadata only). If nothing is playing, the caller typically calls **PlayNext**.
-
-3. **PlayNext** — The player pops the next track and calls **startTrack**: opens a **RecoveryStream** (which wraps **TrackStream**) and starts a **playback goroutine** that will obtain a sink and stream PCM.
-
-4. **Get sink** — The playback goroutine asks the **sink provider** for an **AudioSink**.  
-   - **Discord**: joins a voice channel and returns a sink that encodes PCM to Opus and sends it to the voice connection.  
-   - **CLI / local**: returns the speaker sink.  
-   If obtaining the sink fails, playback stops and the queue does not advance.
-
-5. **Open stream** — **RecoveryStream** opens a **TrackStream** by trying the track’s parsers in order (`ytdlp-link`, `kkdai-link`, `ffmpeg-link`). Each parser produces **PCM** (48 kHz, stereo, 16-bit). If the stream dies early, RecoveryStream can retry with the same or next parser (up to a limit).
-
-6. **Stream to sink** — The player feeds the PCM **ReadCloser** into **AudioSink.Stream**. The sink runs until the stream ends or a stop signal is received.
-
-7. **Next or stop** — When the stream ends, the player can auto-advance to the next track (`PlayNext`) or stop. Calling **Stop(true)** clears the queue and releases the sink.
-
-Subpackages: [player](pkg/music/player), [resolver](pkg/music/resolver), [sink](pkg/music/sink), [sources](pkg/music/sources), [parsers](pkg/music/parsers), [stream](pkg/music/stream). See also [pkg/music/README.md](pkg/music/README.md) for using the library standalone.
-
----
-
-## Why Melodix?
-
-I needed a self-hosted music bot that could reliably run for **long DnD sessions** without interruptions. I also wanted to achieve:
-
-* Natievly compiled application
-* Resilient playback engine with fallback parsers and recovery streams
-* Self-hosted solution anyone can run on their own server
-* Get some knowledge about Go and Discord APIs
-
----
-
-## Support
-
-For help or questions, use the [Ctrl+Z](https://discord.gg/uDnTenPxAY) — official Melodix Discord server.
-
----
-
-## FAQ
-
-* **Why does `play` sometimes take a few seconds?**  
-  The bot resolves the input (URL or search) and opens an audio stream using one of the parsers (`yt-dlp`, `kkdai`, `ffmpeg`). The first request for a track may take a moment; playback starts once the stream is ready.
-
-* **Can I use only the music library without the bot?**  
-  Yes. The [pkg/music](pkg/music) library is a standalone Go package. You can use the speaker sink and resolver for a CLI or custom app. See [pkg/music/README.md](pkg/music/README.md) and the example in [pkg/music/examples/cli_speaker](pkg/music/examples/cli_speaker).
-
-* **Why is FFmpeg required?**  
-  Parsers use FFmpeg to decode various audio formats (YouTube, radio streams, etc.) into PCM, which the bot can send to Discord or play locally.
-
-* **Why can't the bot join the voice channel?**  
-  The bot needs **Connect** and **Speak** permissions in that channel. Check the channel or server permissions for the bot role.
-
-* **Why is there no audio or the track never starts?**  
-  Ensure **FFmpeg** (and optionally **yt-dlp**) is available in your `PATH`. Check parser logs for stream open errors. Some region-locked or live YouTube streams may not be supported.
-
-* **The bot does not start or cannot connect to Discord**  
-  In some regions Discord may be blocked. If the server running the bot cannot reach Discord, the bot will fail to connect. Run it on a server with open access to Discord, or configure a proxy/VPN if necessary.
-
----
-
-## Contributing
-
-Contributions are welcome. Open an issue or pull request on [GitHub](https://github.com/keshon/melodix). For larger changes, discuss in the [Melodix Discord server](https://discord.gg/uDnTenPxAY) first.
+* Running and setup: `docs/running.md`
+* Architecture: `docs/architecture.md`
 
 ---
 
