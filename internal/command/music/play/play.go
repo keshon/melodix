@@ -131,6 +131,8 @@ func (c *Play) Run(ctx interface{}) error {
 		return nil
 	}
 
+	c.Bot.SetGuildMusicNotifyChannel(guildID, e.ChannelID)
+
 	p := c.Bot.GetOrCreatePlayer(guildID)
 	if p == nil {
 		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{

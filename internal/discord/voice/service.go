@@ -41,20 +41,24 @@ type Service struct {
 	sinkProviders map[string]*sink.DiscordSinkProvider
 	resolver      *resolve.Resolver
 
-	guildMusicStatus   map[string]guildMusicStatus
-	guildMusicStatusMu sync.RWMutex
+	guildMusicStatus map[string]guildMusicStatus
+	// guildMusicNotifyChannel is the text channel of the last music slash (/play, /next, …) for fallback
+	// "Playback failed" when no status message id is stored yet or edit fails.
+	guildMusicNotifyChannel map[string]string
+	guildMusicStatusMu      sync.RWMutex
 }
 
 // New creates a voice service for the given session getter and config.
 func NewVoiceService(getSession SessionGetter, cfg *config.Config, store *storage.Storage, log zerolog.Logger) *Service {
 	return &Service{
-		getSession:       getSession,
-		cfg:              cfg,
-		store:            store,
-		log:              log,
-		players:          make(map[string]*player.Player),
-		sinkProviders:    make(map[string]*sink.DiscordSinkProvider),
-		guildMusicStatus: make(map[string]guildMusicStatus),
+		getSession:              getSession,
+		cfg:                     cfg,
+		store:                   store,
+		log:                     log,
+		players:                 make(map[string]*player.Player),
+		sinkProviders:           make(map[string]*sink.DiscordSinkProvider),
+		guildMusicStatus:        make(map[string]guildMusicStatus),
+		guildMusicNotifyChannel: make(map[string]string),
 	}
 }
 
@@ -87,14 +91,46 @@ func (s *Service) attachPlaybackFailureNotifier(p *player.Player) {
 		} else {
 			desc = detail
 		}
-		if errEdit := s.UpdatePlaybackStatus(sess, nil, guildID, &discordgo.MessageEmbed{
+		s.deliverPlaybackFailureEmbed(sess, guildID, &discordgo.MessageEmbed{
 			Title:       "Playback failed",
 			Description: desc,
 			Color:       discordreply.EmbedColor,
-		}); errEdit != nil {
-			s.log.Warn().Str("guild_id", guildID).Err(errEdit).Msg("playback_failed_embed_edit_failed")
-		}
+		})
 	})
+}
+
+// deliverPlaybackFailureEmbed edits the stored "now playing" message when possible; otherwise sends
+// a public embed to the last known slash channel (see SetGuildMusicNotifyChannel / UpdatePlaybackStatus).
+func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
+	s.guildMusicStatusMu.RLock()
+	msg, hasMsg := s.guildMusicStatus[guildID]
+	notifyCh := s.guildMusicNotifyChannel[guildID]
+	s.guildMusicStatusMu.RUnlock()
+
+	if hasMsg && msg.ChannelID != "" && msg.MessageID != "" {
+		if _, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, embed); err != nil {
+			s.log.Warn().Str("guild_id", guildID).Err(err).Msg("playback_failed_embed_edit_failed")
+			if notifyCh != "" {
+				if _, err2 := session.ChannelMessageSendEmbed(notifyCh, embed); err2 != nil {
+					s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err2).Msg("playback_failed_fallback_send_failed")
+				} else {
+					s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_after_edit_failed")
+				}
+			}
+		}
+		return
+	}
+
+	if notifyCh != "" {
+		if _, err := session.ChannelMessageSendEmbed(notifyCh, embed); err != nil {
+			s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err).Msg("playback_failed_channel_send_failed")
+		} else {
+			s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_public_fallback")
+		}
+		return
+	}
+
+	s.log.Warn().Str("guild_id", guildID).Msg("playback_failed_no_ui_target")
 }
 
 // GetOrCreatePlayer returns an existing player for the guild or creates a new one.
@@ -147,8 +183,31 @@ func (s *Service) ResolveTracks(guildID, input, source, parser string) ([]source
 	return r.Resolve(input, source, parser)
 }
 
+// SetGuildMusicNotifyChannel records the text channel id for guild (slash command channel) so async
+// playback failure can post a public embed when the status message is not registered yet.
+func (s *Service) SetGuildMusicNotifyChannel(guildID, channelID string) {
+	if guildID == "" || channelID == "" {
+		return
+	}
+	s.guildMusicStatusMu.Lock()
+	if s.guildMusicNotifyChannel == nil {
+		s.guildMusicNotifyChannel = make(map[string]string)
+	}
+	s.guildMusicNotifyChannel[guildID] = channelID
+	s.guildMusicStatusMu.Unlock()
+}
+
 // UpdatePlaybackStatus creates or edits the guild's music status message.
 func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
+	if i != nil && i.ChannelID != "" {
+		s.guildMusicStatusMu.Lock()
+		if s.guildMusicNotifyChannel == nil {
+			s.guildMusicNotifyChannel = make(map[string]string)
+		}
+		s.guildMusicNotifyChannel[guildID] = i.ChannelID
+		s.guildMusicStatusMu.Unlock()
+	}
+
 	s.guildMusicStatusMu.RLock()
 	msg, ok := s.guildMusicStatus[guildID]
 	s.guildMusicStatusMu.RUnlock()

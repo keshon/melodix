@@ -21,6 +21,9 @@ type VoiceAPI interface {
 
 	// UpdatePlaybackStatus creates or edits the guild's music status message so updates work beyond 15 min token expiry.
 	UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error
+
+	// SetGuildMusicNotifyChannel stores the slash command text channel for async playback failure UI.
+	SetGuildMusicNotifyChannel(guildID, channelID string)
 }
 
 // UserVoiceState holds minimal voice channel state for a user.
@@ -65,4 +68,12 @@ func (b *Bot) UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.Interactio
 		return nil
 	}
 	return b.voice.UpdatePlaybackStatus(s, i, guildID, embed)
+}
+
+// SetGuildMusicNotifyChannel records the text channel for public playback-failure fallback (voice service).
+func (b *Bot) SetGuildMusicNotifyChannel(guildID, channelID string) {
+	if b.voice == nil {
+		return
+	}
+	b.voice.SetGuildMusicNotifyChannel(guildID, channelID)
 }

@@ -66,6 +66,8 @@ func (c *Next) Run(ctx interface{}) error {
 		return nil
 	}
 
+	c.Bot.SetGuildMusicNotifyChannel(guildID, e.ChannelID)
+
 	player := c.Bot.GetOrCreatePlayer(guildID)
 	queue := player.Queue()
 	if len(queue) == 0 {
