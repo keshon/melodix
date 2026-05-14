@@ -79,7 +79,11 @@ func (c *Next) Run(ctx interface{}) error {
 	player.Stop(false)
 	if err = player.PlayNext(voiceState.ChannelID); err != nil {
 		if errors.Is(err, musicplayer.ErrTrackStartFailed) {
-			common.ListenPlayerStatusSlash(s, e, player, c.Bot, guildID, slashCtx.AppLog)
+			discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Playback Error",
+				Description: common.PlaybackErrorDescription(err),
+				Color:       discordreply.EmbedColor,
+			})
 			return nil
 		}
 		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{

@@ -215,7 +215,11 @@ func (c *Play) Run(ctx interface{}) error {
 	if !p.IsPlaying() {
 		if err := p.PlayNext(voiceState.ChannelID); err != nil {
 			if errors.Is(err, player.ErrTrackStartFailed) {
-				common.ListenPlayerStatusSlash(s, e, p, c.Bot, guildID, slashCtx.AppLog)
+				discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					Title:       "🎵 Playback Error",
+					Description: common.PlaybackErrorDescription(err),
+					Color:       discordreply.EmbedColor,
+				})
 				return nil
 			}
 			if errors.Is(err, player.ErrNoTracksInQueue) {

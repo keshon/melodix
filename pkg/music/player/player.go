@@ -248,7 +248,7 @@ func (p *Player) PlayNext(target string) error {
 			qEmpty := len(p.queue) == 0
 			p.mu.Unlock()
 			if qEmpty {
-				p.emitStatus(StatusError)
+				// Discord slash handlers send the error text for this case; avoid a stray StatusError on the channel.
 				return fmt.Errorf("%w: %v", ErrTrackStartFailed, err)
 			}
 			continue
