@@ -88,6 +88,14 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 						appLog.Warn().Str("status", "added").Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 					}
 					return
+
+				case player.StatusError:
+					_ = discordreply.FollowupEmbedEphemeral(session, event, &discordgo.MessageEmbed{
+						Title:       statusEmoji(player.StatusError) + " Playback Error",
+						Description: "Could not start or continue playback (for example all stream parsers failed).",
+						Color:       discordreply.EmbedColor,
+					})
+					return
 				}
 			}
 		}

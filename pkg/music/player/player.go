@@ -27,8 +27,11 @@ const (
 )
 
 var (
-	ErrNoTrackPlaying     = errors.New("no track is currently playing")
-	ErrNoTracksInQueue    = errors.New("no tracks in queue")
+	ErrNoTrackPlaying  = errors.New("no track is currently playing")
+	ErrNoTracksInQueue = errors.New("no tracks in queue")
+	// ErrTrackStartFailed is returned when a dequeued track could not start playback (e.g. all parsers failed)
+	// and there are no further tracks in the queue.
+	ErrTrackStartFailed   = errors.New("track failed to start")
 	ErrNoParsersForTrack  = errors.New("track has no available parsers")
 	ErrPauseNotSupported  = errors.New("pause is not supported")
 	ErrResumeNotSupported = errors.New("resume is not supported")
@@ -241,6 +244,13 @@ func (p *Player) PlayNext(target string) error {
 
 		if err != nil {
 			p.log.Warn().Str("title", track.Title).Err(err).Msg("track_skipped_error")
+			p.mu.Lock()
+			qEmpty := len(p.queue) == 0
+			p.mu.Unlock()
+			if qEmpty {
+				p.emitStatus(StatusError)
+				return fmt.Errorf("%w: %v", ErrTrackStartFailed, err)
+			}
 			continue
 		}
 

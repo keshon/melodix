@@ -1,6 +1,7 @@
 package next
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -9,6 +10,7 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/discord/perm"
+	musicplayer "github.com/keshon/melodix/pkg/music/player"
 )
 
 type Next struct {
@@ -76,6 +78,10 @@ func (c *Next) Run(ctx interface{}) error {
 
 	player.Stop(false)
 	if err = player.PlayNext(voiceState.ChannelID); err != nil {
+		if errors.Is(err, musicplayer.ErrTrackStartFailed) {
+			common.ListenPlayerStatusSlash(s, e, player, c.Bot, guildID, slashCtx.AppLog)
+			return nil
+		}
 		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Playback Error",
 			Description: fmt.Sprintf("Failed to play next track.\n\n**Error:** %v", err),
@@ -86,4 +92,3 @@ func (c *Next) Run(ctx interface{}) error {
 	common.ListenPlayerStatusSlash(s, e, player, c.Bot, guildID, slashCtx.AppLog)
 	return nil
 }
-

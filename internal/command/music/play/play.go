@@ -11,6 +11,7 @@ import (
 	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/pkg/music/player"
 )
 
 type Play struct {
@@ -212,10 +213,28 @@ func (c *Play) Run(ctx interface{}) error {
 	}
 
 	if !p.IsPlaying() {
-		_ = p.PlayNext(voiceState.ChannelID)
+		if err := p.PlayNext(voiceState.ChannelID); err != nil {
+			if errors.Is(err, player.ErrTrackStartFailed) {
+				common.ListenPlayerStatusSlash(s, e, p, c.Bot, guildID, slashCtx.AppLog)
+				return nil
+			}
+			if errors.Is(err, player.ErrNoTracksInQueue) {
+				discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					Title:       "🎵 Queue",
+					Description: "Nothing is in the queue to play.",
+					Color:       discordreply.EmbedColor,
+				})
+				return nil
+			}
+			discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Playback Error",
+				Description: fmt.Sprintf("%v", err),
+				Color:       discordreply.EmbedColor,
+			})
+			return nil
+		}
 	}
 
 	common.ListenPlayerStatusSlash(s, e, p, c.Bot, guildID, slashCtx.AppLog)
 	return nil
 }
-
