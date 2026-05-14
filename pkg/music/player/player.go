@@ -92,6 +92,11 @@ type Player struct {
 
 	transportRecoveryMode string
 	transportSoftAttempts int
+
+	// errMu protects lastPlaybackUserErr (Discord / UI; separate from mu to avoid deadlocks with emit paths).
+	errMu                 sync.Mutex
+	lastPlaybackUserErr   string
+	onPlaybackFailed      func(guildID string, track parsers.TrackParse, playbackErr error)
 }
 
 type Options struct {
@@ -103,6 +108,9 @@ type Options struct {
 	// TransportSoftAttempts bounds how many soft retries we do before falling back to hard recovery.
 	// Applies to mode="soft" only. Default 1.
 	TransportSoftAttempts int
+	// OnPlaybackFailed is called when playback ends with an error after a track had started (e.g. sink warm-up).
+	// guildID is empty for non-Discord players; implementers should no-op.
+	OnPlaybackFailed func(guildID string, track parsers.TrackParse, playbackErr error)
 }
 
 // New creates a new Player. target is set per playback via PlayNext(target).
@@ -136,6 +144,7 @@ func NewWithOptions(sinkProvider sink.Provider, res Resolver, opts Options) *Pla
 		transportRecoveryMode: mode,
 		transportSoftAttempts: softAttempts,
 		log:                   l,
+		onPlaybackFailed:      opts.OnPlaybackFailed,
 	}
 }
 
@@ -153,13 +162,19 @@ func (p *Player) SetRecorder(r PlaybackRecorder) {
 	p.mu.Unlock()
 }
 
+// SetOnPlaybackFailed sets a callback when playback fails after a track has started (e.g. warm-up read).
+// Pass nil to disable. Used by Discord voice wiring to edit the guild "now playing" message.
+func (p *Player) SetOnPlaybackFailed(fn func(guildID string, track parsers.TrackParse, playbackErr error)) {
+	p.onPlaybackFailed = fn
+}
+
 // Enqueue adds tracks to the queue
 func (p *Player) Enqueue(input string, source string, parser string) error {
 	p.log.Info().Str("input", input).Str("source", source).Str("parser", parser).Msg("enqueue_called")
 	tracksInfo, err := p.resolver.Resolve(input, source, parser)
 	if err != nil {
 		p.log.Warn().Err(err).Msg("resolve_tracks_failed")
-		p.emitStatus(StatusError)
+		p.emitPlaybackError(err)
 		return err
 	}
 
@@ -180,13 +195,14 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 		})
 	}
 	if len(tracksParse) == 0 {
-		p.emitStatus(StatusError)
+		p.emitPlaybackError(ErrNoParsersForTrack)
 		return ErrNoParsersForTrack
 	}
 
 	p.queue = append(p.queue, tracksParse...)
 	p.log.Info().Int("added", len(tracksParse)).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
 	if p.currTrack != nil {
+		p.drainStalePlayerStatus()
 		p.emitStatus(StatusAdded)
 	}
 	return nil
@@ -195,7 +211,7 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 // EnqueueTrackInfo enqueues a single pre-resolved track (avoids double resolve when caller already has TrackInfo).
 func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
 	if len(trackInfo.AvailableParsers) == 0 {
-		p.emitStatus(StatusError)
+		p.emitPlaybackError(ErrNoParsersForTrack)
 		return ErrNoParsersForTrack
 	}
 	p.mu.Lock()
@@ -208,6 +224,7 @@ func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
 	})
 	p.log.Info().Int("added", 1).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
 	if p.currTrack != nil {
+		p.drainStalePlayerStatus()
 		p.emitStatus(StatusAdded)
 	}
 	return nil
@@ -381,9 +398,13 @@ func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
 	}
 
 	if resumed {
+		p.drainStalePlayerStatus()
+		p.clearPlaybackUserError()
 		p.emitStatus(StatusResumed)
 		p.log.Info().Str("title", track.Title).Msg("track_resuming")
 	} else {
+		p.drainStalePlayerStatus()
+		p.clearPlaybackUserError()
 		p.emitStatus(StatusPlaying)
 		p.log.Info().Str("title", track.Title).Msg("track_starting")
 	}
@@ -440,7 +461,13 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 	target := p.target
 	recoveryMode := p.transportRecoveryMode
 	softAttempts := p.transportSoftAttempts
+	guildID := p.guildID
 	p.mu.Unlock()
+
+	failedSnapshot := parsers.TrackParse{}
+	if ct != nil {
+		failedSnapshot = cloneTrackParse(*ct)
+	}
 
 	title := "(unknown)"
 	if ct != nil {
@@ -457,11 +484,7 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 			p.log.Warn().Int("attempt", attempt).Int("max", maxVoiceTransportAttempts).Err(err).Msg("sink_get_failed")
 			p.sinkProvider.InvalidateSink()
 			if attempt == maxVoiceTransportAttempts {
-				p.mu.Lock()
-				p.playing = false
-				p.currTrack = nil
-				p.mu.Unlock()
-				p.emitStatus(StatusError)
+				p.markPlaybackFailed(ct, failedSnapshot, guildID, errors.Join(ErrSinkUnavailable, fmt.Errorf("get sink: %w", err)))
 				return errors.Join(ErrSinkUnavailable, fmt.Errorf("get sink: %w", err))
 			}
 			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
@@ -494,19 +517,11 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 			}
 
 			if reopenErr := rs.ReopenAfterTransportFailure(); reopenErr != nil {
-				p.mu.Lock()
-				p.playing = false
-				p.currTrack = nil
-				p.mu.Unlock()
-				p.emitStatus(StatusError)
+				p.markPlaybackFailed(ct, failedSnapshot, guildID, fmt.Errorf("voice transport failed, could not reopen stream: %w", reopenErr))
 				return fmt.Errorf("voice transport failed, could not reopen stream: %w", reopenErr)
 			}
 			if attempt == maxVoiceTransportAttempts {
-				p.mu.Lock()
-				p.playing = false
-				p.currTrack = nil
-				p.mu.Unlock()
-				p.emitStatus(StatusError)
+				p.markPlaybackFailed(ct, failedSnapshot, guildID, err)
 				return err
 			}
 			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
@@ -515,16 +530,17 @@ func (p *Player) runPlayback(rs *stream.RecoveryStream, stopCh, doneCh chan stru
 		break
 	}
 
+	if err != nil {
+		p.markPlaybackFailed(ct, failedSnapshot, guildID, err)
+		p.log.Warn().Err(err).Msg("playback_finished_error")
+		return fmt.Errorf("playback error: %w", err)
+	}
+
 	p.mu.Lock()
 	p.playing = false
 	p.currTrack = nil
 	p.mu.Unlock()
 
-	if err != nil {
-		p.emitStatus(StatusError)
-		p.log.Warn().Err(err).Msg("playback_finished_error")
-		return fmt.Errorf("playback error: %w", err)
-	}
 	p.log.Info().Msg("playback_stopped")
 	p.emitStatus(StatusStopped)
 
@@ -542,6 +558,56 @@ func (p *Player) emitStatus(status Status) {
 	default:
 		p.log.Debug().Str("status", string(status)).Msg("player_status_dropped")
 	}
+}
+
+// drainStalePlayerStatus drops buffered PlayerStatus values so a prior run's StatusError
+// cannot be consumed by the next slash listener (channel is buffered).
+func (p *Player) drainStalePlayerStatus() {
+	for {
+		select {
+		case <-p.PlayerStatus:
+		default:
+			return
+		}
+	}
+}
+
+func (p *Player) clearPlaybackUserError() {
+	p.errMu.Lock()
+	p.lastPlaybackUserErr = ""
+	p.errMu.Unlock()
+}
+
+func (p *Player) emitPlaybackError(err error) {
+	if err != nil {
+		p.errMu.Lock()
+		p.lastPlaybackUserErr = err.Error()
+		p.errMu.Unlock()
+	}
+	p.emitStatus(StatusError)
+}
+
+// markPlaybackFailed clears playing state, records user-visible error, notifies Discord (if wired).
+func (p *Player) markPlaybackFailed(ct *parsers.TrackParse, failedSnapshot parsers.TrackParse, guildID string, playbackErr error) {
+	p.mu.Lock()
+	p.playing = false
+	p.currTrack = nil
+	p.mu.Unlock()
+	if playbackErr == nil {
+		return
+	}
+	p.emitPlaybackError(playbackErr)
+	if ct != nil && p.onPlaybackFailed != nil && guildID != "" {
+		p.onPlaybackFailed(guildID, failedSnapshot, playbackErr)
+	}
+}
+
+// LastPlaybackUserError returns the last error string attached to StatusError (may be empty).
+func (p *Player) LastPlaybackUserError() string {
+	p.errMu.Lock()
+	s := p.lastPlaybackUserErr
+	p.errMu.Unlock()
+	return s
 }
 
 // ChannelID returns the current target (voice channel ID for Discord, "" for CLI).

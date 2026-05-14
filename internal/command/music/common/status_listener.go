@@ -90,9 +90,13 @@ func ListenPlayerStatusSlash(session *discordgo.Session, event *discordgo.Intera
 					return
 
 				case player.StatusError:
+					desc := PlaybackErrorString(p.LastPlaybackUserError())
+					if desc == "" {
+						desc = "Could not start or continue playback (for example all stream parsers failed)."
+					}
 					_ = discordreply.FollowupEmbedEphemeral(session, event, &discordgo.MessageEmbed{
 						Title:       statusEmoji(player.StatusError) + " Playback Error",
-						Description: "Could not start or continue playback (for example all stream parsers failed).",
+						Description: desc,
 						Color:       discordreply.EmbedColor,
 					})
 					return

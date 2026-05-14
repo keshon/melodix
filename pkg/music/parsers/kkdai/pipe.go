@@ -55,6 +55,12 @@ func kkdaiPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		stream.Close()
 		return nil, nil, fmt.Errorf("ffmpeg stdout pipe error: %w", err)
 	}
+	stderr, err := ffmpeg.StderrPipe()
+	if err != nil {
+		stream.Close()
+		return nil, nil, fmt.Errorf("ffmpeg stderr pipe error: %w", err)
+	}
+	startFFmpegStderrReader("kkdai-pipe", stderr)
 
 	if err := ffmpeg.Start(); err != nil {
 		stream.Close()

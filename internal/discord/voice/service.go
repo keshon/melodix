@@ -1,12 +1,15 @@
 package voice
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/discord/voice/sink"
+	"github.com/keshon/melodix/internal/playbackerr"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
@@ -69,6 +72,31 @@ func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parse
 	}
 }
 
+func (s *Service) attachPlaybackFailureNotifier(p *player.Player) {
+	p.SetOnPlaybackFailed(func(guildID string, track parsers.TrackParse, err error) {
+		sess := s.getSession()
+		if sess == nil {
+			return
+		}
+		detail := playbackerr.String(err.Error())
+		var desc string
+		if track.Title != "" && track.URL != "" {
+			desc = fmt.Sprintf("%s\n\n[%s](%s)", detail, track.Title, track.URL)
+		} else if track.Title != "" {
+			desc = fmt.Sprintf("%s\n\n%s", detail, track.Title)
+		} else {
+			desc = detail
+		}
+		if errEdit := s.UpdatePlaybackStatus(sess, nil, guildID, &discordgo.MessageEmbed{
+			Title:       "Playback failed",
+			Description: desc,
+			Color:       discordreply.EmbedColor,
+		}); errEdit != nil {
+			s.log.Warn().Str("guild_id", guildID).Err(errEdit).Msg("playback_failed_embed_edit_failed")
+		}
+	})
+}
+
 // GetOrCreatePlayer returns an existing player for the guild or creates a new one.
 func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	s.mu.Lock()
@@ -79,6 +107,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	}
 	if p, ok := s.players[guildID]; ok {
 		p.SetGuildID(guildID)
+		s.attachPlaybackFailureNotifier(p)
 		if s.store != nil {
 			p.SetRecorder(playbackRecorder{store: s.store, log: s.log})
 		}
@@ -94,10 +123,11 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		s.sinkProviders[guildID] = provider
 	}
 	p := player.NewWithOptions(provider, s.resolver, player.Options{
-		Logger:               s.log,
+		Logger:                s.log,
 		TransportRecoveryMode: s.cfg.PlayerTransportRecoveryMode,
 		TransportSoftAttempts: s.cfg.PlayerTransportSoftAttempts,
 	})
+	s.attachPlaybackFailureNotifier(p)
 	p.SetGuildID(guildID)
 	if s.store != nil {
 		p.SetRecorder(playbackRecorder{store: s.store, log: s.log})

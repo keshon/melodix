@@ -135,6 +135,20 @@ The sink drives the read loop via `AudioSink.Stream(reader, stopCh)`:
   - then calls `rs.ReopenAfterTransportFailure()` to reopen media at the current seek
 - On user stop/skip: playback stops cleanly.
 
+### Discord / UI: errors and `PlayerStatus`
+
+Slash handlers often call `PlayNext`, then start `ListenPlayerStatusSlash`, which reads **one** status from the buffered `Player.PlayerStatus` channel and exits on `StatusPlaying` or `StatusAdded`. Failures that happen **after** the track has started (e.g. sink warm-up read errors) are emitted later as `StatusError`; without care, a stale error can be read on the **next** command. The player therefore **drains** the status channel before emitting `StatusPlaying` / `StatusAdded`, and stores a capped `lastPlaybackUserErr` for consistent embed text.
+
+When wired to Discord, the voice service sets `Player.SetOnPlaybackFailed` so a failure after “Now Playing” can **edit the guild status message** (same message id as “Now Playing”) instead of relying on an interaction follow-up that already finished.
+
+The **kkdai** parser uses a package-level logger: call `kkdai.SetLogger(appLogger)` once at process startup (the Discord bot does this in `NewBot`). FFmpeg **stderr** is read for both link and pipe paths; lines that look like HTTP 403 / forbidden / conversion failures are logged at **Warn**, other lines at **Debug** to limit noise.
+
+**Manual regression checklist**
+
+1. Broken or geo-blocked URL three `/play` commands in a row — no “wrong” error attributed to a later play; guild message shows failure when playback dies after start.
+2. Enqueue while something is playing — queue / status messages stay consistent.
+3. `/next` onto a broken next track — error text matches other failure paths (same length cap / phrasing family).
+
 ## Key extension points
 
 - **Custom resolver**: implement `player.Resolver` to support new sources or search.
