@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/discord/commandlogger"
-	"github.com/keshon/melodix/internal/discord/commandsync"
+	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/discord/cmdlogger"
+	"github.com/keshon/melodix/internal/discord/cmdsync"
 	"github.com/keshon/melodix/internal/discord/execguard"
 	"github.com/keshon/melodix/internal/discord/watchdog"
 )
@@ -23,8 +23,8 @@ func (b *Bot) RunSession(ctx context.Context) error {
 
 	b.mu.Lock()
 	b.dg = dg
-	b.cmdLogger = commandlogger.NewLogger(dg, b.storage, b.log)
-	b.cmdSyncer = commandsync.NewSyncer(dg, commandkit.DefaultRegistry, b.log)
+	b.cmdLogger = cmdlogger.NewLogger(dg, b.storage, b.log)
+	b.cmdSyncer = cmdsync.NewSyncer(dg, command.DefaultRegistry, b.log)
 	attachDiscordgoLogger(b.log)
 	b.mu.Unlock()
 

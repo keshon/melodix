@@ -1,10 +1,10 @@
-package command
+package cmdadapter
 
 import (
 	"context"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/commandkit"
+	"github.com/keshon/command"
 )
 
 type Adapter struct {
@@ -17,7 +17,7 @@ func (a *Adapter) Group() string            { return a.Cmd.Group() }
 func (a *Adapter) Category() string         { return a.Cmd.Category() }
 func (a *Adapter) UserPermissions() []int64 { return a.Cmd.UserPermissions() }
 
-func (a *Adapter) Run(ctx context.Context, inv *commandkit.Invocation) error {
+func (a *Adapter) Run(ctx context.Context, inv *command.Invocation) error {
 	return a.Cmd.Run(inv.Data)
 }
 

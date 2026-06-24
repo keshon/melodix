@@ -1,4 +1,4 @@
-package commandsync
+package cmdsync
 
 import (
 	"fmt"
@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
+
 	"github.com/rs/zerolog"
 )
 
@@ -16,7 +17,7 @@ const discordRateLimitDelay = 25 * time.Millisecond
 // Syncer handles registering and syncing slash commands per guild.
 type Syncer struct {
 	dg       *discordgo.Session
-	registry *commandkit.Registry
+	registry *command.Registry
 	log      zerolog.Logger
 
 	// perGuildLocks serializes sync operations per guild.
@@ -25,7 +26,7 @@ type Syncer struct {
 }
 
 // NewSyncer creates a command syncer with a Discord session and command registry.
-func NewSyncer(dg *discordgo.Session, registry *commandkit.Registry, log zerolog.Logger) *Syncer {
+func NewSyncer(dg *discordgo.Session, registry *command.Registry, log zerolog.Logger) *Syncer {
 	return &Syncer{
 		dg:       dg,
 		registry: registry,
@@ -131,10 +132,10 @@ func (m *Syncer) buildCommandDefinitions() []*discordgo.ApplicationCommand {
 	return defs
 }
 
-func toApplicationCommand(c commandkit.Command) *discordgo.ApplicationCommand {
-	root := commandkit.Root(c)
+func toApplicationCommand(c command.Command) *discordgo.ApplicationCommand {
+	root := command.Root(c)
 
-	if slash, ok := root.(command.SlashProvider); ok {
+	if slash, ok := root.(cmdadapter.SlashProvider); ok {
 		if def := slash.SlashDefinition(); def != nil {
 			if def.Type == 0 {
 				def.Type = discordgo.ChatApplicationCommand
@@ -143,7 +144,7 @@ func toApplicationCommand(c commandkit.Command) *discordgo.ApplicationCommand {
 		}
 	}
 
-	if menu, ok := root.(command.ContextMenuProvider); ok {
+	if menu, ok := root.(cmdadapter.ContextMenuProvider); ok {
 		if def := menu.ContextDefinition(); def != nil {
 			if def.Type == 0 {
 				def.Type = discordgo.MessageApplicationCommand

@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
-func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage, syncer command.CommandSyncer) error {
+func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage, syncer cmdadapter.CommandSyncer) error {
 	data := e.ApplicationCommandData()
 
 	subOptions := data.Options[0].Options

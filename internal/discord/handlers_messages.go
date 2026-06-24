@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 )
 
@@ -31,8 +31,8 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			b.log.Warn().Str("kind", "message").Err(err).Msg("command_slot_busy")
 		},
 	}, func(cmdCtx context.Context) error {
-		inv := &commandkit.Invocation{Data: &command.MessageContext{Session: s, Event: m, Storage: b.storage, Config: b.cfg}}
-		for _, c := range commandkit.DefaultRegistry.GetAll() {
+		inv := &command.Invocation{Data: &cmdadapter.MessageContext{Session: s, Event: m, Storage: b.storage, Config: b.cfg}}
+		for _, c := range command.DefaultRegistry.GetAll() {
 			if err := c.Run(cmdCtx, inv); err != nil {
 				if cmdCtx.Err() == context.DeadlineExceeded {
 					b.log.Warn().Str("kind", "message").Err(err).Msg("command_timeout")
@@ -62,11 +62,11 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 			b.log.Warn().Str("kind", "reaction").Err(err).Msg("command_slot_busy")
 		},
 	}, func(cmdCtx context.Context) error {
-		inv := &commandkit.Invocation{Data: &command.MessageReactionContext{
+		inv := &command.Invocation{Data: &cmdadapter.MessageReactionContext{
 			Session: s, Event: r, Storage: b.storage, Config: b.cfg, Logger: logger,
 		}}
-		for _, c := range commandkit.DefaultRegistry.GetAll() {
-			if _, ok := commandkit.Root(c).(command.ReactionProvider); !ok {
+		for _, c := range command.DefaultRegistry.GetAll() {
+			if _, ok := command.Root(c).(cmdadapter.ReactionProvider); !ok {
 				continue
 			}
 			if err := c.Run(cmdCtx, inv); err != nil {
@@ -83,4 +83,3 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 		return nil
 	})
 }
-

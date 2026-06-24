@@ -1,13 +1,14 @@
-package commandlogger
+package cmdlogger
 
 import (
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/command"
+
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
 )
 
-// Logger implements command.Logger so middleware can log command
+// Logger implements discord.Logger so middleware can log command
 // executions without importing the discord package directly.
 //
 // session and storage are injected once at construction — callers only supply
@@ -23,8 +24,8 @@ func NewLogger(s *discordgo.Session, store *storage.Storage, log zerolog.Logger)
 	return &Logger{session: s, storage: store, log: log}
 }
 
-// Ensure Logger satisfies the command.Logger interface at compile time.
-var _ command.Logger = (*Logger)(nil)
+// Ensure Logger satisfies the discord.Logger interface at compile time.
+var _ cmdadapter.Logger = (*Logger)(nil)
 
 // LogCommand records a command execution to storage, resolving channel and guild
 // names from Discord state (falling back to an API call when not cached).

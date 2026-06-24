@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 )
 
@@ -23,7 +23,7 @@ func (b *Bot) onInteractionCreate(s *discordgo.Session, i *discordgo.Interaction
 
 func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	name := i.ApplicationCommandData().Name
-	c := commandkit.DefaultRegistry.Get(name)
+	c := command.DefaultRegistry.Get(name)
 	if c == nil {
 		b.log.Warn().Str("command", name).Msg("command_unknown")
 		return
@@ -33,20 +33,20 @@ func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.Interactio
 	logger := b.cmdLogger
 	b.mu.RUnlock()
 
-	var inv *commandkit.Invocation
+	var inv *command.Invocation
 	switch i.ApplicationCommandData().CommandType {
 	case discordgo.MessageApplicationCommand:
-		inv = &commandkit.Invocation{Data: &command.MessageApplicationCommandContext{
+		inv = &command.Invocation{Data: &cmdadapter.MessageApplicationCommandContext{
 			Session: s, Event: i, Storage: b.storage, Target: i.Message,
 			Config: b.cfg, Responder: discordreply.DefaultResponder, Logger: logger,
 			AppLog: b.log,
 		}}
 	case discordgo.ChatApplicationCommand:
-		inv = &commandkit.Invocation{Data: &command.SlashInteractionContext{
+		inv = &command.Invocation{Data: &cmdadapter.SlashInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
 			Config: b.cfg, Responder: discordreply.DefaultResponder, Logger: logger,
-			AppLog:    b.log,
-			Syncer:    b.cmdSyncer,
+			AppLog: b.log,
+			Syncer: b.cmdSyncer,
 		}}
 	default:
 		return
@@ -61,8 +61,8 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 	customID := i.MessageComponentData().CustomID
 	b.log.Debug().Str("custom_id", customID).Msg("component_interaction")
 
-	var matched commandkit.Command
-	for _, c := range commandkit.DefaultRegistry.GetAll() {
+	var matched command.Command
+	for _, c := range command.DefaultRegistry.GetAll() {
 		if matchesComponentID(customID, c.Name()) {
 			matched = c
 			break
@@ -73,7 +73,7 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 		return
 	}
 
-	handler, ok := commandkit.Root(matched).(command.ComponentInteractionHandler)
+	handler, ok := command.Root(matched).(cmdadapter.ComponentInteractionHandler)
 	if !ok {
 		b.log.Warn().Str("command", matched.Name()).Msg("component_handler_missing")
 		return
@@ -85,7 +85,7 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 
 	b.runGuardedInteraction(s, i, "component", matched.Name(), func(cmdCtx context.Context) error {
 		_ = cmdCtx
-		return handler.Component(&command.ComponentInteractionContext{
+		return handler.Component(&cmdadapter.ComponentInteractionContext{
 			Session: s, Event: i, Storage: b.storage,
 			Config: b.cfg, Responder: discordreply.DefaultResponder, Logger: logger,
 			AppLog: b.log,
@@ -105,4 +105,3 @@ func matchesComponentID(customID, commandName string) bool {
 	}
 	return false
 }
-

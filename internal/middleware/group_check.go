@@ -3,17 +3,17 @@ package middleware
 import (
 	"context"
 
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/storage"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 // WithGroupAccessCheck wraps a command to enforce group access
-func WithGroupAccessCheck() commandkit.Middleware {
-	return func(c commandkit.Command) commandkit.Command {
-		return commandkit.Wrap(c, func(ctx context.Context, inv *commandkit.Invocation) error {
+func WithGroupAccessCheck() command.Middleware {
+	return func(c command.Command) command.Command {
+		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
 			var (
 				guildID string
 				stor    *storage.Storage
@@ -21,7 +21,7 @@ func WithGroupAccessCheck() commandkit.Middleware {
 			)
 
 			switch v := inv.Data.(type) {
-			case *command.SlashInteractionContext:
+			case *cmdadapter.SlashInteractionContext:
 				guildID, stor = v.Event.GuildID, v.Storage
 				if v.Responder != nil {
 					respond = func(msg string) {
@@ -30,7 +30,7 @@ func WithGroupAccessCheck() commandkit.Middleware {
 				} else {
 					respond = func(_ string) {}
 				}
-			case *command.ComponentInteractionContext:
+			case *cmdadapter.ComponentInteractionContext:
 				guildID, stor = v.Event.GuildID, v.Storage
 				if v.Responder != nil {
 					respond = func(msg string) {
@@ -42,11 +42,11 @@ func WithGroupAccessCheck() commandkit.Middleware {
 				if disabledGroup(c, guildID, stor, respond) {
 					return nil
 				}
-				if ch, ok := commandkit.Root(c).(command.ComponentInteractionHandler); ok {
+				if ch, ok := command.Root(c).(cmdadapter.ComponentInteractionHandler); ok {
 					return ch.Component(v)
 				}
 				return nil
-			case *command.MessageApplicationCommandContext:
+			case *cmdadapter.MessageApplicationCommandContext:
 				guildID, stor = v.Event.GuildID, v.Storage
 				if v.Responder != nil {
 					respond = func(msg string) {
@@ -55,10 +55,10 @@ func WithGroupAccessCheck() commandkit.Middleware {
 				} else {
 					respond = func(_ string) {}
 				}
-			case *command.MessageContext:
+			case *cmdadapter.MessageContext:
 				guildID, stor = v.Event.GuildID, v.Storage
 				respond = func(_ string) {}
-			case *command.MessageReactionContext:
+			case *cmdadapter.MessageReactionContext:
 				guildID, stor = v.Event.GuildID, v.Storage
 				respond = func(_ string) {}
 			default:
@@ -73,8 +73,8 @@ func WithGroupAccessCheck() commandkit.Middleware {
 	}
 }
 
-func disabledGroup(c commandkit.Command, guildID string, stor *storage.Storage, respond func(string)) bool {
-	meta, ok := commandkit.Root(c).(command.Meta)
+func disabledGroup(c command.Command, guildID string, stor *storage.Storage, respond func(string)) bool {
+	meta, ok := command.Root(c).(cmdadapter.Meta)
 	if !ok || meta.Group() == "" {
 		return false
 	}

@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 )
 
@@ -27,7 +27,7 @@ func (c *Stop) SlashDefinition() *discordgo.ApplicationCommand {
 }
 
 func (c *Stop) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*command.SlashInteractionContext)
+	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
 	if !ok {
 		return nil
 	}
@@ -54,4 +54,3 @@ func (c *Stop) Run(ctx interface{}) error {
 	}
 	return nil
 }
-

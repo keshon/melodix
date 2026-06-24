@@ -6,7 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/buildinfo"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 )
 
@@ -28,7 +28,7 @@ func (c *About) SlashDefinition() *discordgo.ApplicationCommand {
 }
 
 func (c *About) Run(ctx interface{}) error {
-	context, ok := ctx.(*command.SlashInteractionContext)
+	context, ok := ctx.(*cmdadapter.SlashInteractionContext)
 	if !ok {
 		return nil
 	}

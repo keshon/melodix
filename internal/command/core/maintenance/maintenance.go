@@ -3,7 +3,7 @@ package maintenance
 import (
 	"fmt"
 
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 
 	"github.com/bwmarrin/discordgo"
@@ -44,7 +44,7 @@ func (c *Maintenance) SlashDefinition() *discordgo.ApplicationCommand {
 }
 
 func (c *Maintenance) Run(ctx interface{}) error {
-	context, ok := ctx.(*command.SlashInteractionContext)
+	context, ok := ctx.(*cmdadapter.SlashInteractionContext)
 	if !ok {
 		return nil
 	}

@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/command"
+
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/domain"
 )
@@ -16,8 +17,10 @@ type History struct {
 	Bot discord.VoiceAPI
 }
 
-func (c *History) Name() string             { return "history" }
-func (c *History) Description() string      { return "Show recently played tracks (replay by id with /play)" }
+func (c *History) Name() string { return "history" }
+func (c *History) Description() string {
+	return "Show recently played tracks (replay by id with /play)"
+}
 func (c *History) Group() string            { return "music" }
 func (c *History) Category() string         { return "🎵 Music" }
 func (c *History) UserPermissions() []int64 { return []int64{} }
@@ -56,7 +59,7 @@ const historyLinesPerPage = 15
 const historyFooterReplay = "replay with `/play <id>`."
 
 func (c *History) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*command.SlashInteractionContext)
+	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
 	if !ok {
 		return nil
 	}
@@ -191,4 +194,3 @@ func (c *History) Run(ctx interface{}) error {
 	}
 	return nil
 }
-

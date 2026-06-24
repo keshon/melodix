@@ -1,4 +1,4 @@
-package commandsync
+package cmdsync
 
 import (
 	"crypto/sha1"
@@ -112,4 +112,3 @@ func valueKey(v interface{}) string {
 		return "j:" + string(b)
 	}
 }
-

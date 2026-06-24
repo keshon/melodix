@@ -5,11 +5,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/keshon/commandkit"
+	"github.com/keshon/command"
 )
 
 func runHelpFlat() string {
-	all := commandkit.DefaultRegistry.GetAll()
+	all := command.DefaultRegistry.GetAll()
 	sort.Slice(all, func(i, j int) bool { return all[i].Name() < all[j].Name() })
 
 	var sb strings.Builder

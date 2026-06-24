@@ -11,14 +11,14 @@ import (
 	"time"
 
 	"github.com/keshon/buildinfo"
-	"github.com/keshon/commandkit"
+	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/applog"
 	"github.com/keshon/melodix/internal/command/core/about"
 	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/command/core/help"
 	"github.com/keshon/melodix/internal/command/core/maintenance"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 
-	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/command/music/history"
 	"github.com/keshon/melodix/internal/command/music/next"
 	"github.com/keshon/melodix/internal/command/music/play"
@@ -105,8 +105,8 @@ func main() {
 	log.Info().Msg("bot_exit")
 }
 
-func defaultMiddleware(log zerolog.Logger) []commandkit.Middleware {
-	return []commandkit.Middleware{
+func defaultMiddleware(log zerolog.Logger) []command.Middleware {
+	return []command.Middleware{
 		middleware.WithGroupAccessCheck(),
 		middleware.WithGuildOnly(),
 		middleware.WithUserPermissionCheck(),
@@ -116,12 +116,12 @@ func defaultMiddleware(log zerolog.Logger) []commandkit.Middleware {
 
 func registerCommands(bot *discord.Bot, log zerolog.Logger) {
 	mw := defaultMiddleware(log)
-	command.Register(&commands.Commands{}, mw...)
-	command.Register(&about.About{}, mw...)
-	command.Register(&help.Help{}, mw...)
-	command.Register(&maintenance.Maintenance{}, mw...)
-	command.Register(&play.Play{Bot: bot}, mw...)
-	command.Register(&next.Next{Bot: bot}, mw...)
-	command.Register(&stop.Stop{Bot: bot}, mw...)
-	command.Register(&history.History{Bot: bot}, mw...)
+	cmdadapter.Register(&commands.Commands{}, mw...)
+	cmdadapter.Register(&about.About{}, mw...)
+	cmdadapter.Register(&help.Help{}, mw...)
+	cmdadapter.Register(&maintenance.Maintenance{}, mw...)
+	cmdadapter.Register(&play.Play{Bot: bot}, mw...)
+	cmdadapter.Register(&next.Next{Bot: bot}, mw...)
+	cmdadapter.Register(&stop.Stop{Bot: bot}, mw...)
+	cmdadapter.Register(&history.History{Bot: bot}, mw...)
 }

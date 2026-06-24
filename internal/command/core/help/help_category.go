@@ -5,19 +5,19 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 )
 
 func runHelpByCategory() string {
-	all := commandkit.DefaultRegistry.GetAll()
+	all := command.DefaultRegistry.GetAll()
 
-	categoryMap := make(map[string][]commandkit.Command)
+	categoryMap := make(map[string][]command.Command)
 	categorySort := make(map[string]int)
 
 	for _, c := range all {
-		meta, _ := commandkit.Root(c).(command.Meta)
+		meta, _ := command.Root(c).(cmdadapter.Meta)
 		cat := ""
 		if meta != nil {
 			cat = meta.Category()

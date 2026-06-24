@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -63,21 +63,21 @@ var PermissionNames = map[int64]string{
 	discordgo.PermissionModerateMembers:                  "Moderate Members",
 }
 
-func WithUserPermissionCheck() commandkit.Middleware {
-	return func(c commandkit.Command) commandkit.Command {
-		return commandkit.Wrap(c, func(ctx context.Context, inv *commandkit.Invocation) error {
+func WithUserPermissionCheck() command.Middleware {
+	return func(c command.Command) command.Command {
+		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
 			var s *discordgo.Session
 			var m *discordgo.Member
 			var guildID, channelID string
 
 			switch v := inv.Data.(type) {
-			case *command.SlashInteractionContext:
+			case *cmdadapter.SlashInteractionContext:
 				s, m, guildID, channelID = v.Session, v.Event.Member, v.Event.GuildID, v.Event.ChannelID
-			case *command.ComponentInteractionContext:
+			case *cmdadapter.ComponentInteractionContext:
 				s, m, guildID, channelID = v.Session, v.Event.Member, v.Event.GuildID, v.Event.ChannelID
-			case *command.MessageApplicationCommandContext:
+			case *cmdadapter.MessageApplicationCommandContext:
 				s, m, guildID, channelID = v.Session, v.Event.Member, v.Event.GuildID, v.Event.ChannelID
-			case *command.MessageContext:
+			case *cmdadapter.MessageContext:
 				s, m, guildID, channelID = v.Session, v.Event.Member, v.Event.GuildID, v.Event.ChannelID
 			default:
 				return c.Run(ctx, inv)
@@ -98,7 +98,7 @@ func WithUserPermissionCheck() commandkit.Middleware {
 				return c.Run(ctx, inv)
 			}
 
-			meta, ok := commandkit.Root(c).(command.Meta)
+			meta, ok := command.Root(c).(cmdadapter.Meta)
 			if !ok {
 				return c.Run(ctx, inv)
 			}
@@ -128,19 +128,19 @@ func WithUserPermissionCheck() commandkit.Middleware {
 					strings.Join(allowed, "`, `"),
 				)
 				switch v := inv.Data.(type) {
-				case *command.SlashInteractionContext:
+				case *cmdadapter.SlashInteractionContext:
 					if v.Responder != nil {
 						_ = v.Responder.RespondEmbedEphemeral(s, v.Event, &discordgo.MessageEmbed{Description: msg})
 					}
-				case *command.ComponentInteractionContext:
+				case *cmdadapter.ComponentInteractionContext:
 					if v.Responder != nil {
 						_ = v.Responder.RespondEmbedEphemeral(s, v.Event, &discordgo.MessageEmbed{Description: msg})
 					}
-				case *command.MessageApplicationCommandContext:
+				case *cmdadapter.MessageApplicationCommandContext:
 					if v.Responder != nil {
 						_ = v.Responder.RespondEmbedEphemeral(s, v.Event, &discordgo.MessageEmbed{Description: msg})
 					}
-				case *command.MessageContext:
+				case *cmdadapter.MessageContext:
 					_, _ = s.ChannelMessageSend(channelID, msg)
 				}
 				return nil

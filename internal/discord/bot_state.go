@@ -8,8 +8,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/commandlogger"
-	"github.com/keshon/melodix/internal/discord/commandsync"
+	"github.com/keshon/melodix/internal/discord/cmdlogger"
+	"github.com/keshon/melodix/internal/discord/cmdsync"
 	"github.com/keshon/melodix/internal/discord/execguard"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/storage"
@@ -26,8 +26,8 @@ type Bot struct {
 	voice     *voice.Service
 	log       zerolog.Logger
 
-	cmdSyncer *commandsync.Syncer
-	cmdLogger *commandlogger.Logger
+	cmdSyncer *cmdsync.Syncer
+	cmdLogger *cmdlogger.Logger
 
 	sessionCtx atomic.Value // *sessionCtxHolder
 	cmdGuard   atomic.Value // *cmdGuardHolder

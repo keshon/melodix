@@ -1,11 +1,11 @@
-package command
+package cmdadapter
 
 import (
-	"github.com/keshon/commandkit"
+	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/config"
 )
 
-func ConfigFromInvocation(inv *commandkit.Invocation) *config.Config {
+func ConfigFromInvocation(inv *command.Invocation) *config.Config {
 	if inv == nil || inv.Data == nil {
 		return nil
 	}
@@ -26,7 +26,7 @@ func ConfigFromInvocation(inv *commandkit.Invocation) *config.Config {
 	}
 }
 
-func Register(discordCmd Handler, mws ...commandkit.Middleware) {
-	c := commandkit.Apply(&Adapter{Cmd: discordCmd}, mws...)
-	commandkit.DefaultRegistry.Register(c)
+func Register(discordCmd Handler, mws ...command.Middleware) {
+	c := command.Apply(&Adapter{Cmd: discordCmd}, mws...)
+	command.DefaultRegistry.Register(c)
 }

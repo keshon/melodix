@@ -1,4 +1,4 @@
-package command
+package cmdadapter
 
 import "github.com/bwmarrin/discordgo"
 

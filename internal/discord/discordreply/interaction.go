@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/command"
+
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/perm"
 )
 
@@ -27,7 +28,7 @@ func (responder) CheckBotPermissions(s *discordgo.Session, channelID string) boo
 func (responder) EmbedColor() int { return EmbedColor }
 
 // DefaultResponder is injected into command contexts so commands never import discord directly.
-var DefaultResponder command.Responder = responder{}
+var DefaultResponder cmdadapter.Responder = responder{}
 
 // --- Interaction responses ---
 

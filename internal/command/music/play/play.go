@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/command"
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/keshon/melodix/internal/storage"
@@ -62,7 +62,7 @@ func (c *Play) SlashDefinition() *discordgo.ApplicationCommand {
 }
 
 func (c *Play) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*command.SlashInteractionContext)
+	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
 	if !ok {
 		return nil
 	}

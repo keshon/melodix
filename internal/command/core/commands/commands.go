@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/keshon/commandkit"
-	"github.com/keshon/melodix/internal/command"
+	"github.com/keshon/command"
+
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/discordreply"
 
 	"github.com/bwmarrin/discordgo"
@@ -84,7 +85,7 @@ func (c *Commands) SlashDefinition() *discordgo.ApplicationCommand {
 }
 
 func (c *Commands) Run(ctx interface{}) error {
-	context, ok := ctx.(*command.SlashInteractionContext)
+	context, ok := ctx.(*cmdadapter.SlashInteractionContext)
 	if !ok {
 		return nil
 	}
@@ -117,8 +118,8 @@ func (c *Commands) Run(ctx interface{}) error {
 
 func getUniqueGroups() []string {
 	set := map[string]struct{}{}
-	for _, c := range commandkit.DefaultRegistry.GetAll() {
-		meta, _ := commandkit.Root(c).(command.Meta)
+	for _, c := range command.DefaultRegistry.GetAll() {
+		meta, _ := command.Root(c).(cmdadapter.Meta)
 		group := ""
 		if meta != nil {
 			group = meta.Group()
