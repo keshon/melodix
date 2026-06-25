@@ -14,9 +14,9 @@ import (
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/applog"
 	"github.com/keshon/melodix/internal/command/core/about"
-	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/command/core/help"
 	"github.com/keshon/melodix/internal/command/core/maintenance"
+	"github.com/keshon/melodix/internal/command/settings"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 
 	"github.com/keshon/melodix/internal/command/music/history"
@@ -116,7 +116,7 @@ func defaultMiddleware(log zerolog.Logger) []command.Middleware {
 
 func registerCommands(bot *discord.Bot, log zerolog.Logger) {
 	mw := defaultMiddleware(log)
-	cmdadapter.Register(&commands.Commands{}, mw...)
+	cmdadapter.Register(&settings.SettingsCommand{}, mw...)
 	cmdadapter.Register(&about.About{}, mw...)
 	cmdadapter.Register(&help.Help{}, mw...)
 	cmdadapter.Register(&maintenance.Maintenance{}, mw...)

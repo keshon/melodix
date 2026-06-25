@@ -9,22 +9,26 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 )
 
-func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage, syncer cmdadapter.CommandSyncer) error {
-	data := e.ApplicationCommandData()
+// RunCmdEnable enables a command group for the guild.
+func RunCmdEnable(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub *discordgo.ApplicationCommandInteractionDataOption) error {
+	group := subOptionString(sub, "group")
+	return runCmdSetGroupState(s, e, stor, syncer, group, true)
+}
 
-	subOptions := data.Options[0].Options
+// RunCmdDisable disables a command group for the guild.
+func RunCmdDisable(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub *discordgo.ApplicationCommandInteractionDataOption) error {
+	group := subOptionString(sub, "group")
+	return runCmdSetGroupState(s, e, stor, syncer, group, false)
+}
 
-	var group, state string
-	for _, opt := range subOptions {
-		switch opt.Name {
-		case "group":
-			group = opt.StringValue()
-		case "state":
-			state = opt.StringValue()
-		}
+func runCmdSetGroupState(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, group string, enabled bool) error {
+	if group == "" {
+		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Description: "Missing required group option.",
+		})
 	}
 
-	if group == "core" && state == "disable" {
+	if group == "core" && !enabled {
 		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "You can't disable the `core` group. It's the backbone of the discord.",
 		})
@@ -32,23 +36,23 @@ func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCr
 
 	var err error
 	embed := &discordgo.MessageEmbed{
-		Footer: &discordgo.MessageEmbedFooter{Text: "Use /commands status to check which commands are disabled."},
+		Footer: &discordgo.MessageEmbedFooter{Text: "Use /settings commands status to check which commands are disabled."},
 	}
 
-	if state == "disable" {
-		err = storage.DisableGroup(e.GuildID, group)
-		if err != nil {
-			embed.Description = "Failed to disable the group."
-			return discordreply.RespondEmbedEphemeral(s, e, embed)
-		}
-		embed.Description = fmt.Sprintf("Command/group `%s` disabled.", group)
-	} else {
-		err = storage.EnableGroup(e.GuildID, group)
+	if enabled {
+		err = stor.EnableGroup(e.GuildID, group)
 		if err != nil {
 			embed.Description = "Failed to enable the group."
 			return discordreply.RespondEmbedEphemeral(s, e, embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` enabled.", group)
+	} else {
+		err = stor.DisableGroup(e.GuildID, group)
+		if err != nil {
+			embed.Description = "Failed to disable the group."
+			return discordreply.RespondEmbedEphemeral(s, e, embed)
+		}
+		embed.Description = fmt.Sprintf("Command/group `%s` disabled.", group)
 	}
 
 	if syncer != nil {
@@ -56,4 +60,13 @@ func (c *Commands) runCmdToggle(s *discordgo.Session, e *discordgo.InteractionCr
 	}
 
 	return discordreply.RespondEmbedEphemeral(s, e, embed)
+}
+
+func subOptionString(sub *discordgo.ApplicationCommandInteractionDataOption, name string) string {
+	for _, opt := range sub.Options {
+		if opt.Name == name {
+			return opt.StringValue()
+		}
+	}
+	return ""
 }

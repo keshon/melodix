@@ -53,8 +53,7 @@ go build -o melodix-cli ./cmd/cli
 ### Use the official server
 
 Try the bot in [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server: 
-enter voice channel and use slash commands in `#bot-music-spam`.
-a 
+enter voice channel and use slash commands in `#music-spam`.
 ---
 
 ### Download a release
@@ -73,7 +72,7 @@ https://github.com/keshon/melodix/releases
 
 - **/about** — Discover the origin of this bot
 - **/help** — Get a list of available commands
-  - **/help category** — View commands grouped by category
+  - **`/help category** — View commands grouped by category
   - **/help group** — View commands grouped by group
   - **/help flat** — View all commands as a flat list
 
@@ -86,15 +85,15 @@ https://github.com/keshon/melodix/releases
 
 ### ⚙️ Settings
 
-- **/commands** — Manage or inspect commands
-  - **/commands log** — Review recent commands called by users
-  - **/commands status** — Check which command groups are enabled or disabled
-  - **/commands toggle** — Enable or disable a group of commands
-  - **/commands update** — Re-register or update slash commands
 - **/maintenance** — Bot maintenance commands
-  - **/maintenance ping** — Check bot latency
+  - **`/maintenance ping** — Check bot latency
   - **/maintenance download-db** — Download the current server database as a JSON file
   - **/maintenance status** — Retrieve statistics about the guild
+- **/settings** — Server settings
+  - **`/settings commands log** — Review recently used commands
+  - **/settings commands status** — Show enabled and disabled command groups
+  - **/settings commands enable** — Enable a command group
+  - **/settings commands disable** — Disable a command group
 
 
 <!-- /generated -->

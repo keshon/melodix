@@ -1,11 +1,11 @@
 package help
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 )
 
 func runHelpFlat() string {
@@ -14,7 +14,7 @@ func runHelpFlat() string {
 
 	var sb strings.Builder
 	for _, c := range all {
-		sb.WriteString(fmt.Sprintf("`%s` - %s\n", c.Name(), c.Description()))
+		sb.WriteString(cmdadapter.FormatCommandWithSubcommands(c))
 	}
 	return sb.String()
 }

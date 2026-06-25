@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -9,13 +8,14 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 )
 
-func (c *Commands) runCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
+// RunCmdLog shows recent command usage for the guild.
+func RunCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
 	guildID := e.GuildID
 
 	records, err := storage.CommandHistory(guildID)
 	if err != nil {
 		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Description: fmt.Sprintf("Failed to fetch command logs: %v", err),
+			Description: "Failed to fetch command logs: " + err.Error(),
 		})
 	}
 	if len(records) == 0 {
@@ -25,19 +25,13 @@ func (c *Commands) runCmdLog(s *discordgo.Session, e *discordgo.InteractionCreat
 	}
 
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("%-19s\t%-15s\t%-12s\t%s\n", "# Datetime", "# Username", "# Channel", "# Command"))
+	builder.WriteString("Datetime           \tUsername       \tChannel     \tCommand\n")
 
 	for i := len(records) - 1; i >= 0; i-- {
 		r := records[i]
 
-		username := r.Username
-
-		line := fmt.Sprintf("%-19s\t%-15s\t#%-12s\t/%s\n",
-			r.Datetime.Format("2006-01-02 15:04:05"),
-			username,
-			r.ChannelName,
-			r.Command,
-		)
+		line := r.Datetime.Format("2006-01-02 15:04:05") + "\t" +
+			r.Username + "\t#" + r.ChannelName + "\t/" + r.Command + "\n"
 
 		if builder.Len()+len(line) > maxContentLength {
 			break
