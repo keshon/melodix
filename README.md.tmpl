@@ -1,70 +1,56 @@
+![Melodix banner](https://raw.githubusercontent.com/keshon/melodix/master/assets/readme-banner.webp)
 
-![# Header](https://raw.githubusercontent.com/keshon/melodix/master/assets/readme-banner.webp)
-
-[![Go Reference](https://pkg.go.dev/badge/github.com/keshon/melodix.svg)](https://pkg.go.dev/github.com/keshon/melodix) [![Go Report Card](https://goreportcard.com/badge/github.com/keshon/melodix)](https://goreportcard.com/report/github.com/keshon/melodix) [![Release](https://img.shields.io/github/v/release/keshon/melodix)](https://github.com/keshon/melodix/releases) [![License](https://img.shields.io/github/license/keshon/melodix)](LICENSE)
-
+[![Go Reference](https://pkg.go.dev/badge/github.com/keshon/melodix.svg)](https://pkg.go.dev/github.com/keshon/melodix) [![Release](https://img.shields.io/github/v/release/keshon/melodix)](https://github.com/keshon/melodix/releases) [![License](https://img.shields.io/github/license/keshon/melodix)](LICENSE)
 
 # Melodix
 
-Self-hosted Discord music bot with a CLI player, built in Go.
+A self-hosted Discord music bot written in Go, with a terminal player thrown in.
+It streams YouTube, SoundCloud and internet radio, and it's built around one
+stubborn idea: **playback should survive** — flaky streams, dead voice
+connections, gateway reconnects, all of it.
 
-Designed to run for long sessions with minimal failure rate.
+Public music bots come and go, usually with a cease-and-desist attached.
+Melodix is the opposite deal: a small binary you run yourself, with your own
+token, on your own machine. Nobody can turn it off for you.
 
----
+## What it does well
+
+- **Refuses to drop a track.** Every track has several extraction backends
+  (yt-dlp, kkdai, plain ffmpeg). If a stream dies mid-play, Melodix reopens it
+  at the same position; if a backend keeps failing, it falls through to the next.
+- **Survives Discord too.** A silent gateway or a dead voice connection is
+  detected and recovered automatically, and queues live through session restarts.
+- **Keeps a memory.** `/history` shows what was played; `/play 42` replays
+  entry 42. No link hunting.
+- **Stays small.** One binary plus ffmpeg (yt-dlp recommended). Storage is a
+  single JSON file — no database to babysit.
+- **Doubles as a terminal player.** The same engine drives `melodix-cli`,
+  which plays straight to your speakers. Good for testing, also just for listening.
+
+## Try it
+
+The bot lives in the [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server —
+hop into a voice channel and use slash commands in `#music-spam`.
+
+Prebuilt binaries are on the [releases page](https://github.com/keshon/melodix/releases).
 
 ## Quick start
 
-### Run Discord bot
-
-1. Create a bot in Discord Developer Portal
-2. Get your token
-3. Run:
-
 ```bash
+# Discord bot — token from the Discord Developer Portal
 go build -o melodix-discord ./cmd/discord
 DISCORD_TOKEN=your-token ./melodix-discord
-````
 
-Full setup guide: see `docs/running.md`
-
----
-
-### Run CLI player
-
-```bash
+# ...or the terminal player, no Discord account required
 go build -o melodix-cli ./cmd/cli
 ./melodix-cli
 ```
 
----
+You need FFmpeg in `PATH`; yt-dlp is optional but recommended. The full setup
+guide — creating the bot, invite link, every config knob, Docker — is in
+[docs/running.md](docs/running.md).
 
-## Features
-
-* Discord bot and CLI player share the same playback engine
-* Multiple parsers with automatic fallback (yt-dlp, kkdai, ffmpeg)
-* Recovery streams for unstable or broken sources
-* Queue system per guild (Discord) or per process (CLI)
-* Fully self-hosted
-
----
-
-## Try Melodix
-
-### Use the official server
-
-Try the bot in [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server: 
-enter voice channel and use slash commands in `#music-spam`.
----
-
-### Download a release
-
-Download pre-built binaries:
-
-https://github.com/keshon/melodix/releases
-
----
-
-## Commands (Discord)
+## Commands
 
 <!-- generated -->
 
@@ -72,37 +58,23 @@ https://github.com/keshon/melodix/releases
 
 <!-- /generated -->
 
-Example usage:
+`/play` takes more than links:
 
-```bash
-/play Never Gonna Give You Up
-/play https://www.youtube.com/watch?v=dQw4w9WgXcQ
-/play http://stream-uk1.radioparadise.com/aac-320
-/play 42
-/history
+```text
+/play never gonna give you up                       search query (YouTube)
+/play https://www.youtube.com/watch?v=dQw4w9WgXcQ   direct link (YouTube / SoundCloud)
+/play http://stream-uk1.radioparadise.com/aac-320   internet radio stream
+/play 42                                            replay entry 42 from /history
 ```
 
----
+## Under the hood
 
-## Running
-
-Requirements:
-
-* FFmpeg in PATH
-* yt-dlp (optional, recommended)
-
-For full setup (Discord bot, env config, Docker):
-see `docs/running.md`
-
----
-
-## Documentation
-
-* Running and setup: `docs/running.md`
-* Architecture: `docs/architecture.md`
-
----
+The playback engine ([pkg/music](pkg/music)) is a standalone Go library with
+no Discord in it: resolver → queue → recovery stream → sink. The Discord bot
+is one consumer of it, the CLI is another. If you're curious how the parser
+fallback and voice recovery actually work, [docs/architecture.md](docs/architecture.md)
+walks through the whole thing.
 
 ## License
 
-Melodix is licensed under the [MIT License](https://opensource.org/licenses/MIT).
+[MIT](LICENSE)

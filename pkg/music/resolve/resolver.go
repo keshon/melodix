@@ -65,8 +65,12 @@ func (r *Resolver) Resolve(input, selectedSource, selectedParser string) ([]sour
 		return yt.Resolve(input, selectedParser)
 	}
 
-	for typ, s := range r.Sources {
-		if typ == sources.Radio {
+	// Deterministic precedence for URL auto-detect (map iteration order is random);
+	// radio stays the final fallback below. A new source must be added here as well
+	// as in New().
+	for _, typ := range []string{sources.YouTube, sources.SoundCloud} {
+		s, ok := r.Sources[typ]
+		if !ok {
 			continue
 		}
 		if s.Match(input) {

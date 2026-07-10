@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/godeps/opus"
@@ -103,13 +104,8 @@ func streamToDiscord(appLog zerolog.Logger, src io.ReadCloser, stop <-chan struc
 		appLog.Debug().Int("packet", packetNum+1).Int("bytes", n).Msg("sink_opus_packet")
 		packetNum++
 	}
-	select {
-	case <-stop:
-		return stream.ErrPlaybackStopped
-		default:
-		if !safeOpusSend(vc, append([]byte(nil), opusBuf[:n]...)) {
-			return stream.ErrVoiceTransport
-		}
+	if err := sendOpus(appLog, vc, append([]byte(nil), opusBuf[:n]...), stop, opusSendTimeout); err != nil {
+		return err
 	}
 
 	for {
@@ -140,20 +136,35 @@ func streamToDiscord(appLog zerolog.Logger, src io.ReadCloser, stop <-chan struc
 			}
 
 			packet := append([]byte(nil), opusBuf[:n]...)
-			select {
-			case <-stop:
-				return stream.ErrPlaybackStopped
-			default:
-				if !safeOpusSend(vc, packet) {
-					return stream.ErrVoiceTransport
-				}
+			if err := sendOpus(appLog, vc, packet, stop, opusSendTimeout); err != nil {
+				return err
 			}
 		}
 	}
 }
 
-func safeOpusSend(vc *discordgo.VoiceConnection, packet []byte) (sent bool) {
-	defer func() { _ = recover() }()
-	vc.OpusSend <- packet
-	return true
+// opusSendTimeout bounds a single Opus packet send. Frame cadence is 20ms, so a send
+// blocked this long means the voice connection is stalled, not merely slow.
+const opusSendTimeout = 3 * time.Second
+
+// sendOpus sends one packet without blocking forever: it aborts on stop (so Player.Stop
+// can always unblock the streaming goroutine) and surfaces a stalled or closed OpusSend
+// channel as stream.ErrVoiceTransport, feeding the player's transport recovery.
+func sendOpus(log zerolog.Logger, vc *discordgo.VoiceConnection, packet []byte, stop <-chan struct{}, timeout time.Duration) (err error) {
+	defer func() {
+		if r := recover(); r != nil { // send on OpusSend closed by disconnect
+			log.Warn().Interface("panic", r).Msg("opus_send_panic")
+			err = stream.ErrVoiceTransport
+		}
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case vc.OpusSend <- packet:
+		return nil
+	case <-stop:
+		return stream.ErrPlaybackStopped
+	case <-timer.C:
+		return stream.ErrVoiceTransport
+	}
 }

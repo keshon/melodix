@@ -6,10 +6,8 @@ import (
 	"github.com/keshon/melodix/pkg/music/parsers"
 )
 
-const (
-	channels   = 2
-	sampleRate = 48000
-)
+// YtdlpPath is the yt-dlp binary invoked by this parser; override for non-PATH installs.
+var YtdlpPath = "yt-dlp"
 
 type Streamer struct{}
 

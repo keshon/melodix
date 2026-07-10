@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"sync"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
@@ -72,29 +71,12 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		return nil, nil, fmt.Errorf("[kkdai-link] get stream URL error: %w", err)
 	}
 
-	ffmpeg := exec.Command("ffmpeg",
-		"-ss", fmt.Sprintf("%.3f", seekSec),
-		"-reconnect", "1",
-		"-reconnect_streamed", "1",
-		"-reconnect_delay_max", "5",
-		"-i", link,
-		"-f", "s16le",
-		"-ar", fmt.Sprintf("%d", sampleRate),
-		"-ac", fmt.Sprintf("%d", channels),
-		"-loglevel", "warning",
-		"pipe:1",
-	)
+	ffmpeg := ffmpegparser.NewPCMCommand(link, seekSec, true, "kkdai-link")
 
 	reader, err := ffmpeg.StdoutPipe()
 	if err != nil {
 		return nil, nil, fmt.Errorf("stdout pipe error: %w", err)
 	}
-
-	stderr, err := ffmpeg.StderrPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("stderr pipe error: %w", err)
-	}
-	startFFmpegStderrReader("kkdai-link", stderr)
 
 	if err := ffmpeg.Start(); err != nil {
 		return nil, nil, fmt.Errorf("command start error: %w", err)
@@ -102,8 +84,7 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
 	cleanup := func() {
-		_ = ffmpeg.Process.Kill()
-		_ = pr.WaitErr()
+		_ = pr.Close()
 	}
 
 	return pr, cleanup, nil

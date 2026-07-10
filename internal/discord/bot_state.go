@@ -31,10 +31,6 @@ type Bot struct {
 
 	sessionCtx atomic.Value // *sessionCtxHolder
 	cmdGuard   atomic.Value // *cmdGuardHolder
-
-	// once ensures one-time background services (e.g. /internal/readme) are not
-	// re-launched on subsequent reconnects.
-	once sync.Once
 }
 
 type sessionCtxHolder struct {

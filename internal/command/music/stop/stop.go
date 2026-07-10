@@ -42,6 +42,13 @@ func (c *Stop) Run(ctx interface{}) error {
 	}
 
 	player := c.Bot.GetOrCreatePlayer(e.GuildID)
+	if player == nil {
+		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 Error",
+			Description: "Music service is not available.",
+		})
+		return nil
+	}
 	if err := player.Stop(true); err != nil {
 		slashCtx.AppLog.Warn().Err(err).Msg("player_stop_failed")
 	}

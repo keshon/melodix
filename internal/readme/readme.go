@@ -153,13 +153,14 @@ func renderDiscordCommand(buf *bytes.Buffer, c command.Command) {
 
 	var sub strings.Builder
 	cmdadapter.AppendSlashSubcommands(&sub, def.Name, def.Options, "")
-	for _, line := range strings.Split(strings.TrimSpace(sub.String()), "\n") {
+	for _, line := range strings.Split(sub.String(), "\n") {
+		// Lines look like:  `/help category` - description
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		inner := strings.TrimPrefix(line, "  `")
-		inner = strings.TrimSuffix(inner, "`")
-		parts := strings.SplitN(inner, "` - ", 2)
+		line = strings.TrimPrefix(line, "`")
+		parts := strings.SplitN(line, "` - ", 2)
 		if len(parts) == 2 {
 			buf.WriteString(fmt.Sprintf("  - **%s** — %s\n", parts[0], parts[1]))
 		}

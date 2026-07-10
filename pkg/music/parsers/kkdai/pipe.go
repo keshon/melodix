@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
@@ -37,17 +36,10 @@ func kkdaiPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		return nil, nil, fmt.Errorf("get stream error: %w", err)
 	}
 
-	log.Debug().Msg("stream_size_unknown_piping")
+	l := logger()
+	l.Debug().Msg("stream_size_unknown_piping")
 
-	ffmpeg := exec.Command("ffmpeg",
-		"-ss", fmt.Sprintf("%.3f", seekSec),
-		"-i", "pipe:0",
-		"-f", "s16le",
-		"-ar", fmt.Sprintf("%d", sampleRate),
-		"-ac", fmt.Sprintf("%d", channels),
-		"-loglevel", "warning",
-		"pipe:1",
-	)
+	ffmpeg := ffmpegparser.NewPCMCommand("pipe:0", seekSec, false, "kkdai-pipe")
 
 	ffmpeg.Stdin = stream
 	reader, err := ffmpeg.StdoutPipe()
@@ -55,12 +47,6 @@ func kkdaiPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		stream.Close()
 		return nil, nil, fmt.Errorf("ffmpeg stdout pipe error: %w", err)
 	}
-	stderr, err := ffmpeg.StderrPipe()
-	if err != nil {
-		stream.Close()
-		return nil, nil, fmt.Errorf("ffmpeg stderr pipe error: %w", err)
-	}
-	startFFmpegStderrReader("kkdai-pipe", stderr)
 
 	if err := ffmpeg.Start(); err != nil {
 		stream.Close()
@@ -70,8 +56,7 @@ func kkdaiPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
 	cleanup := func() {
 		stream.Close()
-		_ = ffmpeg.Process.Kill()
-		_ = pr.WaitErr()
+		_ = pr.Close()
 	}
 
 	return pr, cleanup, nil

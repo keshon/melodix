@@ -3,21 +3,10 @@ package ffmpeg
 import (
 	"fmt"
 	"io"
-	"os/exec"
 )
 
 func ffmpegLink(url string) (io.ReadCloser, func(), error) {
-	cmd := exec.Command("ffmpeg",
-		"-reconnect", "1",
-		"-reconnect_streamed", "1",
-		"-reconnect_delay_max", "5",
-		"-i", url,
-		"-f", "s16le",
-		"-ar", fmt.Sprintf("%d", sampleRate),
-		"-ac", fmt.Sprintf("%d", channels),
-		"-loglevel", "warning",
-		"pipe:1",
-	)
+	cmd := NewPCMCommand(url, 0, true, "ffmpeg-link")
 
 	reader, err := cmd.StdoutPipe()
 	if err != nil {
@@ -30,8 +19,7 @@ func ffmpegLink(url string) (io.ReadCloser, func(), error) {
 
 	pr := NewProcessStream(cmd, reader)
 	cleanup := func() {
-		_ = cmd.Process.Kill()
-		_ = pr.WaitErr()
+		_ = pr.Close()
 	}
 
 	return pr, cleanup, nil

@@ -2,27 +2,27 @@ package kkdai
 
 import (
 	"io"
+	"sync/atomic"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/rs/zerolog"
 )
 
-const (
-	channels   = 2
-	sampleRate = 48000
-)
-
 type Streamer struct{}
 
-var log = zerolog.Nop()
+var logPtr atomic.Pointer[zerolog.Logger]
 
-// SetLogger sets an optional logger for kkdai parser internals (ffmpeg stderr, debug signals).
+// SetLogger sets an optional logger for kkdai parser internals (debug signals).
+// Safe for concurrent use; call once at process startup.
 func SetLogger(l zerolog.Logger) {
-	if l.GetLevel() == zerolog.NoLevel {
-		log = zerolog.Nop()
-		return
+	logPtr.Store(&l)
+}
+
+func logger() zerolog.Logger {
+	if l := logPtr.Load(); l != nil {
+		return *l
 	}
-	log = l
+	return zerolog.Nop()
 }
 
 func (s *Streamer) LinkStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {

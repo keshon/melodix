@@ -2,9 +2,6 @@ package discord
 
 import (
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/readme"
 )
 
 // onReady fires on every successful connect/reconnect.
@@ -29,14 +26,6 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 			}
 		}
 	}
-
-	// Background services start once across all reconnects.
-	b.once.Do(func() {
-		b.log.Info().Msg("bg_services_started")
-		if err := readme.UpdateReadme(command.DefaultRegistry, config.CategoryWeights, b.log); err != nil {
-			b.log.Error().Err(err).Msg("readme_update_failed")
-		}
-	})
 
 	b.log.Info().Str("username", botInfo.Username).Msg("discord_ready")
 }

@@ -70,6 +70,13 @@ func (c *Next) Run(ctx interface{}) error {
 	c.Bot.SetGuildMusicNotifyChannel(guildID, e.ChannelID)
 
 	player := c.Bot.GetOrCreatePlayer(guildID)
+	if player == nil {
+		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 Error",
+			Description: "Music service is not available.",
+		})
+		return nil
+	}
 	queue := player.Queue()
 	if len(queue) == 0 {
 		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -96,6 +103,12 @@ func (c *Next) Run(ctx interface{}) error {
 		return nil
 	}
 
-	common.ListenPlayerStatusSlash(s, e, player, c.Bot, guildID, slashCtx.AppLog)
+	// The skip outcome is known here, so render it synchronously (async transitions are
+	// handled by the voice service's status watcher).
+	if track := player.CurrentTrack(); track != nil {
+		if uerr := c.Bot.UpdatePlaybackStatus(s, e, guildID, discordreply.NowPlayingEmbed(track.Title, track.URL)); uerr != nil {
+			slashCtx.AppLog.Warn().Str("guild_id", guildID).Err(uerr).Msg("guild_status_update_failed")
+		}
+	}
 	return nil
 }

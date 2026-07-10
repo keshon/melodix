@@ -14,7 +14,7 @@ import (
 )
 
 func ytdlpLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
-	ytdlp := exec.Command("yt-dlp", "-j", "-f", "bestaudio", track.URL)
+	ytdlp := exec.Command(YtdlpPath, "-j", "-f", "bestaudio", track.URL)
 	output, err := ytdlp.Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("yt-dlp get-url error: %w", err)
@@ -57,18 +57,7 @@ func ytdlpLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
-	ffmpeg := exec.Command("ffmpeg",
-		"-ss", fmt.Sprintf("%.3f", seekSec),
-		"-reconnect", "1",
-		"-reconnect_streamed", "1",
-		"-reconnect_delay_max", "5",
-		"-i", link,
-		"-f", "s16le",
-		"-ar", fmt.Sprintf("%d", sampleRate),
-		"-ac", fmt.Sprintf("%d", channels),
-		"-loglevel", "warning",
-		"pipe:1",
-	)
+	ffmpeg := ffmpegparser.NewPCMCommand(link, seekSec, true, "ytdlp-link")
 
 	reader, err := ffmpeg.StdoutPipe()
 	if err != nil {
@@ -81,8 +70,7 @@ func ytdlpLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
 	cleanup := func() {
-		_ = ffmpeg.Process.Kill()
-		_ = pr.WaitErr()
+		_ = pr.Close()
 	}
 
 	return pr, cleanup, nil

@@ -20,8 +20,10 @@ func New() *Source {
 	}
 }
 
+// Match claims soundcloud.com URLs only. Bare search queries are routed by the
+// resolver (explicit source selection or the YouTube default), not by Match.
 func (s *Source) Match(input string) bool {
-	return strings.Contains(input, "soundcloud.com") || !strings.HasPrefix(input, "http")
+	return strings.Contains(input, "soundcloud.com")
 }
 
 func (s *Source) Resolve(input string, selectedParser string) ([]source.TrackInfo, error) {

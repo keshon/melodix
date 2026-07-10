@@ -8,6 +8,7 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
 	"github.com/rs/zerolog"
 )
@@ -30,6 +31,7 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 	b.sessionCtx.Store(&sessionCtxHolder{ctx: context.Background()})
 	b.cmdGuard.Store(&cmdGuardHolder{g: disabledGuard})
 	kkdai.SetLogger(log)
+	ffmpeg.SetLogger(log)
 	return b
 }
 

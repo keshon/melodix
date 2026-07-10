@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"math/rand/v2"
 	"os"
 	"os/signal"
@@ -27,12 +28,27 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
+	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
 )
 
 func main() {
 	info := buildinfo.Get()
+
+	// -readme regenerates README.md from the command registry as a dev step
+	// (run from the repo root); the bot never writes files at runtime.
+	genReadme := flag.Bool("readme", false, "regenerate README.md from the command registry and exit")
+	flag.Parse()
+	if *genReadme {
+		log := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
+		registerCommands(nil, log)
+		if err := readme.UpdateReadme(command.DefaultRegistry, config.CategoryWeights, log); err != nil {
+			log.Error().Err(err).Msg("readme_update_failed")
+			os.Exit(1)
+		}
+		return
+	}
 
 	// Root context cancels on SIGINT/SIGTERM.
 	rootCtx, stopSignal := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

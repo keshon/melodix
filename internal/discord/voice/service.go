@@ -76,26 +76,25 @@ func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parse
 	}
 }
 
-func (s *Service) attachPlaybackFailureNotifier(p *player.Player) {
-	p.SetOnPlaybackFailed(func(guildID string, track parsers.TrackParse, err error) {
-		sess := s.getSession()
-		if sess == nil {
-			return
-		}
-		detail := playbackerr.String(err.Error())
-		var desc string
-		if track.Title != "" && track.URL != "" {
-			desc = fmt.Sprintf("%s\n\n[%s](%s)", detail, track.Title, track.URL)
-		} else if track.Title != "" {
-			desc = fmt.Sprintf("%s\n\n%s", detail, track.Title)
-		} else {
-			desc = detail
-		}
-		s.deliverPlaybackFailureEmbed(sess, guildID, &discordgo.MessageEmbed{
-			Title:       "Playback failed",
-			Description: desc,
-			Color:       discordreply.EmbedColor,
-		})
+// notifyPlaybackFailed is wired as player.Options.OnPlaybackFailed at player construction.
+func (s *Service) notifyPlaybackFailed(guildID string, track parsers.TrackParse, err error) {
+	sess := s.getSession()
+	if sess == nil {
+		return
+	}
+	detail := playbackerr.String(err.Error())
+	var desc string
+	if track.Title != "" && track.URL != "" {
+		desc = fmt.Sprintf("%s\n\n[%s](%s)", detail, track.Title, track.URL)
+	} else if track.Title != "" {
+		desc = fmt.Sprintf("%s\n\n%s", detail, track.Title)
+	} else {
+		desc = detail
+	}
+	s.deliverPlaybackFailureEmbed(sess, guildID, &discordgo.MessageEmbed{
+		Title:       "Playback failed",
+		Description: desc,
+		Color:       discordreply.EmbedColor,
 	})
 }
 
@@ -142,11 +141,6 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		s.sinkProviders = make(map[string]*sink.DiscordSinkProvider)
 	}
 	if p, ok := s.players[guildID]; ok {
-		p.SetGuildID(guildID)
-		s.attachPlaybackFailureNotifier(p)
-		if s.store != nil {
-			p.SetRecorder(playbackRecorder{store: s.store, log: s.log})
-		}
 		return p
 	}
 	if s.resolver == nil {
@@ -162,14 +156,47 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		Logger:                s.log,
 		TransportRecoveryMode: s.cfg.PlayerTransportRecoveryMode,
 		TransportSoftAttempts: s.cfg.PlayerTransportSoftAttempts,
+		OnPlaybackFailed:      s.notifyPlaybackFailed,
 	})
-	s.attachPlaybackFailureNotifier(p)
 	p.SetGuildID(guildID)
 	if s.store != nil {
 		p.SetRecorder(playbackRecorder{store: s.store, log: s.log})
 	}
 	s.players[guildID] = p
+	go s.watchPlayerStatus(guildID, p)
 	return p
+}
+
+// watchPlayerStatus is the single long-lived consumer of the player's status channel
+// (one per guild, for the player's lifetime). Slash handlers render interaction-driven
+// updates synchronously; this watcher covers async transitions only: auto-advance to the
+// next track and natural queue end. On an interaction-driven start both paths render the
+// same "Now Playing" embed — the duplicate edit is invisible to users.
+func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
+	for status := range p.PlayerStatus {
+		sess := s.getSession()
+		if sess == nil {
+			continue
+		}
+		switch status {
+		case player.StatusPlaying:
+			track := p.CurrentTrack()
+			if track == nil {
+				continue
+			}
+			if err := s.UpdatePlaybackStatus(sess, nil, guildID, discordreply.NowPlayingEmbed(track.Title, track.URL)); err != nil {
+				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
+			}
+		case player.StatusStopped:
+			// A transient Stopped fires between tracks; only render the final one.
+			if p.IsPlaying() || len(p.Queue()) > 0 {
+				continue
+			}
+			if err := s.UpdatePlaybackStatus(sess, nil, guildID, discordreply.PlaybackFinishedEmbed()); err != nil {
+				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
+			}
+		}
+	}
 }
 
 // ResolveTracks resolves input to tracks using the service's shared resolver.

@@ -214,6 +214,7 @@ func (c *Play) Run(ctx interface{}) error {
 		}
 	}
 
+	started := false
 	if !p.IsPlaying() {
 		if err := p.PlayNext(voiceState.ChannelID); err != nil {
 			if errors.Is(err, player.ErrTrackStartFailed) {
@@ -239,8 +240,19 @@ func (c *Play) Run(ctx interface{}) error {
 			})
 			return nil
 		}
+		started = true
 	}
 
-	common.ListenPlayerStatusSlash(s, e, p, c.Bot, guildID, slashCtx.AppLog)
+	// The outcome is known here, so render it synchronously (async transitions such as
+	// auto-advance are handled by the voice service's status watcher).
+	embed := discordreply.TracksAddedEmbed()
+	if started {
+		if track := p.CurrentTrack(); track != nil {
+			embed = discordreply.NowPlayingEmbed(track.Title, track.URL)
+		}
+	}
+	if err := c.Bot.UpdatePlaybackStatus(s, e, guildID, embed); err != nil {
+		slashCtx.AppLog.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
+	}
 	return nil
 }

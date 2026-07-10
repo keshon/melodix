@@ -12,7 +12,7 @@ import (
 )
 
 func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
-	ytdlp := exec.Command("yt-dlp", "-j", "-f", "bestaudio", track.URL)
+	ytdlp := exec.Command(YtdlpPath, "-j", "-f", "bestaudio", track.URL)
 	output, err := ytdlp.Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("yt-dlp json error: %w", err)
@@ -44,16 +44,8 @@ func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
-	ytdlp = exec.Command("yt-dlp", "-o", "-", "-f", "bestaudio", track.URL)
-	ffmpeg := exec.Command("ffmpeg",
-		"-ss", fmt.Sprintf("%.3f", seekSec),
-		"-i", "pipe:0",
-		"-f", "s16le",
-		"-ar", fmt.Sprintf("%d", sampleRate),
-		"-ac", fmt.Sprintf("%d", channels),
-		"-loglevel", "warning",
-		"pipe:1",
-	)
+	ytdlp = exec.Command(YtdlpPath, "-o", "-", "-f", "bestaudio", track.URL)
+	ffmpeg := ffmpegparser.NewPCMCommand("pipe:0", seekSec, false, "ytdlp-pipe")
 
 	ffmpegIn, err := ytdlp.StdoutPipe()
 	if err != nil {
@@ -76,9 +68,9 @@ func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
 	cleanup := func() {
-		_ = ffmpeg.Process.Kill()
+		_ = pr.Close()
 		_ = ytdlp.Process.Kill()
-		_, _ = pr.WaitErr(), ytdlp.Wait()
+		_ = ytdlp.Wait()
 	}
 
 	return pr, cleanup, nil
