@@ -5,7 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -23,13 +23,13 @@ func RunCmdDisable(s *discordgo.Session, e *discordgo.InteractionCreate, stor st
 
 func runCmdSetGroupState(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, group string, enabled bool) error {
 	if group == "" {
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "Missing required group option.",
 		})
 	}
 
 	if group == "core" && !enabled {
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "You can't disable the `core` group. It's the backbone of the discord.",
 		})
 	}
@@ -43,14 +43,14 @@ func runCmdSetGroupState(s *discordgo.Session, e *discordgo.InteractionCreate, s
 		err = stor.EnableGroup(e.GuildID, group)
 		if err != nil {
 			embed.Description = "Failed to enable the group."
-			return discordreply.RespondEmbedEphemeral(s, e, embed)
+			return reply.RespondEmbedEphemeral(s, e, embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` enabled.", group)
 	} else {
 		err = stor.DisableGroup(e.GuildID, group)
 		if err != nil {
 			embed.Description = "Failed to disable the group."
-			return discordreply.RespondEmbedEphemeral(s, e, embed)
+			return reply.RespondEmbedEphemeral(s, e, embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` disabled.", group)
 	}
@@ -59,7 +59,7 @@ func runCmdSetGroupState(s *discordgo.Session, e *discordgo.InteractionCreate, s
 		_ = syncer.SyncGuildCommands(e.GuildID)
 	}
 
-	return discordreply.RespondEmbedEphemeral(s, e, embed)
+	return reply.RespondEmbedEphemeral(s, e, embed)
 }
 
 func subOptionString(sub *discordgo.ApplicationCommandInteractionDataOption, name string) string {

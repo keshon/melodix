@@ -30,11 +30,11 @@ func runHelpByGroup() string {
 
 	var sb strings.Builder
 	for _, group := range sortedGroups {
-		sb.WriteString(fmt.Sprintf("**%s**\n", group))
+		fmt.Fprintf(&sb, "**%s**\n", group)
 		cmds := groupMap[group]
 		sort.Slice(cmds, func(i, j int) bool { return cmds[i].Name() < cmds[j].Name() })
 		for _, c := range cmds {
-			sb.WriteString(fmt.Sprintf("`%s` - %s\n", c.Name(), c.Description()))
+			fmt.Fprintf(&sb, "`%s` - %s\n", c.Name(), c.Description())
 		}
 		sb.WriteString("\n")
 	}

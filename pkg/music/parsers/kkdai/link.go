@@ -12,7 +12,7 @@ import (
 	"github.com/kkdai/youtube/v2"
 )
 
-func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func kkdaiLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	videoID, err := extractYouTubeID(track.URL)
 	if err != nil {
 		return nil, nil, err
@@ -55,7 +55,7 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 	}
 
 	if client == nil || video == nil {
-		return nil, nil, fmt.Errorf("[kkdai-link] youtube client error: %w", lastErr)
+		return nil, nil, fmt.Errorf("kkdai: youtube client: %w", lastErr)
 	}
 
 	track.Duration = video.Duration
@@ -63,23 +63,23 @@ func kkdaiLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	formats := video.Formats.WithAudioChannels()
 	if len(formats) == 0 {
-		return nil, nil, errors.New("[kkdai-link] no audio formats found for video")
+		return nil, nil, errors.New("kkdai: no audio formats found")
 	}
 
 	link, err := client.GetStreamURL(video, &formats[0])
 	if err != nil {
-		return nil, nil, fmt.Errorf("[kkdai-link] get stream URL error: %w", err)
+		return nil, nil, fmt.Errorf("kkdai: get stream url: %w", err)
 	}
 
 	ffmpeg := ffmpegparser.NewPCMCommand(link, seekSec, true, "kkdai-link")
 
 	reader, err := ffmpeg.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("stdout pipe error: %w", err)
+		return nil, nil, fmt.Errorf("kkdai: stdout pipe: %w", err)
 	}
 
 	if err := ffmpeg.Start(); err != nil {
-		return nil, nil, fmt.Errorf("command start error: %w", err)
+		return nil, nil, fmt.Errorf("kkdai: ffmpeg start: %w", err)
 	}
 
 	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)

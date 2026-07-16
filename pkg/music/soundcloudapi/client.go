@@ -15,6 +15,9 @@ import (
 	"time"
 )
 
+// Client talks to SoundCloud api-v2 with automatic client_id management.
+// Use Default() to share one client_id cache process-wide, or New() for an
+// isolated instance (tests).
 type Client struct {
 	// HTTP, APIBase and WebBase are overridable for tests.
 	HTTP    *http.Client
@@ -27,6 +30,7 @@ type Client struct {
 	clientID string
 }
 
+// New creates a Client with production defaults.
 func New() *Client {
 	return &Client{
 		HTTP:    &http.Client{Timeout: 10 * time.Second},

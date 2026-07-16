@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 type commandRunOptions struct {
@@ -54,19 +54,19 @@ func (b *Bot) runGuardedInteraction(
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
 			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_slot_busy")
-			_ = discordreply.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
+			_ = reply.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
 				Description: "Bot is busy right now. Please try again in a moment.",
 			})
 		},
 		onTimeout: func(err error) {
 			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_timeout")
-			_ = discordreply.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
+			_ = reply.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
 				Description: "Timed out running command.",
 			})
 		},
 		onError: func(err error) {
 			b.log.Error().Str("kind", kind).Str("command", name).Err(err).Msg("command_run_error")
-			_ = discordreply.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
+			_ = reply.RespondEmbedEphemeral(s, i, &discordgo.MessageEmbed{
 				Description: fmt.Sprintf("Error running command: %v", err),
 			})
 		},

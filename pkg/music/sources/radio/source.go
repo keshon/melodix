@@ -7,12 +7,15 @@ import (
 	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
+// Name is this source's identifier (equals sources.Radio).
 const Name = "radio"
 
+// Source plays internet radio streams (validated by probing Content-Type).
 type Source struct {
 	validator *Validator
 }
 
+// New creates the radio source.
 func New() *Source {
 	return &Source{
 		validator: NewValidator(),
@@ -61,5 +64,5 @@ func (r *Source) SourceName() string {
 }
 
 func (r *Source) AvailableParsers() []string {
-	return []string{"ffmpeg-link"}
+	return []string{source.ParserFFmpegLink}
 }

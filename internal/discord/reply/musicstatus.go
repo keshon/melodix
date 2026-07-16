@@ -1,4 +1,4 @@
-package discordreply
+package reply
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ import (
 // a title/link line plus a line of inline-code "chips" (source · parser, duration or
 // `live` for radio, artist when known). Embeds don't render -# subtext, so code spans
 // are the chip look Discord gives us.
-func NowPlayingEmbed(track *parsers.TrackParse) *discordgo.MessageEmbed {
+func NowPlayingEmbed(track *parsers.Track) *discordgo.MessageEmbed {
 	var title, url string
 	if track != nil {
 		title, url = track.Title, track.URL
@@ -48,7 +48,7 @@ func NowPlayingEmbed(track *parsers.TrackParse) *discordgo.MessageEmbed {
 
 // trackChips renders the chip line; every chip is optional so an empty track
 // degrades to no line at all.
-func trackChips(track *parsers.TrackParse) string {
+func trackChips(track *parsers.Track) string {
 	if track == nil {
 		return ""
 	}

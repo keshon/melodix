@@ -8,12 +8,15 @@ import (
 	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
+// Name is this source's identifier (equals sources.YouTube).
 const Name string = "youtube"
 
+// Source resolves YouTube URLs and search queries.
 type Source struct {
 	searcher *Searcher
 }
 
+// New creates the YouTube source.
 func New() *Source {
 	return &Source{
 		searcher: NewSearcher(),
@@ -78,5 +81,11 @@ func (y *Source) SourceName() string {
 }
 
 func (y *Source) AvailableParsers() []string {
-	return []string{"ytnative-link", "kkdai-link", "kkdai-pipe", "ytdlp-link", "ytdlp-pipe"}
+	return []string{
+		source.ParserYtnativeLink,
+		source.ParserKkdaiLink,
+		source.ParserKkdaiPipe,
+		source.ParserYtdlpLink,
+		source.ParserYtdlpPipe,
+	}
 }

@@ -33,16 +33,16 @@ func (b *Bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 // onGuildCreate fires when the bot joins a new guild.
 func (b *Bot) onGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
 	b.log.Info().Str("guild_id", g.Guild.ID).Str("guild_name", g.Guild.Name).Msg("guild_added")
-	if b.isGuildBlacklisted(g.Guild.ID) {
-		b.log.Info().Str("guild_id", g.Guild.ID).Msg("guild_blacklisted_leaving")
-		if err := s.GuildLeave(g.Guild.ID); err != nil {
-			b.log.Error().Str("guild_id", g.Guild.ID).Err(err).Msg("guild_leave_failed")
+	if b.isGuildBlacklisted(g.ID) {
+		b.log.Info().Str("guild_id", g.ID).Msg("guild_blacklisted_leaving")
+		if err := s.GuildLeave(g.ID); err != nil {
+			b.log.Error().Str("guild_id", g.ID).Err(err).Msg("guild_leave_failed")
 		}
 		return
 	}
 	if b.cfg.InitSlashCommands {
-		if err := b.cmdSyncer.SyncGuildCommands(g.Guild.ID); err != nil {
-			b.log.Error().Str("guild_id", g.Guild.ID).Err(err).Msg("commands_sync_failed")
+		if err := b.cmdSyncer.SyncGuildCommands(g.ID); err != nil {
+			b.log.Error().Str("guild_id", g.ID).Err(err).Msg("commands_sync_failed")
 		}
 	}
 }

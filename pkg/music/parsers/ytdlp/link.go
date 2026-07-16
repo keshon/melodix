@@ -13,11 +13,11 @@ import (
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 )
 
-func ytdlpLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func ytdlpLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	ytdlp := exec.Command(YtdlpPath, "-j", "-f", "bestaudio", track.URL)
 	output, err := ytdlp.Output()
 	if err != nil {
-		return nil, nil, fmt.Errorf("yt-dlp get-url error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: get url: %w", err)
 	}
 
 	type fragment struct {
@@ -37,7 +37,7 @@ func ytdlpLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	var info ytdlpInfo
 	if err := json.Unmarshal(output, &info); err != nil {
-		return nil, nil, fmt.Errorf("json unmarshal error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: decode json: %w", err)
 	}
 
 	// If the root duration is empty, we try to take it from the first fragment of the first format
@@ -52,7 +52,7 @@ func ytdlpLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 		link = strings.TrimSpace(info.Formats[0].URL)
 	}
 	if link == "" {
-		return nil, nil, errors.New("empty URL returned from yt-dlp")
+		return nil, nil, errors.New("ytdlp: empty url returned")
 	}
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
@@ -61,11 +61,11 @@ func ytdlpLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	reader, err := ffmpeg.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("stdout pipe error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: stdout pipe: %w", err)
 	}
 
 	if err := ffmpeg.Start(); err != nil {
-		return nil, nil, fmt.Errorf("command start error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: ffmpeg start: %w", err)
 	}
 
 	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)

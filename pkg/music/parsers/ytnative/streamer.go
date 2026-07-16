@@ -19,14 +19,11 @@ type Streamer struct{}
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-func (s *Streamer) LinkStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s *Streamer) LinkStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return ytnativeLink(track, seekSec)
 }
-func (s *Streamer) PipeStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s *Streamer) PipeStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return nil, nil, errors.New("ytnative: pipe streaming not supported")
-}
-func (s *Streamer) SupportsPipe() bool {
-	return false
 }
 
 var logPtr atomic.Pointer[zerolog.Logger]

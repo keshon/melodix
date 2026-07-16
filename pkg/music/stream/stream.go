@@ -4,7 +4,6 @@ package stream
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
@@ -12,6 +11,7 @@ import (
 	"github.com/keshon/melodix/pkg/music/parsers/scnative"
 	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
 	"github.com/keshon/melodix/pkg/music/parsers/ytnative"
+	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/rs/zerolog"
 )
 
@@ -24,12 +24,12 @@ const (
 // TrackStream wraps a track's PCM stream and metadata.
 type TrackStream struct {
 	io.ReadCloser
-	track  *parsers.TrackParse
+	track  *parsers.Track
 	parser string
 }
 
 // Track returns the underlying track.
-func (ts *TrackStream) Track() *parsers.TrackParse {
+func (ts *TrackStream) Track() *parsers.Track {
 	return ts.track
 }
 
@@ -38,24 +38,33 @@ func (ts *TrackStream) Parser() string {
 	return ts.parser
 }
 
-// Registry maps parser names to streamer implementations
-var Registry = map[string]parsers.Streamer{
-	"ytdlp-link":    &ytdlp.Streamer{},
-	"ytdlp-pipe":    &ytdlp.Streamer{},
-	"kkdai-link":    &kkdai.Streamer{},
-	"kkdai-pipe":    &kkdai.Streamer{},
-	"ffmpeg-link":   &ffmpeg.Streamer{},
-	"scnative-link": &scnative.Streamer{},
-	"ytnative-link": &ytnative.Streamer{},
+// Entry describes a registered parser: the streamer implementation and whether
+// this key opens via the pipe path (Go-side download piped into ffmpeg) or the
+// link path (ffmpeg fetches the URL itself).
+type Entry struct {
+	Streamer parsers.Streamer
+	UsePipe  bool
+}
+
+// Registry maps parser keys (see the sources.Parser* constants; the strings are
+// persisted in playback history, so keys are frozen identifiers) to entries.
+var Registry = map[string]Entry{
+	sources.ParserYtnativeLink: {Streamer: &ytnative.Streamer{}},
+	sources.ParserScnativeLink: {Streamer: &scnative.Streamer{}},
+	sources.ParserKkdaiLink:    {Streamer: &kkdai.Streamer{}},
+	sources.ParserKkdaiPipe:    {Streamer: &kkdai.Streamer{}, UsePipe: true},
+	sources.ParserYtdlpLink:    {Streamer: &ytdlp.Streamer{}},
+	sources.ParserYtdlpPipe:    {Streamer: &ytdlp.Streamer{}, UsePipe: true},
+	sources.ParserFFmpegLink:   {Streamer: &ffmpeg.Streamer{}},
 }
 
 // OpenTrack attempts to open a stream for a track, trying parsers in order
-func OpenTrack(track *parsers.TrackParse, seekSec float64) (*TrackStream, func(), string, error) {
+func OpenTrack(track *parsers.Track, seekSec float64) (*TrackStream, func(), string, error) {
 	return OpenTrackWithLogger(zerolog.Nop(), track, seekSec)
 }
 
 // OpenTrackWithLogger is like OpenTrack but logs parser fallbacks using the provided logger.
-func OpenTrackWithLogger(log zerolog.Logger, track *parsers.TrackParse, seekSec float64) (*TrackStream, func(), string, error) {
+func OpenTrackWithLogger(log zerolog.Logger, track *parsers.Track, seekSec float64) (*TrackStream, func(), string, error) {
 	var errs []error
 	var cleanup func()
 	var lastParser string
@@ -82,8 +91,8 @@ func OpenTrackWithLogger(log zerolog.Logger, track *parsers.TrackParse, seekSec 
 }
 
 // openWithParser opens a stream using the specified parser
-func openWithParser(track *parsers.TrackParse, parser string, seekSec float64) (*TrackStream, func(), error) {
-	streamer, ok := Registry[parser]
+func openWithParser(track *parsers.Track, parser string, seekSec float64) (*TrackStream, func(), error) {
+	entry, ok := Registry[parser]
 	if !ok {
 		return nil, nil, fmt.Errorf("streamer not found for parser: %s", parser)
 	}
@@ -92,10 +101,10 @@ func openWithParser(track *parsers.TrackParse, parser string, seekSec float64) (
 	var cleanup func()
 	var err error
 
-	if streamer.SupportsPipe() && strings.HasSuffix(parser, "-pipe") {
-		r, cleanup, err = streamer.PipeStream(track, seekSec)
+	if entry.UsePipe {
+		r, cleanup, err = entry.Streamer.PipeStream(track, seekSec)
 	} else {
-		r, cleanup, err = streamer.LinkStream(track, seekSec)
+		r, cleanup, err = entry.Streamer.LinkStream(track, seekSec)
 	}
 
 	if err != nil {

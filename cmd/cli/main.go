@@ -34,9 +34,13 @@ func main() {
 	defer provider.Close()
 
 	res := resolve.New()
+	recoveryMode, ok := player.ParseTransportRecoveryMode(cfg.PlayerTransportRecoveryMode)
+	if !ok {
+		log.Warn().Str("value", cfg.PlayerTransportRecoveryMode).Msg("unknown_transport_recovery_mode_using_hard")
+	}
 	p := player.NewWithOptions(provider, res, player.Options{
-		Logger:               log,
-		TransportRecoveryMode: cfg.PlayerTransportRecoveryMode,
+		Logger:                log,
+		TransportRecoveryMode: recoveryMode,
 		TransportSoftAttempts: cfg.PlayerTransportSoftAttempts,
 	})
 

@@ -10,7 +10,7 @@ import (
 	"github.com/keshon/melodix/pkg/music/soundcloudapi"
 )
 
-func scnativeLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func scnativeLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	sc := soundcloudapi.Default()
 
 	t, err := sc.ResolveTrack(track.URL)
@@ -36,10 +36,10 @@ func scnativeLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, fu
 
 	reader, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("stdout pipe error: %w", err)
+		return nil, nil, fmt.Errorf("scnative: stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("command start error: %w", err)
+		return nil, nil, fmt.Errorf("scnative: ffmpeg start: %w", err)
 	}
 
 	pr := ffmpegparser.NewProcessStream(cmd, reader)

@@ -18,6 +18,7 @@ func isYouTubeVideoURL(s string) bool {
 		strings.Contains(s, "youtu.be/")
 }
 
+// CleanVideoURL strips tracking/playlist params, returning a canonical watch URL.
 func CleanVideoURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {

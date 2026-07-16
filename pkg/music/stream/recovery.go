@@ -14,7 +14,7 @@ const maxRecoveryAttempts = 3
 // It covers flaky media (YouTube/ffmpeg reads), not Discord gateway or voice WebSocket loss;
 // voice transport is handled by the player/sink layer (invalidate + rejoin).
 type RecoveryStream struct {
-	track       *parsers.TrackParse
+	track       *parsers.Track
 	parserIndex int            // current parser index
 	stream      *TrackStream   // active stream
 	cleanup     func()         // cleanup function for the current stream
@@ -25,12 +25,12 @@ type RecoveryStream struct {
 }
 
 // NewRecoveryStream creates a new resilient wrapper for a track
-func NewRecoveryStream(track *parsers.TrackParse) *RecoveryStream {
+func NewRecoveryStream(track *parsers.Track) *RecoveryStream {
 	return NewRecoveryStreamWithLogger(track, zerolog.Nop())
 }
 
 // NewRecoveryStreamWithLogger creates a new resilient wrapper for a track using the provided logger.
-func NewRecoveryStreamWithLogger(track *parsers.TrackParse, log zerolog.Logger) *RecoveryStream {
+func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *RecoveryStream {
 	return &RecoveryStream{
 		track:     track,
 		retries:   make(map[string]int),
@@ -194,7 +194,7 @@ func (rs *RecoveryStream) Close() error {
 }
 
 // Track returns the underlying track.
-func (rs *RecoveryStream) Track() *parsers.TrackParse {
+func (rs *RecoveryStream) Track() *parsers.Track {
 	return rs.track
 }
 

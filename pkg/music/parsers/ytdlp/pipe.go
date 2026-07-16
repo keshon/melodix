@@ -11,11 +11,11 @@ import (
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 )
 
-func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func ytdlpPipe(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	ytdlp := exec.Command(YtdlpPath, "-j", "-f", "bestaudio", track.URL)
 	output, err := ytdlp.Output()
 	if err != nil {
-		return nil, nil, fmt.Errorf("yt-dlp json error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: get json: %w", err)
 	}
 
 	type fragment struct {
@@ -33,7 +33,7 @@ func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	var info ytdlpInfo
 	if err := json.Unmarshal(output, &info); err != nil {
-		return nil, nil, fmt.Errorf("json unmarshal error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: decode json: %w", err)
 	}
 
 	if info.Duration == 0 && len(info.Formats) > 0 {
@@ -49,21 +49,21 @@ func ytdlpPipe(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(
 
 	ffmpegIn, err := ytdlp.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("yt-dlp stdout pipe error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: yt-dlp stdout pipe: %w", err)
 	}
 	ffmpeg.Stdin = ffmpegIn
 
 	reader, err := ffmpeg.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("ffmpeg stdout pipe error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: ffmpeg stdout pipe: %w", err)
 	}
 
 	if err := ytdlp.Start(); err != nil {
-		return nil, nil, fmt.Errorf("yt-dlp start error: %w", err)
+		return nil, nil, fmt.Errorf("ytdlp: yt-dlp start: %w", err)
 	}
 	if err := ffmpeg.Start(); err != nil {
-		ytdlp.Process.Kill()
-		return nil, nil, fmt.Errorf("ffmpeg start error: %w", err)
+		_ = ytdlp.Process.Kill()
+		return nil, nil, fmt.Errorf("ytdlp: ffmpeg start: %w", err)
 	}
 
 	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)

@@ -15,7 +15,32 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Status is a playback lifecycle event delivered on Player.PlayerStatus.
 type Status string
+
+// TransportRecoveryMode selects how the player reacts to voice transport
+// failures (stream.ErrVoiceTransport from the sink).
+type TransportRecoveryMode string
+
+const (
+	// RecoveryHard invalidates the sink (forcing a voice rejoin) before
+	// reopening the media stream. The safe default.
+	RecoveryHard TransportRecoveryMode = "hard"
+	// RecoverySoft reopens the media stream first and falls back to hard
+	// recovery after Options.TransportSoftAttempts.
+	RecoverySoft TransportRecoveryMode = "soft"
+)
+
+// ParseTransportRecoveryMode maps a config string to a mode; ok is false for
+// unknown values (callers should warn and use RecoveryHard).
+func ParseTransportRecoveryMode(s string) (TransportRecoveryMode, bool) {
+	switch TransportRecoveryMode(s) {
+	case RecoveryHard, RecoverySoft:
+		return TransportRecoveryMode(s), true
+	default:
+		return RecoveryHard, false
+	}
+}
 
 const (
 	StatusPlaying Status = "Playing"
@@ -49,9 +74,12 @@ type Resolver interface {
 // PlaybackRecorder is called after a track successfully starts (after Open), e.g. to persist guild playback history.
 // Discord wiring sets guildID; CLI/examples leave recorder nil.
 type PlaybackRecorder interface {
-	Record(guildID string, playedAt time.Time, track parsers.TrackParse)
+	Record(guildID string, playedAt time.Time, track parsers.Track)
 }
 
+// Player is a queue-based playback engine: it resolves input through a Resolver,
+// opens tracks via the parser registry with recovery, and streams PCM to an
+// AudioSink. One Player per playback target (e.g. per guild).
 type Player struct {
 	// mu protects queue, currTrack, playing, starting, target, and the stop/playback fields below.
 	mu sync.Mutex
@@ -63,9 +91,9 @@ type Player struct {
 	// so concurrent PlayNext or Resume cannot start two tracks.
 	playNextMu sync.Mutex
 	// currTrack is the track being opened or actively playing (nil when idle).
-	currTrack *parsers.TrackParse
+	currTrack *parsers.Track
 	// queue holds tracks waiting to play (FIFO).
-	queue []parsers.TrackParse
+	queue []parsers.Track
 
 	// resolver turns user input into track metadata for enqueue.
 	resolver Resolver
@@ -92,7 +120,7 @@ type Player struct {
 	// service's status watcher, or the CLI loop); competing receivers steal events.
 	PlayerStatus chan Status
 
-	transportRecoveryMode string
+	transportRecoveryMode TransportRecoveryMode
 	transportSoftAttempts int
 
 	// errMu protects lastPlaybackUserErr (Discord / UI; separate from mu to avoid deadlocks with emit paths).
@@ -100,21 +128,22 @@ type Player struct {
 	lastPlaybackUserErr string
 	// onPlaybackFailed is set once at construction (Options.OnPlaybackFailed) and never mutated,
 	// so the playback goroutine may read it without a lock.
-	onPlaybackFailed func(guildID string, track parsers.TrackParse, playbackErr error)
+	onPlaybackFailed func(guildID string, track parsers.Track, playbackErr error)
 }
 
+// Options configures optional Player behavior; the zero value is usable.
 type Options struct {
 	// Logger is optional. If zero, the player logs nothing.
 	Logger zerolog.Logger
 	// TransportRecoveryMode controls behavior on stream.ErrVoiceTransport.
-	// Supported: "hard" (default), "soft".
-	TransportRecoveryMode string
+	// Zero value (or any unknown value) means RecoveryHard.
+	TransportRecoveryMode TransportRecoveryMode
 	// TransportSoftAttempts bounds how many soft retries we do before falling back to hard recovery.
 	// Applies to mode="soft" only. Default 1.
 	TransportSoftAttempts int
 	// OnPlaybackFailed is called when playback ends with an error after a track had started (e.g. sink warm-up).
 	// guildID is empty for non-Discord players; implementers should no-op.
-	OnPlaybackFailed func(guildID string, track parsers.TrackParse, playbackErr error)
+	OnPlaybackFailed func(guildID string, track parsers.Track, playbackErr error)
 }
 
 // New creates a new Player. target is set per playback via PlayNext(target).
@@ -125,8 +154,8 @@ func New(sinkProvider sink.Provider, res Resolver) *Player {
 // NewWithOptions creates a new Player with custom options.
 func NewWithOptions(sinkProvider sink.Provider, res Resolver, opts Options) *Player {
 	mode := opts.TransportRecoveryMode
-	if mode == "" {
-		mode = "hard"
+	if mode != RecoverySoft {
+		mode = RecoveryHard
 	}
 	softAttempts := opts.TransportSoftAttempts
 	if softAttempts <= 0 {
@@ -141,7 +170,7 @@ func NewWithOptions(sinkProvider sink.Provider, res Resolver, opts Options) *Pla
 	return &Player{
 		resolver:              res,
 		sinkProvider:          sinkProvider,
-		queue:                 make([]parsers.TrackParse, 0),
+		queue:                 make([]parsers.Track, 0),
 		stopPlayback:          make(chan struct{}),
 		playbackDone:          make(chan struct{}),
 		PlayerStatus:          make(chan Status, 10),
@@ -179,26 +208,26 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	tracksParse := make([]parsers.TrackParse, 0, len(tracksInfo))
+	tracks := make([]parsers.Track, 0, len(tracksInfo))
 	for _, trackInfo := range tracksInfo {
 		if len(trackInfo.AvailableParsers) == 0 {
 			p.log.Warn().Str("title", trackInfo.Title).Msg("track_skipped_no_parsers")
 			continue
 		}
-		tracksParse = append(tracksParse, parsers.TrackParse{
+		tracks = append(tracks, parsers.Track{
 			URL:           trackInfo.URL,
 			Title:         trackInfo.Title,
 			CurrentParser: trackInfo.AvailableParsers[0],
 			SourceInfo:    trackInfo,
 		})
 	}
-	if len(tracksParse) == 0 {
+	if len(tracks) == 0 {
 		p.emitPlaybackError(ErrNoParsersForTrack)
 		return ErrNoParsersForTrack
 	}
 
-	p.queue = append(p.queue, tracksParse...)
-	p.log.Info().Int("added", len(tracksParse)).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
+	p.queue = append(p.queue, tracks...)
+	p.log.Info().Int("added", len(tracks)).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
 	if p.currTrack != nil {
 		p.emitStatus(StatusAdded)
 	}
@@ -213,7 +242,7 @@ func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.queue = append(p.queue, parsers.TrackParse{
+	p.queue = append(p.queue, parsers.Track{
 		URL:           trackInfo.URL,
 		Title:         trackInfo.Title,
 		CurrentParser: trackInfo.AvailableParsers[0],
@@ -274,7 +303,7 @@ func (p *Player) PlayNext(target string) error {
 		p.mu.Unlock()
 		if rec != nil && gid != "" {
 			// Future: listened-duration aggregation would require completion callbacks from here or runPlayback.
-			rec.Record(gid, playedAt, cloneTrackParse(track))
+			rec.Record(gid, playedAt, cloneTrack(track))
 		}
 
 		p.log.Info().Str("title", track.Title).Int("queue_len", len(p.Queue())).Msg("track_now_playing")
@@ -344,20 +373,20 @@ func (p *Player) IsPlaying() bool {
 }
 
 // CurrentTrack returns currently playing track (nil if none)
-func (p *Player) CurrentTrack() *parsers.TrackParse {
+func (p *Player) CurrentTrack() *parsers.Track {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.currTrack
 }
 
 // Queue returns a copy of current queue
-func (p *Player) Queue() []parsers.TrackParse {
+func (p *Player) Queue() []parsers.Track {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return slices.Clone(p.queue)
 }
 
-func cloneTrackParse(tp parsers.TrackParse) parsers.TrackParse {
+func cloneTrack(tp parsers.Track) parsers.Track {
 	out := tp
 	if len(tp.SourceInfo.AvailableParsers) > 0 {
 		out.SourceInfo.AvailableParsers = slices.Clone(tp.SourceInfo.AvailableParsers)
@@ -366,7 +395,7 @@ func cloneTrackParse(tp parsers.TrackParse) parsers.TrackParse {
 }
 
 // startTrack launches playback goroutine
-func (p *Player) startTrack(track *parsers.TrackParse, resumed bool) error {
+func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	p.log.Info().
 		Str("title", track.Title).
 		Str("url", track.URL).
@@ -451,7 +480,7 @@ const maxVoiceTransportAttempts = 3
 // runPlayback streams to the sink. track, stopCh and doneCh are for this run only:
 // track must be the run's own pointer (reading p.currTrack here could observe a newer
 // run's track mid-open if this goroutine is scheduled late).
-func (p *Player) runPlayback(track *parsers.TrackParse, rs *stream.RecoveryStream, stopCh, doneCh chan struct{}) error {
+func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, stopCh, doneCh chan struct{}) error {
 	defer rs.Close()
 	defer close(doneCh)
 
@@ -462,7 +491,7 @@ func (p *Player) runPlayback(track *parsers.TrackParse, rs *stream.RecoveryStrea
 	guildID := p.guildID
 	p.mu.Unlock()
 
-	failedSnapshot := cloneTrackParse(*track)
+	failedSnapshot := cloneTrack(*track)
 	p.log.Info().Str("title", track.Title).Msg("playback_running")
 
 	var err error
@@ -494,7 +523,7 @@ func (p *Player) runPlayback(track *parsers.TrackParse, rs *stream.RecoveryStrea
 		if errors.Is(err, stream.ErrVoiceTransport) {
 			p.log.Warn().Int("attempt", attempt).Int("max", maxVoiceTransportAttempts).Err(err).Msg("voice_transport_error")
 
-			softTry := recoveryMode == "soft" && softUsed < softAttempts
+			softTry := recoveryMode == RecoverySoft && softUsed < softAttempts
 			if softTry {
 				softUsed++
 				p.log.Info().Int("used", softUsed).Int("max", softAttempts).Msg("transport_recovery_soft_reopen_stream")
@@ -559,7 +588,7 @@ func (p *Player) emitPlaybackError(err error) {
 
 // clearIfCurrent resets playing state only if track is still the current one, so a stale
 // run's goroutine cannot clobber the state of a newer run that already started.
-func (p *Player) clearIfCurrent(track *parsers.TrackParse) {
+func (p *Player) clearIfCurrent(track *parsers.Track) {
 	p.mu.Lock()
 	if p.currTrack == track {
 		p.playing = false
@@ -569,7 +598,7 @@ func (p *Player) clearIfCurrent(track *parsers.TrackParse) {
 }
 
 // markPlaybackFailed clears playing state, records user-visible error, notifies Discord (if wired).
-func (p *Player) markPlaybackFailed(track *parsers.TrackParse, failedSnapshot parsers.TrackParse, guildID string, playbackErr error) {
+func (p *Player) markPlaybackFailed(track *parsers.Track, failedSnapshot parsers.Track, guildID string, playbackErr error) {
 	p.clearIfCurrent(track)
 	if playbackErr == nil {
 		return

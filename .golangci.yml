@@ -1,0 +1,44 @@
+# Curated, minimal linter set — every enabled linter passes clean, so a finding
+# always means something. revive's exported-docs rule is deliberately off:
+# pkg/music (the library surface) is documented by hand; internal/ favors
+# self-explanatory names over comment ceremony.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    errcheck:
+      exclude-functions:
+        # Best-effort Discord UI replies: a failed followup is logged or ignored
+        # by design (the interaction may already be gone).
+        - github.com/keshon/melodix/internal/discord/reply.FollowupEmbedEphemeral
+        - github.com/keshon/melodix/internal/discord/reply.FollowupEmbed
+        - github.com/keshon/melodix/internal/discord/reply.FollowupEphemeral
+        - github.com/keshon/melodix/internal/discord/reply.RespondEmbedEphemeral
+        # Idiomatic deferred cleanup where the error has no consumer.
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (*os.File).Close
+        - (*github.com/godeps/opus.Encoder).Reset
+        - (*github.com/keshon/melodix/pkg/music/stream.RecoveryStream).Close
+        - (*github.com/keshon/melodix/pkg/music/sink.SpeakerProvider).Close
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

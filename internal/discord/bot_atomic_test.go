@@ -29,4 +29,3 @@ func TestSessionCtxAtomicValue_HolderTypeIsStable(t *testing.T) {
 		v.Store(&sessionCtxHolder{ctx: context.Background()})
 	}()
 }
-

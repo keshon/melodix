@@ -54,4 +54,3 @@ func (g *Guard) Release() {
 	default:
 	}
 }
-

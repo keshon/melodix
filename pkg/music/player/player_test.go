@@ -17,23 +17,24 @@ import (
 // fakeStreamer mirrors the pattern in pkg/music/stream/recovery_test.go: tests swap
 // stream.Registry with fakes and restore it afterwards.
 type fakeStreamer struct {
-	link func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error)
+	link func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error)
 }
 
-func (s fakeStreamer) LinkStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s fakeStreamer) LinkStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return s.link(track, seekSec)
 }
-func (s fakeStreamer) PipeStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s fakeStreamer) PipeStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return nil, nil, io.ErrUnexpectedEOF
 }
-func (s fakeStreamer) SupportsPipe() bool { return false }
 
-func swapRegistry(t *testing.T, reg map[string]parsers.Streamer) {
+func swapRegistry(t *testing.T, reg map[string]stream.Entry) {
 	t.Helper()
 	orig := stream.Registry
 	stream.Registry = reg
 	t.Cleanup(func() { stream.Registry = orig })
 }
+
+func linkEntry(s parsers.Streamer) stream.Entry { return stream.Entry{Streamer: s} }
 
 // openLog records which tracks were opened, in order (mutex-guarded for the hammer test).
 type openLog struct {
@@ -57,7 +58,7 @@ func (l *openLog) list() []string {
 // open time — tiny, so EOF is treated as natural end by RecoveryStream.
 func okStreamer(opened *openLog) fakeStreamer {
 	return fakeStreamer{
-		link: func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 			track.Duration = time.Millisecond
 			if opened != nil {
 				opened.add(track.Title)
@@ -69,7 +70,7 @@ func okStreamer(opened *openLog) fakeStreamer {
 
 func badStreamer() fakeStreamer {
 	return fakeStreamer{
-		link: func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 			return nil, nil, errors.New("open failed")
 		},
 	}
@@ -167,7 +168,7 @@ func waitRelease(t *testing.T, p *fakeProvider, timeout time.Duration) {
 
 func TestPlayAndAutoAdvance(t *testing.T) {
 	opened := &openLog{}
-	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(opened)})
+	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(opened))})
 	provider := newFakeProvider(&fakeSink{})
 	p := New(provider, fakeResolver{})
 
@@ -223,7 +224,7 @@ func TestPlayAndAutoAdvance(t *testing.T) {
 }
 
 func TestStopUnblocksBlockedSink(t *testing.T) {
-	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(nil)})
+	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(nil))})
 	provider := newFakeProvider(&fakeSink{block: true})
 	p := New(provider, fakeResolver{})
 
@@ -250,7 +251,7 @@ func TestStopUnblocksBlockedSink(t *testing.T) {
 }
 
 func TestPlayNextEmptyQueue(t *testing.T) {
-	swapRegistry(t, map[string]parsers.Streamer{})
+	swapRegistry(t, map[string]stream.Entry{})
 	p := New(newFakeProvider(&fakeSink{}), fakeResolver{})
 	if err := p.PlayNext(""); !errors.Is(err, ErrNoTracksInQueue) {
 		t.Fatalf("expected ErrNoTracksInQueue, got %v", err)
@@ -259,9 +260,9 @@ func TestPlayNextEmptyQueue(t *testing.T) {
 
 func TestStartFailureSkipsToNextTrack(t *testing.T) {
 	opened := &openLog{}
-	swapRegistry(t, map[string]parsers.Streamer{
-		"ok":  okStreamer(opened),
-		"bad": badStreamer(),
+	swapRegistry(t, map[string]stream.Entry{
+		"ok":  linkEntry(okStreamer(opened)),
+		"bad": linkEntry(badStreamer()),
 	})
 	provider := newFakeProvider(&fakeSink{})
 	p := New(provider, fakeResolver{})
@@ -282,7 +283,7 @@ func TestStartFailureSkipsToNextTrack(t *testing.T) {
 }
 
 func TestAllTracksFailToStart(t *testing.T) {
-	swapRegistry(t, map[string]parsers.Streamer{"bad": badStreamer()})
+	swapRegistry(t, map[string]stream.Entry{"bad": linkEntry(badStreamer())})
 	p := New(newFakeProvider(&fakeSink{}), fakeResolver{})
 
 	if err := p.EnqueueTrackInfo(testTrack("broken", "bad")); err != nil {
@@ -295,7 +296,7 @@ func TestAllTracksFailToStart(t *testing.T) {
 
 // TestConcurrentHammer races the public API; the assertion is clean completion under -race.
 func TestConcurrentHammer(t *testing.T) {
-	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(nil)})
+	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(nil))})
 	provider := newFakeProvider(&fakeSink{})
 	res := fakeResolver{tracks: []sources.TrackInfo{testTrack("hammer", "ok")}}
 	p := New(provider, res)
@@ -324,18 +325,18 @@ func TestConcurrentHammer(t *testing.T) {
 }
 
 func TestOnPlaybackFailedCalled(t *testing.T) {
-	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(nil)})
+	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(nil))})
 	provider := newFakeProvider(nil)
 	provider.sinkErr = errors.New("no voice")
 
 	type failure struct {
 		guildID string
-		track   parsers.TrackParse
+		track   parsers.Track
 		err     error
 	}
 	failedCh := make(chan failure, 1)
 	p := NewWithOptions(provider, fakeResolver{}, Options{
-		OnPlaybackFailed: func(guildID string, track parsers.TrackParse, err error) {
+		OnPlaybackFailed: func(guildID string, track parsers.Track, err error) {
 			select {
 			case failedCh <- failure{guildID, track, err}:
 			default:

@@ -8,6 +8,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Streamer extracts YouTube audio via the kkdai/youtube library (InnerTube +
+// signature deciphering); the fallback when ytnative can't produce a plain URL.
 type Streamer struct{}
 
 var logPtr atomic.Pointer[zerolog.Logger]
@@ -25,12 +27,9 @@ func logger() zerolog.Logger {
 	return zerolog.Nop()
 }
 
-func (s *Streamer) LinkStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s *Streamer) LinkStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return kkdaiLink(track, seekSec)
 }
-func (s *Streamer) PipeStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s *Streamer) PipeStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return kkdaiPipe(track, seekSec)
-}
-func (s *Streamer) SupportsPipe() bool {
-	return true
 }

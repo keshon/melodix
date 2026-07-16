@@ -41,4 +41,3 @@ func (t *Tracker) SinceLastWS(now time.Time) time.Duration {
 	}
 	return now.Sub(last)
 }
-

@@ -103,4 +103,3 @@ func collectHTTPTokens(tokens []string) []string {
 	}
 	return out
 }
-

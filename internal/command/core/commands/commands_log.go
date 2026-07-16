@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -14,12 +14,12 @@ func RunCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 
 	records, err := storage.CommandHistory(guildID)
 	if err != nil {
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "Failed to fetch command logs: " + err.Error(),
 		})
 	}
 	if len(records) == 0 {
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "No command logs found.",
 		})
 	}
@@ -40,5 +40,5 @@ func RunCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 	}
 
 	msg := codeLeftBlockWrapper + "\n" + builder.String() + codeRightBlockWrapper
-	return discordreply.RespondEphemeral(s, e, msg)
+	return reply.RespondEphemeral(s, e, msg)
 }

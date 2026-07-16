@@ -17,7 +17,7 @@ var musicPlaybackHistoryLimit = 750
 // ErrMusicPlaybackNotFound is returned when no row matches the id (unknown, trimmed, or typo).
 var ErrMusicPlaybackNotFound = errors.New("music playback not found")
 
-func musicPlaybackFromTrackParse(id uint64, at time.Time, tp parsers.TrackParse) domain.MusicPlayback {
+func musicPlaybackFromTrack(id uint64, at time.Time, tp parsers.Track) domain.MusicPlayback {
 	return domain.MusicPlayback{
 		ID:               id,
 		PlayedAt:         at,
@@ -48,7 +48,7 @@ func TrackInfoFromMusicPlayback(m domain.MusicPlayback) sources.TrackInfo {
 }
 
 // AppendMusicPlayback assigns a monotonic id, appends, trims oldest rows, and persists.
-func (s *Storage) AppendMusicPlayback(guildID string, track parsers.TrackParse, at time.Time) (uint64, error) {
+func (s *Storage) AppendMusicPlayback(guildID string, track parsers.Track, at time.Time) (uint64, error) {
 	record, err := s.getOrCreateGuildRecord(guildID)
 	if err != nil {
 		return 0, err
@@ -56,7 +56,7 @@ func (s *Storage) AppendMusicPlayback(guildID string, track parsers.TrackParse, 
 
 	record.NextMusicHistoryID++
 	id := record.NextMusicHistoryID
-	row := musicPlaybackFromTrackParse(id, at, track)
+	row := musicPlaybackFromTrack(id, at, track)
 	record.MusicPlaybackHistory = append(record.MusicPlaybackHistory, row)
 
 	if len(record.MusicPlaybackHistory) > musicPlaybackHistoryLimit {

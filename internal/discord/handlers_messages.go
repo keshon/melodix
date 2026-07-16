@@ -7,7 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 // onMessageCreate handles @mention messages directed at the bot.
@@ -36,13 +36,13 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 			if err := c.Run(cmdCtx, inv); err != nil {
 				if cmdCtx.Err() == context.DeadlineExceeded {
 					b.log.Warn().Str("kind", "message").Err(err).Msg("command_timeout")
-					_ = discordreply.MessageEmbed(s, m.ChannelID, &discordgo.MessageEmbed{
+					_ = reply.MessageEmbed(s, m.ChannelID, &discordgo.MessageEmbed{
 						Description: "Timed out running command.",
 					})
 					continue
 				}
 				b.log.Error().Str("kind", "message").Err(err).Msg("command_run_error")
-				_ = discordreply.MessageEmbed(s, m.ChannelID, &discordgo.MessageEmbed{
+				_ = reply.MessageEmbed(s, m.ChannelID, &discordgo.MessageEmbed{
 					Description: fmt.Sprintf("Error: %v", err),
 				})
 			}
@@ -75,7 +75,7 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 					continue
 				}
 				b.log.Error().Str("kind", "reaction").Err(err).Msg("command_run_error")
-				_ = discordreply.MessageEmbed(s, r.ChannelID, &discordgo.MessageEmbed{
+				_ = reply.MessageEmbed(s, r.ChannelID, &discordgo.MessageEmbed{
 					Description: fmt.Sprintf("Error: %v", err),
 				})
 			}

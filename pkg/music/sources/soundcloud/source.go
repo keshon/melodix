@@ -8,12 +8,15 @@ import (
 	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
+// Name is this source's identifier (equals sources.SoundCloud).
 const Name string = "soundcloud"
 
+// Source resolves SoundCloud URLs and search queries.
 type Source struct {
 	searcher *Searcher
 }
 
+// New creates the SoundCloud source.
 func New() *Source {
 	return &Source{
 		searcher: NewSearcher(),
@@ -75,5 +78,5 @@ func (s *Source) SourceName() string {
 }
 
 func (s *Source) AvailableParsers() []string {
-	return []string{"scnative-link", "ytdlp-pipe", "ytdlp-link"}
+	return []string{source.ParserScnativeLink, source.ParserYtdlpPipe, source.ParserYtdlpLink}
 }

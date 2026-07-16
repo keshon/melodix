@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -13,9 +13,9 @@ func runStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 	if err != nil || guild == nil {
 		guild, err = s.Guild(e.GuildID)
 		if err != nil {
-			return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Description: fmt.Sprintf("Failed to fetch guild: %v", err),
-				Color:       discordreply.EmbedColor,
+				Color:       reply.EmbedColor,
 			})
 		}
 	}
@@ -40,9 +40,9 @@ func runStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 		channelCount,
 	)
 
-	return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+	return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 		Title:       "📊 Guild Status",
 		Description: desc,
-		Color:       discordreply.EmbedColor,
+		Color:       reply.EmbedColor,
 	})
 }

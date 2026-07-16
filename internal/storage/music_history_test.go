@@ -28,7 +28,7 @@ func TestAppendGetListMusicPlayback(t *testing.T) {
 	// Intentionally omit s.Close(): datastore Close can block on autosave wait in tests.
 
 	guild := "guild1"
-	tp := parsers.TrackParse{
+	tp := parsers.Track{
 		URL:           "https://example.com/a",
 		Title:         "Song A",
 		CurrentParser: "p1",
@@ -82,7 +82,7 @@ func TestMusicPlaybackTrimKeepsRecent(t *testing.T) {
 	}
 
 	guild := "g2"
-	base := parsers.TrackParse{
+	base := parsers.Track{
 		URL:           "https://example.com/x",
 		Title:         "t",
 		CurrentParser: "p",

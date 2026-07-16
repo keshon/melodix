@@ -7,7 +7,7 @@ import (
 
 	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 
 	"github.com/keshon/melodix/internal/storage"
 )
@@ -49,14 +49,14 @@ func (c *SettingsCommand) Run(ctx interface{}) error {
 
 	data := e.ApplicationCommandData()
 	if len(data.Options) == 0 {
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "No settings group provided.",
 		})
 	}
 
 	group := data.Options[0]
 	if len(group.Options) == 0 {
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: "No subcommand provided.",
 		})
 	}
@@ -67,7 +67,7 @@ func (c *SettingsCommand) Run(ctx interface{}) error {
 	case "commands":
 		return runCommandsSettings(s, e, *st, context.Syncer, sub)
 	default:
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Unknown settings group: %s", group.Name),
 		})
 	}
@@ -84,7 +84,7 @@ func runCommandsSettings(s *discordgo.Session, e *discordgo.InteractionCreate, s
 	case "disable":
 		return commands.RunCmdDisable(s, e, st, syncer, sub)
 	default:
-		return discordreply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

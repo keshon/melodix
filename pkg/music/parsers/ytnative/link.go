@@ -10,7 +10,7 @@ import (
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 )
 
-func ytnativeLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func ytnativeLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	videoID, err := extractVideoID(track.URL)
 	if err != nil {
 		return nil, nil, err
@@ -40,10 +40,10 @@ func ytnativeLink(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, fu
 
 	reader, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("stdout pipe error: %w", err)
+		return nil, nil, fmt.Errorf("ytnative: stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("command start error: %w", err)
+		return nil, nil, fmt.Errorf("ytnative: ffmpeg start: %w", err)
 	}
 
 	pr2 := ffmpegparser.NewProcessStream(cmd, reader)

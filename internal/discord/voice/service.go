@@ -7,7 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/playbackerr"
 	"github.com/keshon/melodix/internal/storage"
@@ -67,7 +67,7 @@ type playbackRecorder struct {
 	log   zerolog.Logger
 }
 
-func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parsers.TrackParse) {
+func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parsers.Track) {
 	if r.store == nil {
 		return
 	}
@@ -77,7 +77,7 @@ func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parse
 }
 
 // notifyPlaybackFailed is wired as player.Options.OnPlaybackFailed at player construction.
-func (s *Service) notifyPlaybackFailed(guildID string, track parsers.TrackParse, err error) {
+func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err error) {
 	sess := s.getSession()
 	if sess == nil {
 		return
@@ -94,7 +94,7 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.TrackParse,
 	s.deliverPlaybackFailureEmbed(sess, guildID, &discordgo.MessageEmbed{
 		Title:       "Playback failed",
 		Description: desc,
-		Color:       discordreply.EmbedColor,
+		Color:       reply.EmbedColor,
 	})
 }
 
@@ -152,9 +152,13 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 		provider = sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay, s.log)
 		s.sinkProviders[guildID] = provider
 	}
+	recoveryMode, ok := player.ParseTransportRecoveryMode(s.cfg.PlayerTransportRecoveryMode)
+	if !ok {
+		s.log.Warn().Str("value", s.cfg.PlayerTransportRecoveryMode).Msg("unknown_transport_recovery_mode_using_hard")
+	}
 	p := player.NewWithOptions(provider, s.resolver, player.Options{
 		Logger:                s.log,
-		TransportRecoveryMode: s.cfg.PlayerTransportRecoveryMode,
+		TransportRecoveryMode: recoveryMode,
 		TransportSoftAttempts: s.cfg.PlayerTransportSoftAttempts,
 		OnPlaybackFailed:      s.notifyPlaybackFailed,
 	})
@@ -184,7 +188,7 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			if track == nil {
 				continue
 			}
-			if err := s.UpdatePlaybackStatus(sess, nil, guildID, discordreply.NowPlayingEmbed(track)); err != nil {
+			if err := s.UpdatePlaybackStatus(sess, nil, guildID, reply.NowPlayingEmbed(track)); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 			}
 		case player.StatusStopped:
@@ -192,7 +196,7 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			if p.IsPlaying() || len(p.Queue()) > 0 {
 				continue
 			}
-			if err := s.UpdatePlaybackStatus(sess, nil, guildID, discordreply.PlaybackFinishedEmbed()); err != nil {
+			if err := s.UpdatePlaybackStatus(sess, nil, guildID, reply.PlaybackFinishedEmbed()); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 			}
 		}

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -43,5 +43,5 @@ func RunCmdStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage 
 			{Name: "Enabled", Value: strings.Join(enabled, ", "), Inline: false},
 		},
 	}
-	return discordreply.RespondEmbedEphemeral(s, e, embed)
+	return reply.RespondEmbedEphemeral(s, e, embed)
 }

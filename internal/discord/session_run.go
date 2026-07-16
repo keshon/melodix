@@ -49,7 +49,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	}
 	defer func() {
 		b.log.Info().Msg("discord_session_close")
-		dg.Close()
+		_ = dg.Close()
 	}()
 
 	b.startSessionHealthWatchers(sessionCtx, dg, tracker, notifyUnhealthy)

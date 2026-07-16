@@ -11,16 +11,15 @@ import (
 )
 
 type fakeStreamer struct {
-	link func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error)
+	link func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error)
 }
 
-func (s fakeStreamer) LinkStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s fakeStreamer) LinkStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return s.link(track, seekSec)
 }
-func (s fakeStreamer) PipeStream(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+func (s fakeStreamer) PipeStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 	return nil, nil, io.ErrUnexpectedEOF
 }
-func (s fakeStreamer) SupportsPipe() bool { return false }
 
 type eofOnFirstRead struct {
 	read bool
@@ -37,21 +36,21 @@ func (r *eofOnFirstRead) Close() error { return nil }
 
 func TestRecoveryStream_ImmediateFail_SwitchesToNextParser(t *testing.T) {
 	origRegistry := Registry
-	Registry = map[string]parsers.Streamer{}
+	Registry = map[string]Entry{}
 	defer func() { Registry = origRegistry }()
 
-	Registry["p1"] = fakeStreamer{
-		link: func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+	Registry["p1"] = Entry{Streamer: fakeStreamer{
+		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 			return &eofOnFirstRead{}, func() {}, nil
 		},
-	}
-	Registry["p2"] = fakeStreamer{
-		link: func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+	}}
+	Registry["p2"] = Entry{Streamer: fakeStreamer{
+		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 			return io.NopCloser(bytes.NewReader([]byte("ok"))), func() {}, nil
 		},
-	}
+	}}
 
-	track := &parsers.TrackParse{
+	track := &parsers.Track{
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}},
 	}
 	rs := NewRecoveryStream(track)
@@ -74,22 +73,22 @@ func TestRecoveryStream_ImmediateFail_SwitchesToNextParser(t *testing.T) {
 
 func TestRecoveryStream_NaturalEOF_DoesNotFallback(t *testing.T) {
 	origRegistry := Registry
-	Registry = map[string]parsers.Streamer{}
+	Registry = map[string]Entry{}
 	defer func() { Registry = origRegistry }()
 
-	Registry["p1"] = fakeStreamer{
-		link: func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+	Registry["p1"] = Entry{Streamer: fakeStreamer{
+		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 			// One successful read then EOF.
 			return io.NopCloser(bytes.NewReader([]byte("data"))), func() {}, nil
 		},
-	}
-	Registry["p2"] = fakeStreamer{
-		link: func(track *parsers.TrackParse, seekSec float64) (io.ReadCloser, func(), error) {
+	}}
+	Registry["p2"] = Entry{Streamer: fakeStreamer{
+		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
 			return io.NopCloser(bytes.NewReader([]byte("fallback"))), func() {}, nil
 		},
-	}
+	}}
 
-	track := &parsers.TrackParse{
+	track := &parsers.Track{
 		Duration:   1 * time.Microsecond, // tiny, so EOF will be treated as natural end
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}},
 	}

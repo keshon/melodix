@@ -10,10 +10,12 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
+// Resolver routes input (URL or search query) to the matching Source.
 type Resolver struct {
 	Sources map[string]sources.Source
 }
 
+// New creates a Resolver with the built-in sources (YouTube, SoundCloud, radio).
 func New() *Resolver {
 	youtubeSource := youtube.New()
 	soundcloudSource := soundcloud.New()
@@ -28,6 +30,8 @@ func New() *Resolver {
 	}
 }
 
+// Resolve turns input into track metadata. selectedSource/selectedParser are
+// optional overrides ("" = auto-detect); see the precedence rules in the body.
 func (r *Resolver) Resolve(input, selectedSource, selectedParser string) ([]sources.TrackInfo, error) {
 	// Direct source selection
 	if selectedSource != "" {

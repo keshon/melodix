@@ -11,6 +11,8 @@ var (
 	ErrNoTranscoding = errors.New("soundcloud api: no playable transcoding")
 )
 
+// Transcoding is one available encoding of a track; exchange it for a signed
+// stream URL via Client.StreamURL.
 type Transcoding struct {
 	URL    string `json:"url"`
 	Preset string `json:"preset"` // e.g. "aac_160k", "mp3_standard", "opus_0_0"
@@ -20,6 +22,7 @@ type Transcoding struct {
 	} `json:"format"`
 }
 
+// Track is the api-v2 track resource (only the fields Melodix needs).
 type Track struct {
 	Title        string `json:"title"`
 	DurationMS   int64  `json:"duration"`

@@ -26,6 +26,7 @@ type Validator struct {
 	Client *http.Client
 }
 
+// NewValidator creates a Validator with production defaults.
 func NewValidator() *Validator {
 	return &Validator{
 		Client: &http.Client{

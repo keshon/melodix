@@ -1,4 +1,4 @@
-package discordreply
+package reply
 
 import (
 	"testing"
@@ -8,8 +8,8 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-func track(source, parser, artist string, d time.Duration) *parsers.TrackParse {
-	return &parsers.TrackParse{
+func track(source, parser, artist string, d time.Duration) *parsers.Track {
+	return &parsers.Track{
 		URL:           "https://example.com/t",
 		Title:         "Song",
 		Artist:        artist,
@@ -22,7 +22,7 @@ func track(source, parser, artist string, d time.Duration) *parsers.TrackParse {
 func TestNowPlayingEmbedChips(t *testing.T) {
 	cases := []struct {
 		name  string
-		track *parsers.TrackParse
+		track *parsers.Track
 		want  string // full expected description
 	}{
 		{
@@ -47,7 +47,7 @@ func TestNowPlayingEmbedChips(t *testing.T) {
 		},
 		{
 			name:  "no metadata means no chip line",
-			track: &parsers.TrackParse{Title: "Song", URL: "https://example.com/t"},
+			track: &parsers.Track{Title: "Song", URL: "https://example.com/t"},
 			want:  "🎶 [Song](https://example.com/t)",
 		},
 		{

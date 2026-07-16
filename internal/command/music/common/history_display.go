@@ -79,4 +79,3 @@ func FormatCountsLine(r domain.PlaybackCountRow) string {
 	title = fitTitleToLineLimit(title, build)
 	return build(title)
 }
-

@@ -30,6 +30,8 @@ type ProcessStream struct {
 	done     chan struct{}
 }
 
+// NewProcessStream wraps a started command and its stdout; it begins waiting
+// for process exit immediately.
 func NewProcessStream(cmd *exec.Cmd, stdout io.ReadCloser) *ProcessStream {
 	ps := &ProcessStream{
 		cmd:    cmd,
@@ -74,6 +76,7 @@ func (p *ProcessStream) Close() error {
 	return p.stdout.Close()
 }
 
+// WaitErr blocks until the process exits and returns its exit error, if any.
 func (p *ProcessStream) WaitErr() error {
 	<-p.done
 	return p.waitErr

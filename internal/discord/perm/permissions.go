@@ -62,4 +62,3 @@ func CheckBotVoicePermissions(s *discordgo.Session, channelID string) (bool, err
 	ok := perms&need == need
 	return ok, nil
 }
-

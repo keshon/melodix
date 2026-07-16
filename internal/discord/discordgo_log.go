@@ -15,7 +15,7 @@ func attachDiscordgoLogger(log zerolog.Logger) {
 		raw := fmt.Sprintf(format, a...)
 
 		var (
-			ev    *zerolog.Event
+			ev *zerolog.Event
 		)
 		switch msgL {
 		case discordgo.LogError:

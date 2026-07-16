@@ -22,6 +22,7 @@ type Searcher struct {
 	Client  *http.Client
 }
 
+// NewSearcher creates a Searcher with production defaults.
 func NewSearcher() *Searcher {
 	return &Searcher{
 		BaseURL: "https://www.youtube.com",
@@ -31,6 +32,7 @@ func NewSearcher() *Searcher {
 	}
 }
 
+// SearchFirstVideoURL returns the watch URL of the first search result.
 func (r *Searcher) SearchFirstVideoURL(query string) (string, error) {
 	searchURL := fmt.Sprintf("%s/results?search_query=%s", r.BaseURL, url.QueryEscape(query))
 

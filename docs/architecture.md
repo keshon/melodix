@@ -1,5 +1,8 @@
 # Architecture
 
+> House rules (naming, concurrency contracts, how to add sources/parsers) live
+> in [conventions.md](conventions.md); this document covers how the system works.
+
 Melodix is a Discord music bot built around a reusable, Discord-agnostic playback engine.
 The repository ships two binaries on top of the same engine:
 
@@ -48,7 +51,7 @@ flowchart TB
 | `internal/discord/voice/sink` | `DiscordSink`: PCM → Opus → voice connection |
 | `internal/discord/cmdadapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
 | `internal/discord/cmdsync` | Per-guild slash-command diff sync (create/edit/delete) |
-| `internal/discord/discordreply` | Embed/response helpers shared by handlers and the voice service |
+| `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
 | `internal/discord/execguard` | Global command parallelism cap + per-command timeout |
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
 | `internal/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
@@ -78,9 +81,8 @@ type Source interface {
 
 // pkg/music/parsers — track → PCM byte stream (s16le 48kHz stereo)
 type Streamer interface {
-    LinkStream(track *TrackParse, seekSec float64) (io.ReadCloser, func(), error)
-    PipeStream(track *TrackParse, seekSec float64) (io.ReadCloser, func(), error)
-    SupportsPipe() bool
+    LinkStream(track *Track, seekSec float64) (io.ReadCloser, func(), error)
+    PipeStream(track *Track, seekSec float64) (io.ReadCloser, func(), error)
 }
 
 // pkg/music/sink — PCM stream → audio output
@@ -169,7 +171,7 @@ sequenceDiagram
 
 Key mechanics:
 
-- **Queue** — a plain `[]TrackParse` under `p.mu`. `playNextMu` serializes dequeue+open so
+- **Queue** — a plain `[]Track` under `p.mu`. `playNextMu` serializes dequeue+open so
   two tracks can never start concurrently.
 - **Completion chain** — `runPlayback → completion goroutine → PlayNext → startTrack → new
   runPlayback`. Iteration happens via fresh goroutines, not recursion. Queue-end disconnect

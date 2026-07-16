@@ -10,11 +10,11 @@ func ffmpegLink(url string) (io.ReadCloser, func(), error) {
 
 	reader, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("stdout pipe error: %w", err)
+		return nil, nil, fmt.Errorf("ffmpeg: stdout pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("command start error: %w", err)
+		return nil, nil, fmt.Errorf("ffmpeg: start: %w", err)
 	}
 
 	pr := NewProcessStream(cmd, reader)

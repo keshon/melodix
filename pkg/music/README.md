@@ -73,7 +73,7 @@ The resolver is intentionally pluggable; the player does not care *how* a track 
 
 ### 2) Enqueue (TrackInfo → queue)
 
-Goal: turn `TrackInfo` into `parsers.TrackParse` and append to the FIFO queue.
+Goal: turn `TrackInfo` into `parsers.Track` and append to the FIFO queue.
 
 - Tracks without `AvailableParsers` are rejected/skipped.
 - `CurrentParser` starts as the first entry in `AvailableParsers` (will be updated later by recovery/open logic).

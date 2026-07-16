@@ -9,7 +9,7 @@ import (
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/domain"
 )
 
@@ -89,7 +89,7 @@ func (c *History) Run(ctx interface{}) error {
 
 	guildID := e.GuildID
 	if c.Bot.GetOrCreatePlayer(guildID) == nil {
-		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -97,7 +97,7 @@ func (c *History) Run(ctx interface{}) error {
 	}
 
 	if store == nil {
-		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Music history storage is not available.",
 		})
@@ -106,7 +106,7 @@ func (c *History) Run(ctx interface{}) error {
 
 	rows, err := store.ListMusicPlaybackTimeline(guildID)
 	if err != nil {
-		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 History",
 			Description: fmt.Sprintf("Could not load history: %v", err),
 		})
@@ -114,10 +114,10 @@ func (c *History) Run(ctx interface{}) error {
 	}
 
 	if len(rows) == 0 {
-		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 History",
 			Description: "No playback history yet. Use `/play` first. History is stored per server; very old entries may be removed when the list is trimmed.",
-			Color:       discordreply.EmbedColor,
+			Color:       reply.EmbedColor,
 		})
 		return nil
 	}
@@ -187,9 +187,9 @@ func (c *History) Run(ctx interface{}) error {
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),
 		},
-		Color: discordreply.EmbedColor,
+		Color: reply.EmbedColor,
 	}
-	if err := discordreply.FollowupEmbed(s, e, embed); err != nil {
+	if err := reply.FollowupEmbed(s, e, embed); err != nil {
 		slashCtx.AppLog.Warn().Str("command", "history").Err(err).Msg("followup_embed_failed")
 	}
 	return nil

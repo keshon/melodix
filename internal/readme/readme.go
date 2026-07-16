@@ -82,7 +82,7 @@ func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, lo
 				buf.WriteString("\n")
 			}
 			currentCategory = cat
-			buf.WriteString(fmt.Sprintf("### %s\n\n", currentCategory))
+			fmt.Fprintf(&buf, "### %s\n\n", currentCategory)
 		}
 
 		renderDiscordCommand(&buf, root)
@@ -131,15 +131,11 @@ func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, lo
 func renderDiscordCommand(buf *bytes.Buffer, c command.Command) {
 	name := c.Name()
 	display := name
-	if !(hasSpace(name) || startsWithUpper(name)) {
+	if !hasSpace(name) && !startsWithUpper(name) {
 		display = "/" + display
 	}
 
-	buf.WriteString(fmt.Sprintf(
-		"- **%s** — %s\n",
-		display,
-		c.Description(),
-	))
+	fmt.Fprintf(buf, "- **%s** — %s\n", display, c.Description())
 
 	sp, ok := c.(cmdadapter.SlashProvider)
 	if !ok {
@@ -162,7 +158,7 @@ func renderDiscordCommand(buf *bytes.Buffer, c command.Command) {
 		line = strings.TrimPrefix(line, "`")
 		parts := strings.SplitN(line, "` - ", 2)
 		if len(parts) == 2 {
-			buf.WriteString(fmt.Sprintf("  - **%s** — %s\n", parts[0], parts[1]))
+			fmt.Fprintf(buf, "  - **%s** — %s\n", parts[0], parts[1])
 		}
 	}
 }

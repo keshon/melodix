@@ -25,7 +25,7 @@ type WSSilence struct {
 	tick        time.Duration
 
 	heartbeatLatency func() time.Duration
-	onUnhealthy       func(meta WSSilenceMeta)
+	onUnhealthy      func(meta WSSilenceMeta)
 }
 
 type WSSilenceOptions struct {
@@ -88,4 +88,3 @@ func (w *WSSilence) Run(ctx context.Context) {
 		}
 	}
 }
-

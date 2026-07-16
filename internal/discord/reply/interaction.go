@@ -1,4 +1,4 @@
-package discordreply
+package reply
 
 import (
 	"fmt"

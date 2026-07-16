@@ -1,5 +1,7 @@
 package sources
 
+// Source turns user input (URL or search query) into playable track metadata.
+// Implementations: youtube, soundcloud, radio.
 type Source interface {
 	// Match checks if this source can handle the given input
 	Match(input string) bool

@@ -26,8 +26,8 @@ type MusicPlayback struct {
 }
 
 type Record struct {
-	CommandsDisabled []string          `json:"commands_disabled"`
-	CommandsHistory  []CommandHistory  `json:"commands_history"`
+	CommandsDisabled []string         `json:"commands_disabled"`
+	CommandsHistory  []CommandHistory `json:"commands_history"`
 
 	MusicPlaybackHistory []MusicPlayback `json:"music_playback_history,omitempty"`
 	NextMusicHistoryID   uint64          `json:"next_music_history_id"`

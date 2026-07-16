@@ -6,7 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/discordreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 type Stop struct {
@@ -43,7 +43,7 @@ func (c *Stop) Run(ctx interface{}) error {
 
 	player := c.Bot.GetOrCreatePlayer(e.GuildID)
 	if player == nil {
-		discordreply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -53,11 +53,11 @@ func (c *Stop) Run(ctx interface{}) error {
 		slashCtx.AppLog.Warn().Err(err).Msg("player_stop_failed")
 	}
 	stopMsg := "Playback stopped. Queue cleared."
-	if err := discordreply.FollowupEmbed(s, e, &discordgo.MessageEmbed{
+	if err := reply.FollowupEmbed(s, e, &discordgo.MessageEmbed{
 		Description: "⏹️ " + stopMsg,
 	}); err != nil {
 		slashCtx.AppLog.Warn().Str("command", "stop").Err(err).Msg("followup_embed_failed")
-		_ = discordreply.EditResponse(s, e, "⏹️ "+stopMsg)
+		_ = reply.EditResponse(s, e, "⏹️ "+stopMsg)
 	}
 	return nil
 }
