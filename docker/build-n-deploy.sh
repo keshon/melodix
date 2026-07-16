@@ -1,50 +1,83 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# build-n-deploy.sh — rebuild the Docker image and (re)start the stack.
+#
+# Flow: load .env → fetch source → stop stack → drop old image → build → start → prune.
+# Runs from its own directory, so it works regardless of where you call it from.
+#
+# Config (via .env or environment):
+#   ALIAS     container + image name          (required)
+#   GIT       "true" to clone, "false" to use existing ./src   (default: true)
+#   GIT_URL   repository to clone             (required when GIT=true)
 
 set -euo pipefail
 
-DOCKER_COMPOSE_COMMAND="docker compose -f docker-compose.yml up -d"
+# Always operate from the directory this script lives in.
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-# Step 1: Load .env
-echo "1. Loading env..."
-if [ -f .env ]; then
-    source .env
+# --- Tunables (override via environment if needed) ---
+ENV_FILE="${ENV_FILE:-.env}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
+SRC_DIR="${SRC_DIR:-./src}"
+
+# --- Pretty output (colors only when writing to a terminal) ---
+if [ -t 1 ]; then
+    BOLD=$'\e[1m'; DIM=$'\e[2m'; RED=$'\e[31m'; GREEN=$'\e[32m'; RESET=$'\e[0m'
 else
-    echo "ERROR: .env file not found!"
-    exit 1
+    BOLD=''; DIM=''; RED=''; GREEN=''; RESET=''
 fi
 
-# Step 2: Pull or verify source code
-if [ "${GIT:-}" != "false" ]; then
-    echo "2. Cloning repository..."
-    rm -rf ./src
-    git clone "$GIT_URL" src
+step_no=0
+step() { step_no=$((step_no + 1)); printf '%s[%d]%s %s\n' "$BOLD" "$step_no" "$RESET" "$1"; }
+info() { printf '    %s%s%s\n' "$DIM" "$1" "$RESET"; }
+die()  { printf '%serror:%s %s\n' "$RED" "$RESET" "$1" >&2; exit 1; }
+
+start_time=$SECONDS
+
+# --- 1. Load .env -----------------------------------------------------------
+step "Loading ${ENV_FILE}"
+[ -f "$ENV_FILE" ] || die "${ENV_FILE} not found (copy .env.example to ${ENV_FILE})"
+# shellcheck disable=SC1090  # runtime-provided path
+set -a; source "$ENV_FILE"; set +a
+[ -n "${ALIAS:-}" ] || die "ALIAS is not set in ${ENV_FILE}"
+
+IMAGE="${ALIAS}-image"
+
+# --- 2. Fetch source --------------------------------------------------------
+if [ "${GIT:-true}" != "false" ]; then
+    [ -n "${GIT_URL:-}" ] || die "GIT_URL is not set (or set GIT=false to use existing ${SRC_DIR})"
+    step "Cloning ${GIT_URL}"
+    rm -rf "$SRC_DIR"
+    git clone "$GIT_URL" "$SRC_DIR"
 else
-    if [ ! -d "./src" ]; then
-        echo "ERROR: src directory not found!"
-        exit 1
-    fi
+    step "Using existing source in ${SRC_DIR}"
+    [ -d "$SRC_DIR" ] || die "${SRC_DIR} not found (set GIT=true to clone it)"
 fi
 
-# Step 3: Bring down running containers
-echo "3. Stopping containers..."
-docker compose down --remove-orphans
+# --- 3. Stop the running stack ----------------------------------------------
+step "Stopping containers"
+docker compose -f "$COMPOSE_FILE" down --remove-orphans
 
-# Step 4: Remove old image(s) related to ALIAS
-echo "4. Removing old images..."
-OLD_IMAGES=$(docker images --filter=reference="${ALIAS}-image" -q)
-
-if [ -n "$OLD_IMAGES" ]; then
-    docker rmi -f $OLD_IMAGES || true
+# --- 4. Remove the old image ------------------------------------------------
+step "Removing old image (${IMAGE})"
+old_images=$(docker images --filter=reference="$IMAGE" -q)
+if [ -n "$old_images" ]; then
+    # shellcheck disable=SC2086  # intentional split: pass each image id as a separate arg
+    docker rmi -f $old_images || true
+else
+    info "none found"
 fi
 
-# Step 5: Build image
-echo "5. Building new image..."
-DOCKER_BUILDKIT=1 docker build -t "${ALIAS}-image" .
+# --- 5. Build the new image -------------------------------------------------
+step "Building ${IMAGE}"
+DOCKER_BUILDKIT=1 docker build -t "$IMAGE" .
 
-# Step 6: Start up containers
-echo "6. Starting containers..."
-eval "$DOCKER_COMPOSE_COMMAND"
+# --- 6. Start the stack -----------------------------------------------------
+step "Starting containers"
+docker compose -f "$COMPOSE_FILE" up -d
 
-# Step 7: Prune unused Docker junk
-echo "7. Cleaning up dangling Docker artifacts..."
+# --- 7. Prune dangling artifacts --------------------------------------------
+step "Pruning dangling images"
 docker image prune -f
+
+printf '%sdone%s in %ds — %s is up.\n' "$GREEN" "$RESET" "$((SECONDS - start_time))" "$ALIAS"
