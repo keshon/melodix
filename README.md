@@ -101,6 +101,11 @@ is one consumer of it, the CLI is another. If you're curious how the parser
 fallback and voice recovery actually work, [docs/architecture.md](docs/architecture.md)
 walks through the whole thing.
 
+The codebase keeps itself honest: the house rules — naming, concurrency
+contracts, how to add a source or parser — are written down in
+[docs/conventions.md](docs/conventions.md), and CI enforces the mechanical
+half (vet, race-enabled tests, a lint config that passes with zero findings).
+
 ## License
 
 [MIT](LICENSE)
