@@ -1,12 +1,13 @@
-// Package sink defines interfaces and implementations for consuming PCM audio (e.g. speaker, or custom Discord sink).
+// Package sink defines interfaces and implementations for consuming a track's
+// Opus packet stream (e.g. forward to Discord voice, or decode to a speaker).
 package sink
 
-import "io"
+import "github.com/keshon/melodix/pkg/music/opus"
 
-// AudioSink consumes a PCM stream (e.g. encode-and-send to Discord VC, or play to speaker).
-// The sink owns the read loop; Stream returns when the stream ends or stop is closed.
+// AudioSink consumes a stream of 20ms Opus packets. The sink owns the read loop;
+// Stream returns when the stream ends (io.EOF) or stop is closed.
 type AudioSink interface {
-	Stream(stream io.ReadCloser, stop <-chan struct{}) error
+	Stream(r opus.Reader, stop <-chan struct{}) error
 }
 
 // Provider returns an AudioSink for a given target.

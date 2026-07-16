@@ -20,7 +20,7 @@ flowchart TB
     Resolver["resolve.Resolver<br/>(input → TrackInfo)"]
     Player["player.Player<br/>(queue + playback loop)"]
     Stream["stream.RecoveryStream<br/>(parser fallback + retry)"]
-    Parsers["parsers: ytnative | scnative | kkdai | ytdlp | ffmpeg<br/>(track → PCM via ffmpeg)"]
+    Parsers["parsers: ytnative | scnative | kkdai | ytdlp | ffmpeg<br/>(track → 20ms Opus packets)"]
     SinkIface["sink.AudioSink"]
   end
   DiscordBot --> Player
@@ -29,8 +29,8 @@ flowchart TB
   Player --> Stream
   Stream --> Parsers
   Player --> SinkIface
-  SinkIface -->|Opus encode + VC send| DiscordVC["Discord voice"]
-  SinkIface -->|oto| Speaker["Local speaker"]
+  SinkIface -->|forward Opus packets| DiscordVC["Discord voice"]
+  SinkIface -->|decode → oto| Speaker["Local speaker"]
 ```
 
 ---
@@ -43,12 +43,13 @@ flowchart TB
 | `pkg/music/resolve` | `Resolver`: input → `[]TrackInfo`; source detection and precedence |
 | `pkg/music/sources` | `Source` interface + `youtube`, `soundcloud`, `radio` implementations |
 | `pkg/music/parsers` | `Streamer` interface + `ytnative`, `scnative`, `kkdai`, `ytdlp`, `ffmpeg` implementations |
+| `pkg/music/opus` | The engine's currency: `Reader` (20ms Opus packets), a zero-dep WebM demuxer (passthrough), and encode/decode adapters over `godeps/opus`; 48 kHz / stereo / 960-sample constants |
 | `pkg/music/soundcloudapi` | Minimal SoundCloud api-v2 client (rotating client_id, resolve, stream URLs, search) shared by `scnative` and the soundcloud source |
-| `pkg/music/stream` | Parser registry, `RecoveryStream`, PCM constants (48 kHz / stereo / 960-sample frames) |
+| `pkg/music/stream` | Parser registry + `RecoveryStream` (packet-level recovery) |
 | `pkg/music/sink` | `AudioSink`/`Provider` interfaces + speaker implementation |
 | `internal/discord` | The `Bot`: session lifecycle, handlers, health watchdogs, voice service |
 | `internal/discord/voice` | Per-guild players and sink providers; guild status messages; **survives session restarts** |
-| `internal/discord/voice/sink` | `DiscordSink`: PCM → Opus → voice connection |
+| `internal/discord/voice/sink` | `DiscordSink`: forwards Opus packets to the voice connection (no encode) |
 | `internal/discord/cmdadapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
 | `internal/discord/cmdsync` | Per-guild slash-command diff sync (create/edit/delete) |
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
@@ -58,11 +59,12 @@ flowchart TB
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
 | `internal/storage` + `internal/domain` | JSON datastore keyed by guild: command history, playback history, disabled commands |
 
-External process dependencies: **ffmpeg** (required, every parser decodes through it) and
-**yt-dlp** (optional, used by the `ytdlp-*` fallback parsers — the primary `ytnative`/`scnative`
-parsers extract natively over HTTP). Binary paths default to `PATH` and can
-be overridden via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`. `bwmarrin/discordgo` is replaced
-with the vendored fork in `pkg/discordgo-fork-dev` (panic fixes, stream handling).
+External process dependencies: **ffmpeg** (optional — used only by the *transcode* parsers:
+SoundCloud AAC, radio, and the `kkdai-link`/`ytdlp-*` fallbacks. YouTube plays by Opus
+**passthrough** — `ytnative-link` and `kkdai-pipe` — with no ffmpeg) and **yt-dlp** (optional,
+`ytdlp-*` last resort). A YouTube-first bot needs neither binary. Paths default to `PATH`,
+overridable via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`. `bwmarrin/discordgo` is replaced with the vendored
+fork in `pkg/discordgo-fork-dev` (panic fixes, stream handling).
 
 ---
 
@@ -79,15 +81,14 @@ type Source interface {
     AvailableParsers() []string
 }
 
-// pkg/music/parsers — track → PCM byte stream (s16le 48kHz stereo)
+// pkg/music/parsers — track → 20ms Opus packets (opus.Reader)
 type Streamer interface {
-    LinkStream(track *Track, seekSec float64) (io.ReadCloser, func(), error)
-    PipeStream(track *Track, seekSec float64) (io.ReadCloser, func(), error)
+    Open(track *Track, seekSec float64) (opus.Reader, func(), error)
 }
 
-// pkg/music/sink — PCM stream → audio output
+// pkg/music/sink — Opus packets → audio output
 type AudioSink interface {
-    Stream(stream io.ReadCloser, stop <-chan struct{}) error
+    Stream(r opus.Reader, stop <-chan struct{}) error
 }
 type Provider interface {
     Sink(target string) (AudioSink, error)
@@ -117,25 +118,40 @@ Search: YouTube search scrapes the results page with a regex (fragile by design 
 breaks, only search breaks; direct URLs keep working). SoundCloud search uses api-v2
 `/search/tracks` through the shared `soundcloudapi` client.
 
-### Native extraction (`ytnative` / `scnative`)
+### YouTube: Opus passthrough (two paths) and the fallback chain
 
-Both primary parsers extract streams natively over plain HTTP — no external binaries, no
-JS engine, and deliberately **no signature deciphering** (that treadmill belongs to the
-kkdai/yt-dlp fallbacks):
+YouTube audio (itag 251) is *already* 48kHz stereo Opus in a WebM container — Discord's exact
+wire format. So the goal is to **forward it untouched**: `pkg/music/opus`'s zero-dep WebM
+demuxer (`opus.Passthrough`) extracts the Opus packets and hands them straight to the sink,
+with *no ffmpeg, no decode, no re-encode*. It validates the first packet's framing (must be a
+single 20ms frame — Discord's sender assumption) and falls back otherwise. The YouTube parser
+chain, in order:
 
-- **`ytnative`** POSTs YouTube's InnerTube `player` endpoint with the ANDROID_VR client
-  context (the plain ANDROID client was retired by YouTube in 2026), which returns
-  direct cipher-free audio URLs. `clientVersion` in
-  `pkg/music/parsers/ytnative/innertube.go` is the single maintenance knob — when YouTube
-  deprecates it, the parser fails fast and the fallback chain plays the track anyway.
-  Cipher-only responses return `ErrCipherOnly` immediately for the same reason.
-- **`scnative`** uses `pkg/music/soundcloudapi`: the rotating `client_id` is scraped from
-  the web player's JS bundles, cached, and refreshed automatically on 401/403; tracks are
-  resolved via `/resolve`, and the preferred transcoding (AAC HLS > HLS > progressive)
-  is exchanged for a signed CDN URL that ffmpeg consumes directly.
+- **`ytnative-link`** (passthrough) — POSTs YouTube's InnerTube `player` endpoint with the
+  ANDROID_VR client (the plain ANDROID client was retired in 2026), gets a direct cipher-free
+  URL, streams it, and passes the packets through. `clientVersion` in
+  `pkg/music/parsers/ytnative/innertube.go` is the single maintenance knob. Its weakness: the
+  bare token-less client is often bot-checked (`LOGIN_REQUIRED`), so it fails fast a lot.
+- **`kkdai-pipe`** (passthrough) — the workhorse. `kkdai/youtube`'s signature-decipher path
+  resolves a WebM/Opus stream and *bypasses the bot-check that blocks ytnative*; we demux that
+  stream directly. This is the path that actually lands passthrough in today's climate.
+- **`kkdai-link`, `ytdlp-*`** (transcode) — ffmpeg-encode fallbacks: ffmpeg decodes the source
+  and `opus.Encode` re-encodes to packets. Used only when both passthrough paths are exhausted.
 
-Both packages have opt-in live tests (`MELODIX_LIVE_TESTS=1 go test -run Live -v ./...`)
-that act as canaries for endpoint drift.
+`ytnative` cipher-only responses return `ErrCipherOnly`; a passthrough that can't validate
+framing returns `opus.ErrNotPassthrough` — either way recovery walks to the next parser.
+
+### SoundCloud (`scnative`)
+
+`scnative` uses `pkg/music/soundcloudapi`: the rotating `client_id` is scraped from the web
+player's JS bundles, cached, and refreshed automatically on 401/403; tracks are resolved via
+`/resolve`, and the preferred transcoding (AAC HLS > HLS > progressive) is transcoded by
+ffmpeg and encoded to Opus packets (SoundCloud's AAC isn't passthrough-able). Radio streams
+likewise transcode through ffmpeg.
+
+A track's `Now Playing` chip shows `passthrough` or `ffmpeg` so the active mode is visible at
+a glance. The passthrough packages have opt-in live tests
+(`MELODIX_LIVE_TESTS=1 go test -run Live -v ./...`) that act as canaries for endpoint drift.
 
 ---
 
@@ -154,9 +170,9 @@ sequenceDiagram
   P->>P: spawn runPlayback goroutine
   P-->>H: nil (track started)
   H->>H: render "Now Playing" synchronously
-  loop 20ms frames
-    S->>RS: Read PCM
-    S->>S: Opus encode, send (stop/timeout-guarded)
+  loop every 20ms
+    S->>RS: ReadPacket (Opus)
+    S->>S: forward packet → OpusSend (stop/timeout-guarded)
   end
   RS-->>S: EOF
   P->>P: completion goroutine → PlayNext
@@ -179,10 +195,11 @@ Key mechanics:
 - **Per-run ownership** — each run gets its own `stopPlayback`/`playbackDone` channels and
   its own track pointer. A stale run's goroutine can never clobber a newer run's state
   (`clearIfCurrent` compares track identity before resetting).
-- **Discord sink** — reads fixed 20 ms frames (960 samples), warm-up of 10 frames, skips up
-  to 150 leading silent frames, then Opus-encodes per frame. Every `OpusSend` is a `select`
-  against the stop channel and a send timeout, so `Stop()` always unblocks the streaming
-  goroutine and a stalled voice connection surfaces as `ErrVoiceTransport` instead of a hang.
+- **Discord sink** — reads 20ms Opus packets and **forwards them** to `OpusSend` (no encode):
+  a 10-packet warm-up primes the pipeline, then leading near-silent packets (tiny under VBR)
+  are skipped as dead air. Every `OpusSend` is a `select` against the stop channel and a send
+  timeout, so `Stop()` always unblocks the streaming goroutine and a stalled voice connection
+  surfaces as `ErrVoiceTransport` instead of a hang.
 - **Pause/Resume** — intentionally unsupported (the sink owns the read loop); commands get
   `ErrPauseNotSupported`.
 
@@ -230,8 +247,9 @@ command channel. `internal/playbackerr` humanizes the raw error text.
 
 `ProcessStream` (ffmpeg wrapper) converts a zero-byte EOF from a failed process into the
 real process error, so an instant ffmpeg failure (403, bad URL) is never mistaken for a
-clean track end. All parsers build their ffmpeg invocation through `ffmpeg.NewPCMCommand`,
-which also captures and classifies ffmpeg stderr (403/forbidden/conversion failures at Warn).
+clean track end. The transcode parsers build ffmpeg via `ffmpeg.NewPCMCommand` and wrap its
+PCM output in `ffmpeg.OpusReader` (which encodes to Opus packets via `opus.Encode`); ffmpeg
+stderr is captured and classified (403/forbidden/conversion failures at Warn).
 
 ---
 
@@ -282,12 +300,13 @@ Only tracks that actually start playing are recorded, via the `PlaybackRecorder`
 4. If searchable by bare query, extend the query branch in the resolver.
 5. Add it to `/play`'s `source` choices.
 
-**Parser** (new playback backend):
-1. New package under `pkg/music/parsers/<name>/` implementing `Streamer` — build the ffmpeg
-   stage with `ffmpeg.NewPCMCommand`, wrap the process in `ffmpeg.ProcessStream`, and make
-   `cleanup` call `ProcessStream.Close()`.
-2. Register it in `stream.Registry` (`pkg/music/stream/stream.go`); the `-pipe`/`-link` name
-   suffix selects `PipeStream` vs `LinkStream`.
+**Parser** (new playback backend) — implement `Streamer.Open` returning an `opus.Reader`:
+1. New package under `pkg/music/parsers/<name>/`. If the source is a native Opus container,
+   `opus.Demux` the HTTP body (passthrough); otherwise build ffmpeg with `ffmpeg.NewPCMCommand`
+   and wrap it in `ffmpeg.OpusReader` (which encodes PCM → Opus packets). A parser with two
+   modes (link/pipe) carries a `Mode` field on its streamer.
+2. Register the instance in `stream.Registry` (`pkg/music/stream/stream.go`) under its frozen
+   key constant from `pkg/music/sources/parsers.go`.
 3. List it in the owning source's `AvailableParsers()` and `/play`'s `parser` choices.
 
 The player, queue, recovery, sinks, and persistence are source- and parser-agnostic —

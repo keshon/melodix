@@ -3,15 +3,20 @@ package kkdai
 import (
 	"errors"
 	"fmt"
-	"io"
+	"strings"
 
+	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
-	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 
 	"github.com/kkdai/youtube/v2"
 )
 
-func kkdaiPipe(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
+// kkdaiPipe is the kkdai passthrough path: kkdai resolves a WebM/Opus stream
+// (its signature-decipher path bypasses the bot-checks that block ytnative),
+// which we demux straight to Opus packets — no ffmpeg, no transcode. If the
+// video offers no WebM/Opus format, or the framing isn't forwardable, it errors
+// and recovery falls through to kkdai-link (ffmpeg).
+func kkdaiPipe(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
 	videoID, err := extractYouTubeID(track.URL)
 	if err != nil {
 		return nil, nil, err
@@ -22,42 +27,39 @@ func kkdaiPipe(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), er
 	if err != nil {
 		return nil, nil, fmt.Errorf("kkdai: youtube client: %w", err)
 	}
-
 	track.Duration = video.Duration
 	track.Title = video.Title
 
-	formats := video.Formats.WithAudioChannels()
-	if len(formats) == 0 {
-		return nil, nil, errors.New("kkdai: no audio formats found")
+	f, ok := pickOpusFormat(video.Formats.WithAudioChannels())
+	if !ok {
+		return nil, nil, errors.New("kkdai: no webm/opus format for passthrough")
 	}
-
-	stream, _, err := client.GetStream(video, &formats[0])
+	stream, _, err := client.GetStream(video, &f)
 	if err != nil {
 		return nil, nil, fmt.Errorf("kkdai: get stream: %w", err)
 	}
 
-	l := logger()
-	l.Debug().Msg("stream_size_unknown_piping")
-
-	ffmpeg := ffmpegparser.NewPCMCommand("pipe:0", seekSec, false, "kkdai-pipe")
-
-	ffmpeg.Stdin = stream
-	reader, err := ffmpeg.StdoutPipe()
+	r, err := opus.Passthrough(stream, opus.SeekPackets(seekSec))
 	if err != nil {
-		_ = stream.Close()
-		return nil, nil, fmt.Errorf("kkdai: ffmpeg stdout pipe: %w", err)
+		return nil, nil, err // Passthrough closed stream
 	}
+	track.Passthrough = true
+	l := logger()
+	l.Info().Str("video_id", videoID).Msg("kkdai_passthrough")
+	return r, func() { _ = r.Close() }, nil
+}
 
-	if err := ffmpeg.Start(); err != nil {
-		_ = stream.Close()
-		return nil, nil, fmt.Errorf("kkdai: ffmpeg start: %w", err)
+// pickOpusFormat returns the highest-bitrate WebM/Opus format (itag 249/250/251).
+func pickOpusFormat(formats youtube.FormatList) (youtube.Format, bool) {
+	var best youtube.Format
+	found := false
+	for _, f := range formats {
+		if !strings.Contains(f.MimeType, "audio/webm") || !strings.Contains(f.MimeType, "opus") {
+			continue
+		}
+		if !found || f.Bitrate > best.Bitrate {
+			best, found = f, true
+		}
 	}
-
-	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
-	cleanup := func() {
-		stream.Close()
-		_ = pr.Close()
-	}
-
-	return pr, cleanup, nil
+	return best, found
 }

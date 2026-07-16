@@ -8,33 +8,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/keshon/melodix/pkg/music/stream"
 )
 
-// fakeStreamer mirrors the pattern in pkg/music/stream/recovery_test.go: tests swap
-// stream.Registry with fakes and restore it afterwards.
+// fakeStreamer implements parsers.Streamer for tests: swap stream.Registry with
+// fakes and restore afterwards.
 type fakeStreamer struct {
-	link func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error)
+	open func(track *parsers.Track, seek float64) (opus.Reader, func(), error)
 }
 
-func (s fakeStreamer) LinkStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
-	return s.link(track, seekSec)
-}
-func (s fakeStreamer) PipeStream(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
-	return nil, nil, io.ErrUnexpectedEOF
+func (s fakeStreamer) Open(track *parsers.Track, seek float64) (opus.Reader, func(), error) {
+	return s.open(track, seek)
 }
 
-func swapRegistry(t *testing.T, reg map[string]stream.Entry) {
+func swapRegistry(t *testing.T, reg map[string]parsers.Streamer) {
 	t.Helper()
 	orig := stream.Registry
 	stream.Registry = reg
 	t.Cleanup(func() { stream.Registry = orig })
 }
-
-func linkEntry(s parsers.Streamer) stream.Entry { return stream.Entry{Streamer: s} }
 
 // openLog records which tracks were opened, in order (mutex-guarded for the hammer test).
 type openLog struct {
@@ -54,23 +50,24 @@ func (l *openLog) list() []string {
 	return append([]string(nil), l.titles...)
 }
 
-// okStreamer serves a short PCM burst and, like real parsers, fills in track.Duration at
-// open time — tiny, so EOF is treated as natural end by RecoveryStream.
+// okStreamer serves a short Opus burst (3 real 20ms packets) and fills in a tiny
+// track.Duration so RecoveryStream treats the end as natural.
 func okStreamer(opened *openLog) fakeStreamer {
 	return fakeStreamer{
-		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
+		open: func(track *parsers.Track, seek float64) (opus.Reader, func(), error) {
 			track.Duration = time.Millisecond
 			if opened != nil {
 				opened.add(track.Title)
 			}
-			return io.NopCloser(bytes.NewReader(make([]byte, 4096))), func() {}, nil
+			pcm := make([]byte, opus.PCMFrameBytes*3)
+			return opus.Encode(io.NopCloser(bytes.NewReader(pcm))), func() {}, nil
 		},
 	}
 }
 
 func badStreamer() fakeStreamer {
 	return fakeStreamer{
-		link: func(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
+		open: func(track *parsers.Track, seek float64) (opus.Reader, func(), error) {
 			return nil, nil, errors.New("open failed")
 		},
 	}
@@ -90,14 +87,13 @@ type fakeSink struct {
 	block bool
 }
 
-func (s *fakeSink) Stream(r io.ReadCloser, stop <-chan struct{}) error {
+func (s *fakeSink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	if s.block {
 		<-stop
 		return stream.ErrPlaybackStopped
 	}
-	buf := make([]byte, 1024)
 	for {
-		if _, err := r.Read(buf); err != nil {
+		if _, err := r.ReadPacket(); err != nil {
 			return nil
 		}
 		select {
@@ -168,7 +164,7 @@ func waitRelease(t *testing.T, p *fakeProvider, timeout time.Duration) {
 
 func TestPlayAndAutoAdvance(t *testing.T) {
 	opened := &openLog{}
-	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(opened))})
+	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(opened)})
 	provider := newFakeProvider(&fakeSink{})
 	p := New(provider, fakeResolver{})
 
@@ -224,7 +220,7 @@ func TestPlayAndAutoAdvance(t *testing.T) {
 }
 
 func TestStopUnblocksBlockedSink(t *testing.T) {
-	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(nil))})
+	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(nil)})
 	provider := newFakeProvider(&fakeSink{block: true})
 	p := New(provider, fakeResolver{})
 
@@ -251,7 +247,7 @@ func TestStopUnblocksBlockedSink(t *testing.T) {
 }
 
 func TestPlayNextEmptyQueue(t *testing.T) {
-	swapRegistry(t, map[string]stream.Entry{})
+	swapRegistry(t, map[string]parsers.Streamer{})
 	p := New(newFakeProvider(&fakeSink{}), fakeResolver{})
 	if err := p.PlayNext(""); !errors.Is(err, ErrNoTracksInQueue) {
 		t.Fatalf("expected ErrNoTracksInQueue, got %v", err)
@@ -260,9 +256,9 @@ func TestPlayNextEmptyQueue(t *testing.T) {
 
 func TestStartFailureSkipsToNextTrack(t *testing.T) {
 	opened := &openLog{}
-	swapRegistry(t, map[string]stream.Entry{
-		"ok":  linkEntry(okStreamer(opened)),
-		"bad": linkEntry(badStreamer()),
+	swapRegistry(t, map[string]parsers.Streamer{
+		"ok":  okStreamer(opened),
+		"bad": badStreamer(),
 	})
 	provider := newFakeProvider(&fakeSink{})
 	p := New(provider, fakeResolver{})
@@ -283,7 +279,7 @@ func TestStartFailureSkipsToNextTrack(t *testing.T) {
 }
 
 func TestAllTracksFailToStart(t *testing.T) {
-	swapRegistry(t, map[string]stream.Entry{"bad": linkEntry(badStreamer())})
+	swapRegistry(t, map[string]parsers.Streamer{"bad": badStreamer()})
 	p := New(newFakeProvider(&fakeSink{}), fakeResolver{})
 
 	if err := p.EnqueueTrackInfo(testTrack("broken", "bad")); err != nil {
@@ -296,7 +292,7 @@ func TestAllTracksFailToStart(t *testing.T) {
 
 // TestConcurrentHammer races the public API; the assertion is clean completion under -race.
 func TestConcurrentHammer(t *testing.T) {
-	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(nil))})
+	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(nil)})
 	provider := newFakeProvider(&fakeSink{})
 	res := fakeResolver{tracks: []sources.TrackInfo{testTrack("hammer", "ok")}}
 	p := New(provider, res)
@@ -325,7 +321,7 @@ func TestConcurrentHammer(t *testing.T) {
 }
 
 func TestOnPlaybackFailedCalled(t *testing.T) {
-	swapRegistry(t, map[string]stream.Entry{"ok": linkEntry(okStreamer(nil))})
+	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(nil)})
 	provider := newFakeProvider(nil)
 	provider.sinkErr = errors.New("no voice")
 

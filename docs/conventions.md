@@ -10,9 +10,10 @@ rule and pragmatism conflict, pragmatism wins — but note the exception in code
   its existence by having two real implementations or a real test seam.
   Everything else is concrete.
 - **Three extension layers, nothing else.** `sources.Source` (input → metadata),
-  `parsers.Streamer` (track → PCM), `sink.AudioSink`/`Provider` (PCM → audio).
-  New capability should arrive as an implementation of one of these, not as a
-  new layer. See [architecture.md](architecture.md).
+  `parsers.Streamer` (track → Opus packets), `sink.AudioSink`/`Provider` (Opus
+  packets → audio). The engine's currency is 20ms Opus packets (`opus.Reader`) end
+  to end. New capability should arrive as an implementation of one of these, not as
+  a new layer. See [architecture.md](architecture.md).
 - **The engine (`pkg/music`) never imports Discord.** The CLI existing proves
   it; keep it that way. Discord-specific behavior lives in `internal/`.
 - **Parsers are expendable.** They fail fast with a clear error; the
@@ -75,11 +76,12 @@ the name constant to `sources/sources.go`; register in `resolve.New()` *and*
 the auto-detect precedence list in `Resolver.Resolve`; extend the bare-query
 branch if searchable; add the `/play` source choice.
 
-**A parser** — implement `parsers.Streamer` in `pkg/music/parsers/<name>/`
-(ffmpeg stage via `ffmpeg.NewPCMCommand`, wrap with `ProcessStream`, cleanup =
-`Close()`); add the key constant to `sources/parsers.go`; register in
-`stream.Registry`; list it in the owning source's `AvailableParsers()` and the
-`/play` parser choices. If it talks to a live endpoint, add an opt-in live test
+**A parser** — implement `parsers.Streamer.Open` returning an `opus.Reader` in
+`pkg/music/parsers/<name>/` (native Opus container → `opus.Demux`; otherwise
+ffmpeg via `ffmpeg.NewPCMCommand` wrapped in `ffmpeg.OpusReader`); add the key
+constant to `sources/parsers.go`; register the instance in `stream.Registry`;
+list it in the owning source's `AvailableParsers()` and the `/play` parser
+choices. If it talks to a live endpoint, add an opt-in live test
 (`MELODIX_LIVE_TESTS=1`) as a drift canary.
 
 ## Testing & verification

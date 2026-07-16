@@ -1,12 +1,11 @@
 package parsers
 
-import "io"
+import "github.com/keshon/melodix/pkg/music/opus"
 
-// Streamer opens a track as a PCM byte stream (s16le, 48 kHz, stereo). The
-// returned func() is cleanup (kill external processes, close streams). Which
-// method the registry calls is decided by the registry entry, not the streamer;
-// implementations without a pipe path return an error from PipeStream.
+// Streamer opens a track as a stream of 20ms Opus packets (opus.Reader). How it
+// produces them is internal: passthrough sources demux a native Opus container,
+// transcode sources run ffmpeg → PCM → encode. The returned func() is cleanup
+// (kill external processes, close streams).
 type Streamer interface {
-	LinkStream(track *Track, seekSec float64) (io.ReadCloser, func(), error)
-	PipeStream(track *Track, seekSec float64) (io.ReadCloser, func(), error)
+	Open(track *Track, seekSec float64) (opus.Reader, func(), error)
 }

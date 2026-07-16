@@ -2,15 +2,15 @@ package scnative
 
 import (
 	"fmt"
-	"io"
 	"time"
 
+	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/soundcloudapi"
 )
 
-func scnativeLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
+func scnativeLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
 	sc := soundcloudapi.Default()
 
 	t, err := sc.ResolveTrack(track.URL)
@@ -33,18 +33,5 @@ func scnativeLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(),
 	// reconnect flags only apply to single-HTTP-stream (progressive) inputs.
 	reconnect := transcoding.Format.Protocol == "progressive"
 	cmd := ffmpegparser.NewPCMCommand(streamURL, seekSec, reconnect, "scnative-link")
-
-	reader, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("scnative: stdout pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("scnative: ffmpeg start: %w", err)
-	}
-
-	pr := ffmpegparser.NewProcessStream(cmd, reader)
-	cleanup := func() {
-		_ = pr.Close()
-	}
-	return pr, cleanup, nil
+	return ffmpegparser.OpusReader(cmd, "scnative")
 }

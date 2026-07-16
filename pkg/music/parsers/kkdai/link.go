@@ -3,16 +3,16 @@ package kkdai
 import (
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 
+	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 
 	"github.com/kkdai/youtube/v2"
 )
 
-func kkdaiLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
+func kkdaiLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
 	videoID, err := extractYouTubeID(track.URL)
 	if err != nil {
 		return nil, nil, err
@@ -71,21 +71,5 @@ func kkdaiLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), er
 		return nil, nil, fmt.Errorf("kkdai: get stream url: %w", err)
 	}
 
-	ffmpeg := ffmpegparser.NewPCMCommand(link, seekSec, true, "kkdai-link")
-
-	reader, err := ffmpeg.StdoutPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("kkdai: stdout pipe: %w", err)
-	}
-
-	if err := ffmpeg.Start(); err != nil {
-		return nil, nil, fmt.Errorf("kkdai: ffmpeg start: %w", err)
-	}
-
-	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
-	cleanup := func() {
-		_ = pr.Close()
-	}
-
-	return pr, cleanup, nil
+	return ffmpegparser.OpusReader(ffmpegparser.NewPCMCommand(link, seekSec, true, "kkdai-link"), "kkdai")
 }

@@ -1,6 +1,6 @@
 # music
 
-Queue-based music playback library for Go with pluggable audio sinks and track resolvers. Resolves URLs and search queries (YouTube, SoundCloud, radio), opens PCM streams via multiple parsers (native InnerTube/api-v2 extractors first, with yt-dlp, kkdai and ffmpeg as fallbacks), and plays through a sink of your choice (e.g. speaker or custom Discord voice).
+Queue-based music playback library for Go with pluggable audio sinks and track resolvers. Resolves URLs and search queries (YouTube, SoundCloud, radio) and opens each track as a stream of 20ms Opus packets — YouTube plays by **Opus passthrough** (WebM demux, no ffmpeg, no transcode); other sources transcode through ffmpeg and encode to Opus. Plays through a sink of your choice (forward to Discord voice, or decode to a speaker).
 
 ## How it works (high level)
 
@@ -8,7 +8,7 @@ At runtime the system is a pipeline:
 
 - **Resolve** user input → `sources.TrackInfo` (URL, title, available parsers)
 - **Enqueue** resolved tracks into a FIFO queue
-- **Open stream** using one of the available parsers (PCM `s16le` @ 48kHz stereo)
+- **Open stream** using one of the available parsers (20ms Opus packets, 48kHz stereo)
 - **Stream to sink** (speaker / Discord / custom) until the track ends or fails
 - **Recover** when possible (parser fallback on instant-open failures; reopen on early EOF; special handling for voice transport)
 
@@ -153,11 +153,11 @@ The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use packa
 
 - **Custom resolver**: implement `player.Resolver` to support new sources or search.
 - **Custom sink**: implement `sink.AudioSink` / `sink.Provider` to support new outputs.
-- **New parser**: implement `parsers.Streamer` and register it in `stream.Registry`.
+- **New parser**: implement `parsers.Streamer.Open` (returning an `opus.Reader`) and register it in `stream.Registry`.
 
 ## Requirements
 
-- **ffmpeg** — Must be installed and on your `PATH`. Used by most parsers to decode audio to PCM.
+- **ffmpeg** — Optional. Used by the transcode parsers (SoundCloud, radio, and the `kkdai-link`/`ytdlp-*` fallbacks) to decode audio; YouTube passthrough (`ytnative-link`, `kkdai-pipe`) needs no ffmpeg. Install it on `PATH` for full source coverage.
 - **yt-dlp** — Optional. If installed, the ytdlp-link and ytdlp-pipe parsers are available; otherwise the library falls back to kkdai/ffmpeg parsers.
 - **ebitengine/oto** — The speaker sink (`sink.NewSpeakerProvider()`) uses [oto](https://github.com/ebitengine/oto/v3) for audio output. Omit the speaker sink if you only need a custom sink (e.g. Discord).
 

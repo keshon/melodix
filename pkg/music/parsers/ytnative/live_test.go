@@ -4,7 +4,57 @@ import (
 	"net/http"
 	"os"
 	"testing"
+
+	gopus "github.com/godeps/opus"
+	"github.com/keshon/melodix/pkg/music/opus"
 )
+
+// TestLivePassthrough exercises the full passthrough path against real YouTube:
+// InnerTube → pick Opus/WebM → HTTP stream → demux → framing guard → decode.
+// It proves a track plays with no ffmpeg. Opt-in via MELODIX_LIVE_TESTS=1.
+func TestLivePassthrough(t *testing.T) {
+	if os.Getenv("MELODIX_LIVE_TESTS") == "" {
+		t.Skip("set MELODIX_LIVE_TESTS=1 to hit real YouTube")
+	}
+	pr, err := fetchPlayer(httpClient, playerEndpoint, "dQw4w9WgXcQ")
+	if err != nil {
+		t.Fatalf("fetchPlayer: %v", err)
+	}
+	f, ok := pickOpusFormat(pr.StreamingData.AdaptiveFormats)
+	if !ok {
+		t.Fatal("no opus/webm format offered")
+	}
+	t.Logf("opus format: %s @ %d bps", f.MimeType, f.Bitrate)
+
+	r, cleanup, err := openPassthrough(f.URL, 0)
+	if err != nil {
+		t.Fatalf("openPassthrough: %v", err)
+	}
+	defer cleanup()
+
+	dec, err := gopus.NewDecoder(opus.SampleRate, opus.Channels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcm := make([]int16, opus.FrameSize*opus.Channels)
+	n, bad := 0, 0
+	for ; n < 100; n++ {
+		pkt, err := r.ReadPacket()
+		if err != nil {
+			break
+		}
+		if !opus.IsSingle20ms(pkt) {
+			bad++
+		}
+		if _, err := dec.Decode(pkt, pcm); err != nil {
+			t.Fatalf("decode packet %d: %v", n, err)
+		}
+	}
+	t.Logf("passthrough: read %d packets, %d not single-20ms, all decoded ✓", n, bad)
+	if n < 50 || bad != 0 {
+		t.Fatalf("passthrough not clean: %d packets, %d bad", n, bad)
+	}
+}
 
 // TestLiveInnerTube hits the real InnerTube API with the ANDROID_VR client and checks
 // that a direct (cipher-free) audio URL comes back and the CDN accepts our UA.

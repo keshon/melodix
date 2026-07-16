@@ -20,6 +20,9 @@ type Track struct {
 	// CurrentParser is the registry key of the parser currently playing this
 	// track (starts as the first preference, updated by recovery fallback).
 	CurrentParser string
+	// Passthrough is true when the active stream forwards native Opus packets
+	// with no ffmpeg/transcode (set by the parser at open time; reset per attempt).
+	Passthrough bool
 	// SourceInfo is the resolver's original metadata, including the ordered
 	// parser preference list recovery iterates over.
 	SourceInfo sources.TrackInfo

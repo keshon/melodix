@@ -60,6 +60,11 @@ func trackChips(track *parsers.Track) string {
 	}
 	if track.CurrentParser != "" {
 		chips = append(chips, "`"+track.CurrentParser+"`")
+		if track.Passthrough {
+			chips = append(chips, "`passthrough`")
+		} else {
+			chips = append(chips, "`ffmpeg`")
+		}
 	}
 
 	switch {

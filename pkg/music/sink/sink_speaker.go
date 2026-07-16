@@ -6,11 +6,13 @@ import (
 	"time"
 
 	"github.com/ebitengine/oto/v3"
+	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/stream"
 	"github.com/rs/zerolog"
 )
 
-// SpeakerSink plays PCM (48kHz, 2ch, 16-bit LE) to the default audio device.
+// SpeakerSink decodes a track's Opus packets to PCM (48kHz, 2ch, 16-bit LE) and
+// plays them to the default audio device.
 type SpeakerSink struct {
 	ctx       *oto.Context
 	readyChan <-chan struct{}
@@ -39,8 +41,8 @@ func (s *SpeakerSink) ensureContext() error {
 		return nil
 	}
 	op := &oto.NewContextOptions{
-		SampleRate:   stream.SampleRate,
-		ChannelCount: stream.Channels,
+		SampleRate:   opus.SampleRate,
+		ChannelCount: opus.Channels,
 		Format:       oto.FormatSignedInt16LE,
 	}
 	ctx, ready, err := oto.NewContext(op)
@@ -52,16 +54,18 @@ func (s *SpeakerSink) ensureContext() error {
 	return nil
 }
 
-// Stream reads PCM from the stream and plays it. Returns when the stream ends or stop is closed.
-func (s *SpeakerSink) Stream(src io.ReadCloser, stop <-chan struct{}) error {
-	defer src.Close()
+// Stream decodes the Opus packets to PCM and plays them. Returns when the stream
+// ends or stop is closed.
+func (s *SpeakerSink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	if err := s.ensureContext(); err != nil {
 		return err
 	}
 	<-s.readyChan
 
-	r := &speakerStopReader{r: src, stop: stop}
-	player := s.ctx.NewPlayer(r)
+	pcm := opus.DecodeReader(r)
+	defer pcm.Close()
+	sr := &speakerStopReader{r: pcm, stop: stop}
+	player := s.ctx.NewPlayer(sr)
 	player.Play()
 
 	for player.IsPlaying() {

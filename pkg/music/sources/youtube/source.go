@@ -81,10 +81,12 @@ func (y *Source) SourceName() string {
 }
 
 func (y *Source) AvailableParsers() []string {
+	// Passthrough paths first (ytnative, then kkdai-pipe — no ffmpeg), then the
+	// ffmpeg-encode fallbacks (kkdai-link, yt-dlp).
 	return []string{
 		source.ParserYtnativeLink,
-		source.ParserKkdaiLink,
 		source.ParserKkdaiPipe,
+		source.ParserKkdaiLink,
 		source.ParserYtdlpLink,
 		source.ParserYtdlpPipe,
 	}

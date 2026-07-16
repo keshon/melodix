@@ -19,6 +19,12 @@ func track(source, parser, artist string, d time.Duration) *parsers.Track {
 	}
 }
 
+func passthroughTrack(source, parser string, d time.Duration) *parsers.Track {
+	tr := track(source, parser, "", d)
+	tr.Passthrough = true
+	return tr
+}
+
 func TestNowPlayingEmbedChips(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -26,24 +32,29 @@ func TestNowPlayingEmbedChips(t *testing.T) {
 		want  string // full expected description
 	}{
 		{
-			name:  "all chips",
+			name:  "passthrough track",
+			track: passthroughTrack("youtube", "kkdai-pipe", 212*time.Second),
+			want:  "🎶 [Song](https://example.com/t)\n\n`youtube` `kkdai-pipe` `passthrough` `3:32`",
+		},
+		{
+			name:  "ffmpeg track with artist",
 			track: track("youtube", "ytnative-link", "Rick Astley", 212*time.Second),
-			want:  "🎶 [Song](https://example.com/t)\n\n`youtube` `ytnative-link` `3:32` `Rick Astley`",
+			want:  "🎶 [Song](https://example.com/t)\n\n`youtube` `ytnative-link` `ffmpeg` `3:32` `Rick Astley`",
 		},
 		{
 			name:  "radio shows live instead of duration",
 			track: track(sources.Radio, "ffmpeg-link", "", 0),
-			want:  "🎶 [Song](https://example.com/t)\n\n`radio` `ffmpeg-link` `live`",
+			want:  "🎶 [Song](https://example.com/t)\n\n`radio` `ffmpeg-link` `ffmpeg` `live`",
 		},
 		{
 			name:  "unknown duration omitted",
 			track: track("soundcloud", "scnative-link", "", 0),
-			want:  "🎶 [Song](https://example.com/t)\n\n`soundcloud` `scnative-link`",
+			want:  "🎶 [Song](https://example.com/t)\n\n`soundcloud` `scnative-link` `ffmpeg`",
 		},
 		{
 			name:  "hour-long formatting",
-			track: track("youtube", "kkdai-pipe", "", time.Hour+5*time.Minute+7*time.Second),
-			want:  "🎶 [Song](https://example.com/t)\n\n`youtube` `kkdai-pipe` `1:05:07`",
+			track: passthroughTrack("youtube", "kkdai-pipe", time.Hour+5*time.Minute+7*time.Second),
+			want:  "🎶 [Song](https://example.com/t)\n\n`youtube` `kkdai-pipe` `passthrough` `1:05:07`",
 		},
 		{
 			name:  "no metadata means no chip line",

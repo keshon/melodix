@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 )
 
-func ytdlpLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), error) {
+func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
 	ytdlp := exec.Command(YtdlpPath, "-j", "-f", "bestaudio", track.URL)
 	output, err := ytdlp.Output()
 	if err != nil {
@@ -57,21 +57,5 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (io.ReadCloser, func(), er
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
-	ffmpeg := ffmpegparser.NewPCMCommand(link, seekSec, true, "ytdlp-link")
-
-	reader, err := ffmpeg.StdoutPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("ytdlp: stdout pipe: %w", err)
-	}
-
-	if err := ffmpeg.Start(); err != nil {
-		return nil, nil, fmt.Errorf("ytdlp: ffmpeg start: %w", err)
-	}
-
-	pr := ffmpegparser.NewProcessStream(ffmpeg, reader)
-	cleanup := func() {
-		_ = pr.Close()
-	}
-
-	return pr, cleanup, nil
+	return ffmpegparser.OpusReader(ffmpegparser.NewPCMCommand(link, seekSec, true, "ytdlp-link"), "ytdlp")
 }
