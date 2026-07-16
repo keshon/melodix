@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Melodix — self-hosted Discord music bot</title>
+    <meta name="description"
+      content="Melodix is a self-hosted Discord music bot in Go. Streams YouTube, SoundCloud and internet radio, and treats every failure as a recoverable event.">
+    <style>
+  /* ============ tokens ============ */
+  :root {
+    --ink: #fbf6f9;
+    --surface: #ffffff;
+    --surface-2: #f5ecf2;
+    --line: #e5d5de;
+    --text: #241a21;
+    --muted: #7d6875;
+    --accent: #b01e66;
+    --accent-soft: #b01e6614;
+    --ok: #2c8f63;
+    --chip-bg: #ede0e7;
+    --chip-text: #5c4553;
+    --code-bg: #241a21;
+    --code-text: #f2e6ec;
+    --code-comment: #8d7383;
+    --code-label: #b98aa4;
+    --wave: #b01e66;
+    --wave-dim: #d9b6c8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #171118; --surface: #201724; --surface-2: #2a1e2e; --line: #3a2b3d;
+      --text: #f2e9ee; --muted: #a58fa0; --accent: #e13a86; --accent-soft: #e13a861f;
+      --ok: #4cc492; --chip-bg: #322336; --chip-text: #cfb3c4;
+      --code-bg: #120d13; --code-text: #e9dce4; --code-comment: #8d7383; --code-label: #9a7289;
+      --wave: #e13a86; --wave-dim: #4d3648;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #171118; --surface: #201724; --surface-2: #2a1e2e; --line: #3a2b3d;
+    --text: #f2e9ee; --muted: #a58fa0; --accent: #e13a86; --accent-soft: #e13a861f;
+    --ok: #4cc492; --chip-bg: #322336; --chip-text: #cfb3c4;
+    --code-bg: #120d13; --code-text: #e9dce4; --code-comment: #8d7383; --code-label: #9a7289;
+    --wave: #e13a86; --wave-dim: #4d3648;
+  }
+  :root[data-theme="light"] {
+    --ink: #fbf6f9; --surface: #ffffff; --surface-2: #f5ecf2; --line: #e5d5de;
+    --text: #241a21; --muted: #7d6875; --accent: #b01e66; --accent-soft: #b01e6614;
+    --ok: #2c8f63; --chip-bg: #ede0e7; --chip-text: #5c4553;
+    --code-bg: #241a21; --code-text: #f2e6ec; --code-comment: #8d7383; --code-label: #b98aa4;
+    --wave: #b01e66; --wave-dim: #d9b6c8;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: "IBM Plex Sans", "Segoe UI Variable Text", system-ui, "Segoe UI", Roboto, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono, code, pre, kbd {
+    font-family: "Martian Mono", "IBM Plex Mono", "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+  section { scroll-margin-top: 24px; }
+
+  /* ============ nav ============ */
+  nav {
+    display: flex; align-items: center; gap: 28px;
+    padding: 22px 0;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 13px;
+  }
+  nav .brand { font-weight: 700; letter-spacing: .04em; color: var(--text); font-size: 15px; }
+  nav .brand em { color: var(--accent); font-style: normal; }
+  nav .links { display: flex; gap: 22px; margin-left: auto; flex-wrap: wrap; }
+  nav .links a { color: var(--muted); position: relative; }
+  nav .links a::after {
+    content: ""; position: absolute; left: 0; right: 100%; bottom: -4px;
+    height: 2px; background: var(--accent); transition: right .18s ease;
+  }
+  nav .links a:hover { color: var(--accent); text-decoration: none; }
+  nav .links a:hover::after { right: 0; }
+
+  /* ============ hero ============ */
+  header { padding: 56px 0 46px; }
+  .hero-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 56px; align-items: center; }
+  @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; gap: 40px; } }
+
+  .eyebrow {
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 18px;
+  }
+  h1 {
+    font-family: "Martian Mono", "IBM Plex Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
+    font-size: clamp(36px, 5.2vw, 56px);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    margin: 0 0 28px;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  h1 mark { background: var(--accent); color: #fff; padding: 0 .14em; border-radius: 0px; }
+  .lede { font-size: 18px; color: var(--muted); max-width: 30em; margin: 0 0 36px; }
+  .lede strong { color: var(--text); font-weight: 600; }
+
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-block; padding: 12px 22px; border-radius: 6px;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 14px; font-weight: 600;
+    border: 1px solid transparent; cursor: pointer;
+    transition: transform .12s ease, filter .12s ease, border-color .12s ease, color .12s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { text-decoration: none; filter: brightness(1.08); }
+  .btn-ghost { border-color: var(--line); color: var(--text); background: var(--surface); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+
+  .install-line {
+    margin-top: 26px; display: inline-flex; align-items: center; gap: 12px;
+    background: var(--code-bg); color: var(--code-text);
+    border-radius: 6px; padding: 10px 10px 10px 16px;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 13px;
+    max-width: 100%; overflow-x: auto;
+  }
+  .install-line .dollar { color: var(--accent); user-select: none; }
+  .copy-btn {
+    border: 1px solid #4a3644; background: transparent; color: var(--code-comment);
+    border-radius: 4px; padding: 3px 10px; font-size: 11.5px; cursor: pointer;
+    font-family: inherit; white-space: nowrap;
+  }
+  .copy-btn:hover { color: var(--code-text); border-color: var(--code-comment); }
+
+  /* ============ player card ============ */
+  .player {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 20px 22px 16px;
+    box-shadow: 0 24px 60px -30px rgba(0,0,0,.5);
+  }
+  .player .np-label {
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 12px; font-weight: 700; letter-spacing: .06em; margin: 0 0 8px;
+    display: flex; align-items: center; gap: 8px; text-transform: uppercase;
+  }
+  .np-label .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 2.4s ease-in-out infinite; }
+  .np-label .dot.dead { background: var(--accent); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+  .player .track { font-size: 16.5px; margin: 0 0 14px; font-weight: 600; }
+  .player .track a { color: var(--text); }
+  .player .track a:hover { color: var(--accent); }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; margin: 0 0 16px; }
+  .chip {
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 11.5px;
+    background: var(--chip-bg); color: var(--chip-text);
+    padding: 3px 9px; border-radius: 4px;
+    transition: background .25s ease, color .25s ease;
+  }
+  .chip.flash { background: var(--accent); color: #fff; }
+  canvas#wave { width: 100%; height: 64px; display: block; border-radius: 4px; }
+  .player .log {
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 11px;
+    color: var(--muted); margin: 12px 0 0; min-height: 4.6em;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .log .ok { color: var(--ok); }
+  .log .warn { color: var(--accent); }
+
+  /* ============ sections ============ */
+  section { padding: 64px 0 8px; }
+  .kicker {
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 10px;
+  }
+  h2 {
+    font-family: "Martian Mono", "IBM Plex Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
+    font-size: clamp(25px, 3.2vw, 33px); line-height: 1.16; letter-spacing: -0.015em;
+    margin: 0 0 18px; text-wrap: balance;
+  }
+  .prose { color: var(--muted); max-width: 44em; }
+  .prose strong { color: var(--text); }
+
+  /* fallback rail — tabs */
+  .rail {
+    display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+    margin: 30px 0 0;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 13px;
+  }
+  .stage {
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 9px 16px; border-radius: 6px; color: var(--text);
+    font: inherit; text-align: left; cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+  }
+  .stage small { display: block; color: var(--muted); font-size: 10.5px; margin-top: 3px; }
+  .stage:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .stage[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-soft); }
+  .rail .arrow { color: var(--muted); user-select: none; align-self: center; }
+
+  .tab-detail {
+    margin-top: 14px;
+    background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 18px 22px;
+    max-width: 52em;
+  }
+  .tab-detail h3 {
+    margin: 0 0 6px; font-size: 14px;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  .tab-detail h3 .chip { margin-left: 8px; font-weight: 400; }
+  .tab-detail p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .tab-detail p strong { color: var(--text); }
+  .rail-note { font-size: 13px; color: var(--muted); margin: 14px 0 0; max-width: 46em; }
+
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 36px; }
+  @media (max-width: 880px) { .feat-grid { grid-template-columns: 1fr; } }
+  .feat {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 22px 22px 18px;
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .feat:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .feat h3 {
+    margin: 0 0 8px; font-size: 15px;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  .feat p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .feat p code { font-size: 12px; background: var(--chip-bg); color: var(--chip-text); padding: 1px 5px; border-radius: 3px; }
+
+  /* quick start */
+  .qs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 30px; }
+  @media (max-width: 880px) { .qs-grid { grid-template-columns: 1fr; } }
+  .qs { background: var(--code-bg); color: var(--code-text); border-radius: 8px; padding: 18px 20px; overflow-x: auto; }
+  .qs h3 {
+    margin: 0 0 14px; font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--code-label); font-weight: 600;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  .qs pre { margin: 0; font-size: 13px; line-height: 1.75; }
+  .qs .c { color: var(--code-comment); }
+  .qs .a { color: var(--accent); }
+
+  /* commands */
+  .cmd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 40px; margin-top: 28px; }
+  @media (max-width: 700px) { .cmd-grid { grid-template-columns: 1fr; } }
+  .cmd { display: flex; gap: 16px; align-items: baseline; padding: 11px 4px; border-bottom: 1px solid var(--line); }
+  .cmd code { font-size: 13.5px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .cmd span { color: var(--muted); font-size: 14px; }
+
+  /* downloads */
+  .dl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 30px; }
+  @media (max-width: 880px) { .dl-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .dl-grid { grid-template-columns: 1fr; } }
+  .dl {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px 18px; color: var(--text);
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 13px;
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .dl:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none; }
+  .dl .arch { color: var(--muted); font-size: 12px; }
+  .dl:hover .arch { color: var(--accent); }
+  .dl-note { font-size: 13px; color: var(--muted); margin-top: 14px; }
+
+  /* footer */
+  footer {
+    margin-top: 80px; border-top: 1px solid var(--line);
+    padding: 34px 0 48px;
+    font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 12.5px; color: var(--muted);
+  }
+  footer .cols { display: flex; gap: 24px; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--accent); }
+  .ver-chip {
+    background: var(--accent-soft); color: var(--accent);
+    padding: 2px 9px; border-radius: 4px; font-size: 11.5px; margin-left: 8px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .np-label .dot { animation: none; }
+    .btn, .feat, .dl, .stage, nav .links a::after { transition: none; }
+  }
+</style>
+  </head>
+  <body>
+
+    <div class="wrap">
+      <nav>
+        <span class="brand mono">Melodix Discord Player</span>
+        <div class="links">
+          <a href="#survives">Why</a>
+          <a href="#quickstart">Quick start</a>
+          <a href="#commands">Commands</a>
+          <a href="#downloads">Downloads</a>
+          <a href="https://github.com/keshon/melodix">GitHub</a>
+        </div>
+      </nav>
+
+      <header>
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">discord music bot · self-hosted · go · open source</p>
+            <h1>Playback should <mark>survive</mark>.</h1>
+            <p class="lede">Melodix streams YouTube, SoundCloud and internet
+              radio into your
+              Discord server — and treats every failure as a recoverable event.
+              <strong>Flaky streams, dead voice connections, gateway
+                reconnects:</strong>
+              the music keeps playing.</p>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="#downloads">Download
+                Binaries</a>
+              <a class="btn btn-ghost"
+                href="https://github.com/keshon/melodix">Source on GitHub</a>
+            </div>
+            <div class="install-line">
+              <span class="dollar">$</span>
+              <span id="installCmd">go build ./cmd/discord && DISCORD_TOKEN=···
+                ./melodix-discord</span>
+              <button class="copy-btn" id="copyBtn" type="button">copy</button>
+            </div>
+          </div>
+
+          <div class="player" aria-label="Now Playing demo">
+            <p class="np-label"><span class="dot" id="liveDot"></span> Now
+              Playing</p>
+            <p class="track"><a href="#survives" id="trackTitle">Never Gonna
+                Give You Up</a></p>
+            <div class="chips">
+              <span class="chip">youtube</span>
+              <span class="chip" id="chipParser">ytnative-link</span>
+              <span class="chip" id="chipDur">3:32</span>
+              <span class="chip" id="chipArtist">Rick Astley</span>
+            </div>
+            <canvas id="wave" width="640" height="128"></canvas>
+            <div class="log" id="log" aria-live="off">
+              <span>track_now_playing <span
+                  class="ok">parser=ytnative-link</span></span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section id="survives">
+        <p class="kicker">why it survives</p>
+        <h2>Every track carries its own fallback chain.</h2>
+        <p class="prose">Public music bots come and go, usually with a
+          cease-and-desist attached.
+          Melodix is the opposite deal: a small binary you run yourself, with
+          your own token,
+          on your own machine — built around the assumption that <strong>sources
+            break, and that's fine.</strong>
+          Extraction is layered: a native client goes first, and when a platform
+          changes the rules,
+          the next backend picks the track up mid-song. The player above is
+          running that
+          exact script on a loop.</p>
+
+        <div class="rail" role="tablist" aria-label="Extraction backends">
+          <button class="stage" type="button" role="tab" id="tab-0"
+            aria-selected="true" aria-controls="detail">ytnative<small>native
+              InnerTube · no deps</small></button>
+          <span class="arrow">→</span>
+          <button class="stage" type="button" role="tab" id="tab-1"
+            aria-selected="false" aria-controls="detail">kkdai<small>library
+              extractor</small></button>
+          <span class="arrow">→</span>
+          <button class="stage" type="button" role="tab" id="tab-2"
+            aria-selected="false" aria-controls="detail">yt-dlp<small>last
+              resort</small></button>
+        </div>
+
+        <div class="tab-detail" id="detail" role="tabpanel">
+          <h3 id="detailTitle">ytnative <span class="chip">ships inside the
+              binary</span></h3>
+          <p id="detailBody">Talks to YouTube's InnerTube API with the
+            ANDROID_VR client — the same
+            API the official apps use — and receives direct, cipher-free audio
+            URLs. No JS engine,
+            no external processes, just plain HTTP. When YouTube changes the
+            rules it
+            <strong>fails fast on purpose</strong> so the chain moves on; the
+            fix is a one-line
+            client-version bump.</p>
+        </div>
+        <p class="rail-note">SoundCloud gets the same treatment with its own
+          native extractor
+          (<span class="mono">scnative</span>, api-v2), and radio streams go
+          straight to ffmpeg.</p>
+
+        <div class="feat-grid">
+          <div class="feat">
+            <h3>survives discord too</h3>
+            <p>A silent gateway or a dead voice connection is detected and
+              recovered automatically.
+              Queues live through session restarts.</p>
+          </div>
+          <div class="feat">
+            <h3>keeps a memory</h3>
+            <p><code>/history</code> shows what was played; <code>/play
+                42</code> replays entry 42.
+              No link hunting.</p>
+          </div>
+          <div class="feat">
+            <h3>stays small</h3>
+            <p>One binary plus ffmpeg. Storage is a single JSON file — no
+              database to babysit.
+              Also runs as a terminal player, straight to your speakers.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="quickstart">
+        <p class="kicker">quick start</p>
+        <h2>Running in two minutes.</h2>
+        <div class="qs-grid">
+          <div class="qs">
+            <h3>Discord bot</h3>
+            <pre><span class="c"># token from the Discord Developer Portal</span>
+<span class="a">$</span> go build -o melodix-discord ./cmd/discord
+<span class="a">$</span> DISCORD_TOKEN=your-token ./melodix-discord</pre>
+          </div>
+          <div class="qs">
+            <h3>Terminal player</h3>
+            <pre><span class="c"># no Discord account required</span>
+<span class="a">$</span> go build -o melodix-cli ./cmd/cli
+<span class="a">$</span> ./melodix-cli</pre>
+          </div>
+        </div>
+        <p class="dl-note">You need FFmpeg in <span class="mono">PATH</span>;
+          yt-dlp is optional (fallback only).
+          Full setup — bot creation, invite link, every config knob, Docker —
+          lives in
+          <a
+            href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.</p>
+      </section>
+
+      <section id="commands">
+        <p class="kicker">commands</p>
+        <h2>Eight commands. Simple to maintain.</h2>
+        <div class="cmd-grid">
+          <div class="cmd"><code>/play</code><span>link, search query, radio
+              URL, or history id</span></div>
+          <div class="cmd"><code>/next</code><span>skip to the next
+              track</span></div>
+          <div class="cmd"><code>/stop</code><span>stop playback and clear the
+              queue</span></div>
+          <div class="cmd"><code>/history</code><span>recently played tracks,
+              replayable by id</span></div>
+          <div class="cmd"><code>/help</code><span>commands by category, group,
+              or flat</span></div>
+          <div class="cmd"><code>/settings</code><span>enable or disable command
+              groups per server</span></div>
+          <div class="cmd"><code>/maintenance</code><span>ping, stats, database
+              download</span></div>
+          <div class="cmd"><code>/about</code><span>where this bot came
+              from</span></div>
+        </div>
+        <p class="dl-note">Try it live in the <a
+            href="https://discord.gg/uDnTenPxAY">Ctrl+Z server</a> —
+          join a voice channel and play something in <span
+            class="mono">#music-spam</span>.</p>
+      </section>
+
+      <section id="downloads">
+        <p class="kicker">downloads</p>
+        <h2>Prebuilt binaries.</h2>
+        <div class="dl-grid">
+          <a class="dl"
+            href="https://github.com/keshon/melodix/releases/latest"><span>linux</span><span
+              class="arch">amd64 →</span></a>
+          <a class="dl"
+            href="https://github.com/keshon/melodix/releases/latest"><span>linux</span><span
+              class="arch">arm64 →</span></a>
+          <a class="dl"
+            href="https://github.com/keshon/melodix/releases/latest"><span>windows</span><span
+              class="arch">amd64 →</span></a>
+          <a class="dl"
+            href="https://github.com/keshon/melodix/releases/latest"><span>windows</span><span
+              class="arch">arm64 →</span></a>
+          <a class="dl"
+            href="https://github.com/keshon/melodix/releases/latest"><span>macos</span><span
+              class="arch">amd64 →</span></a>
+          <a class="dl"
+            href="https://github.com/keshon/melodix/releases/latest"><span>macos</span><span
+              class="arch">arm64 →</span></a>
+        </div>
+        <p class="dl-note">Each bundle ships both binaries, a ready-to-edit
+          <span class="mono">.env</span>, and the docs.
+          Or run it in <a
+            href="https://github.com/keshon/melodix/tree/main/docker">Docker</a>.</p>
+      </section>
+
+      <footer>
+        <div class="cols">
+          <span><span class="brand" style="color:var(--text)">
+              Melodix</span> · MIT ·
+            Built by one person, on purpose</span>
+          <span>
+            <a
+              href="https://github.com/keshon/melodix/blob/main/docs/architecture.md">Architecture</a>
+            ·
+            <a
+              href="https://github.com/keshon/melodix/blob/main/docs/conventions.md">Conventions</a>
+            ·
+            <a
+              href="https://github.com/keshon/melodix/blob/main/docs/running.md">How-To</a>
+            ·
+            <a href="https://github.com/keshon/melodix">GitHub</a>
+          </span>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+(function () {
+  "use strict";
+
+  /* ============ hero player: scripted demo loop ============ */
+  var canvas = document.getElementById("wave");
+  var ctx = canvas.getContext("2d");
+  var logEl = document.getElementById("log");
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var chipParser = document.getElementById("chipParser");
+  var chipDur = document.getElementById("chipDur");
+  var chipArtist = document.getElementById("chipArtist");
+  var trackTitle = document.getElementById("trackTitle");
+  var liveDot = document.getElementById("liveDot");
+
+  var TRACKS = [
+    { title: "Never Gonna Give You Up", artist: "Rick Astley", dur: "3:32" },
+    { title: "Take On Me", artist: "a-ha", dur: "3:46" },
+    { title: "Around the World", artist: "Daft Punk", dur: "7:09" }
+  ];
+
+  // Preprogrammed story. dur = seconds; wave controls bar shape during that phase.
+  // Story clock is independent of scroll — tune STORY_RATE to speed up parser switches.
+  var STORY_RATE = 2.2;
+  var SCRIPT = [
+    { dur: 10,  wave: "play" },
+    { dur: 0.7, wave: "flat", enter: function () { log('parser_failed_try_next <span class="warn">parser=ytnative-link</span>'); liveDot.classList.add("dead"); } },
+    { dur: 0.5, wave: "rise", enter: function () { log("stream_opening parser=kkdai-link seek=1:42 …"); } },
+    { dur: 8,   wave: "play", enter: function () { setParser("kkdai-link"); log('stream_opened <span class="ok">parser=kkdai-link ✓</span>'); liveDot.classList.remove("dead"); } },
+    { dur: 0.7, wave: "flat", enter: function () { log('parser_failed_try_next <span class="warn">parser=kkdai-link</span>'); liveDot.classList.add("dead"); } },
+    { dur: 0.5, wave: "rise", enter: function () { log("stream_opening parser=ytdlp-pipe seek=2:05 …"); } },
+    { dur: 8,   wave: "play", enter: function () { setParser("ytdlp-pipe"); log('stream_opened <span class="ok">parser=ytdlp-pipe ✓</span>'); liveDot.classList.remove("dead"); } },
+    { dur: 0.9, wave: "flat", enter: function () { log("playback_stopped → queue advance"); } },
+    { dur: 0.2, wave: "rise", enter: function () { nextTrack(); } }
+  ];
+
+  var phaseIdx = 0, phaseElapsed = 0, trackIdx = 0, stepCount = 0, wavePhase = 0;
+  var scrollOffset = 0, lastTs = 0;
+
+  // Scroll: bars/sec (visual only — sub-pixel offset keeps 60 fps smooth).
+  // Wavelength: per bar pushed; lower WAVE_FREQ = slower pulse.
+  var SCROLL_BPS = 5;
+  var WAVE_FREQ = 0.045;
+
+  var N = 96;
+  var bars = [];
+  for (var i = 0; i <= N; i++) bars.push(0.25 + 0.6 * Math.abs(Math.sin(i * 0.35)) * (0.55 + 0.45 * Math.random()));
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function log(html) {
+    var line = document.createElement("span");
+    line.innerHTML = html;
+    logEl.appendChild(line);
+    while (logEl.children.length > 4) logEl.removeChild(logEl.firstChild);
+  }
+
+  function setParser(name) {
+    chipParser.textContent = name;
+    chipParser.classList.add("flash");
+    setTimeout(function () { chipParser.classList.remove("flash"); }, 900);
+  }
+
+  function nextTrack() {
+    trackIdx = (trackIdx + 1) % TRACKS.length;
+    var t = TRACKS[trackIdx];
+    trackTitle.textContent = t.title;
+    chipArtist.textContent = t.artist;
+    chipDur.textContent = t.dur;
+    setParser("ytnative-link");
+    liveDot.classList.remove("dead");
+    log('track_now_playing <span class="ok">parser=ytnative-link</span>');
+  }
+
+  function tickStory(dt) {
+    phaseElapsed += dt * STORY_RATE;
+    while (phaseElapsed >= SCRIPT[phaseIdx].dur) {
+      phaseElapsed -= SCRIPT[phaseIdx].dur;
+      phaseIdx = (phaseIdx + 1) % SCRIPT.length;
+      if (SCRIPT[phaseIdx].enter) SCRIPT[phaseIdx].enter();
+    }
+  }
+
+  function simStep() {
+    stepCount++;
+    var phase = SCRIPT[phaseIdx];
+
+    bars.shift();
+    if (phase.wave === "flat") {
+      bars.push(0.03 + Math.random() * 0.03);
+    } else if (phase.wave === "rise") {
+      bars.push(0.05 + Math.random() * 0.35);
+    } else {
+      wavePhase += WAVE_FREQ;
+      var base = 0.3 + 0.45 * Math.abs(Math.sin(wavePhase));
+      bars.push(Math.max(0.06, base * (0.55 + 0.5 * Math.random())));
+    }
+  }
+
+  function draw(offset) {
+    var w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    var bw = w / N;
+    var wave = css("--wave"), dim = css("--wave-dim");
+    for (var i = 0; i <= N; i++) {
+      var x = (i - offset) * bw;
+      if (x + bw < 0 || x > w) continue;
+      var v = bars[i];
+      var bh = Math.max(2, v * (h - 8));
+      ctx.fillStyle = i < N * 0.55 ? wave : dim;
+      ctx.globalAlpha = i < N * 0.55 ? 0.9 : 0.75;
+      ctx.fillRect(x + 1, (h - bh) / 2, bw - 2, bh);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function loop(ts) {
+    if (!lastTs) lastTs = ts;
+    var dt = Math.min((ts - lastTs) / 1000, 0.05);
+    lastTs = ts;
+
+    scrollOffset += SCROLL_BPS * dt;
+    tickStory(dt);
+    while (scrollOffset >= 1) {
+      simStep();
+      scrollOffset -= 1;
+    }
+    draw(scrollOffset);
+    requestAnimationFrame(loop);
+  }
+
+  if (reduced) {
+    draw(0); // static waveform; the story stays quiet for reduced motion
+  } else {
+    requestAnimationFrame(loop);
+  }
+
+  /* ============ backend tabs ============ */
+  var DETAILS = [
+    {
+      title: "ytnative",
+      badge: "ships inside the binary",
+      body: 'Talks to YouTube’s InnerTube API with the ANDROID_VR client — the same API the official apps use — and receives direct, cipher-free audio URLs. No JS engine, no external processes, just plain HTTP. When YouTube changes the rules it <strong>fails fast on purpose</strong> so the chain moves on; the fix is a one-line client-version bump.'
+    },
+    {
+      title: "kkdai",
+      badge: "library extractor",
+      body: 'A Go library (<span class="mono">kkdai/youtube</span>) that handles the harder cases: it runs YouTube’s signature deciphering through an embedded JS engine. Heavier than ytnative, but it catches protected and age-gated streams the native client refuses to touch — <strong>still fully in-process</strong>, no external tools.'
+    },
+    {
+      title: "yt-dlp",
+      badge: "last resort · optional",
+      body: 'The battle-tested external extractor, invoked only when everything else has failed. If yt-dlp can’t play it, nobody can. It’s <strong>entirely optional</strong>: without it installed, the chain simply ends one stage earlier.'
+    }
+  ];
+
+  var tabs = [document.getElementById("tab-0"), document.getElementById("tab-1"), document.getElementById("tab-2")];
+  var detailTitle = document.getElementById("detailTitle");
+  var detailBody = document.getElementById("detailBody");
+
+  function selectTab(i) {
+    tabs.forEach(function (t, j) { t.setAttribute("aria-selected", j === i ? "true" : "false"); });
+    var d = DETAILS[i];
+    detailTitle.innerHTML = d.title + ' <span class="chip">' + d.badge + "</span>";
+    detailBody.innerHTML = d.body;
+  }
+  tabs.forEach(function (t, i) { t.addEventListener("click", function () { selectTab(i); }); });
+
+  /* ============ copy button ============ */
+  var copyBtn = document.getElementById("copyBtn");
+  copyBtn.addEventListener("click", function () {
+    var text = document.getElementById("installCmd").textContent;
+    function done() { copyBtn.textContent = "copied ✓"; setTimeout(function () { copyBtn.textContent = "copy"; }, 1400); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, done);
+    } else { done(); }
+  });
+})();
+</script>
+
+  </body>
+</html>
