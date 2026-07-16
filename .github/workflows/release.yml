@@ -103,9 +103,20 @@ jobs:
                   [ -d assets ] && cp -R assets "${PKG_ROOT}/"
                   zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
 
+            - name: Extract release notes from tag annotation
+              id: tag
+              run: |
+                  git fetch --force --tags
+                  {
+                    echo "message<<TAG_NOTES_EOF"
+                    git tag -l --format='%(contents:body)' "${GITHUB_REF_NAME}"
+                    echo "TAG_NOTES_EOF"
+                  } >> $GITHUB_OUTPUT
+
             - name: Publish release
               uses: softprops/action-gh-release@v2
               with:
+                  body: ${{ steps.tag.outputs.message }}
                   files: dist/*.zip
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
