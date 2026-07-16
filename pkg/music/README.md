@@ -1,6 +1,6 @@
 # music
 
-Queue-based music playback library for Go with pluggable audio sinks and track resolvers. Resolves URLs and search queries (YouTube, SoundCloud, radio), opens PCM streams via multiple parsers (yt-dlp, kkdai, ffmpeg), and plays through a sink of your choice (e.g. speaker or custom Discord voice).
+Queue-based music playback library for Go with pluggable audio sinks and track resolvers. Resolves URLs and search queries (YouTube, SoundCloud, radio), opens PCM streams via multiple parsers (native InnerTube/api-v2 extractors first, with yt-dlp, kkdai and ffmpeg as fallbacks), and plays through a sink of your choice (e.g. speaker or custom Discord voice).
 
 ## How it works (high level)
 
@@ -141,7 +141,7 @@ The sink drives the read loop via `AudioSink.Stream(reader, stopCh)`:
 
 When wired to Discord, the voice service passes `Options.OnPlaybackFailed` at player construction so a failure after “Now Playing” can **edit the guild status message** (same message id as “Now Playing”) instead of relying on an interaction follow-up that already finished.
 
-The **ffmpeg** and **kkdai** parser packages use package-level loggers: call `ffmpeg.SetLogger(appLogger)` and `kkdai.SetLogger(appLogger)` once at process startup (the Discord bot does this in `NewBot`). All parsers build their ffmpeg invocation via `ffmpeg.NewPCMCommand`, which captures ffmpeg **stderr** for every parser: lines that look like HTTP 403 / forbidden / conversion failures are logged at **Warn**, other lines at **Debug** to limit noise. The binary paths default to `ffmpeg` / `yt-dlp` on `PATH` and can be overridden via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`.
+The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use package-level loggers: call their `SetLogger(appLogger)` once at process startup (the Discord bot does this in `NewBot`). All parsers build their ffmpeg invocation via `ffmpeg.NewPCMCommand`, which captures ffmpeg **stderr** for every parser: lines that look like HTTP 403 / forbidden / conversion failures are logged at **Warn**, other lines at **Debug** to limit noise. The binary paths default to `ffmpeg` / `yt-dlp` on `PATH` and can be overridden via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`.
 
 **Manual regression checklist**
 

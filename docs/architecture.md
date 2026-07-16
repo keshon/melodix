@@ -17,7 +17,7 @@ flowchart TB
     Resolver["resolve.Resolver<br/>(input → TrackInfo)"]
     Player["player.Player<br/>(queue + playback loop)"]
     Stream["stream.RecoveryStream<br/>(parser fallback + retry)"]
-    Parsers["parsers: kkdai | ytdlp | ffmpeg<br/>(track → PCM via ffmpeg)"]
+    Parsers["parsers: ytnative | scnative | kkdai | ytdlp | ffmpeg<br/>(track → PCM via ffmpeg)"]
     SinkIface["sink.AudioSink"]
   end
   DiscordBot --> Player
@@ -39,7 +39,8 @@ flowchart TB
 | `pkg/music/player` | `Player`: FIFO queue, playback goroutine, transport recovery, status channel |
 | `pkg/music/resolve` | `Resolver`: input → `[]TrackInfo`; source detection and precedence |
 | `pkg/music/sources` | `Source` interface + `youtube`, `soundcloud`, `radio` implementations |
-| `pkg/music/parsers` | `Streamer` interface + `kkdai`, `ytdlp`, `ffmpeg` implementations |
+| `pkg/music/parsers` | `Streamer` interface + `ytnative`, `scnative`, `kkdai`, `ytdlp`, `ffmpeg` implementations |
+| `pkg/music/soundcloudapi` | Minimal SoundCloud api-v2 client (rotating client_id, resolve, stream URLs, search) shared by `scnative` and the soundcloud source |
 | `pkg/music/stream` | Parser registry, `RecoveryStream`, PCM constants (48 kHz / stereo / 960-sample frames) |
 | `pkg/music/sink` | `AudioSink`/`Provider` interfaces + speaker implementation |
 | `internal/discord` | The `Bot`: session lifecycle, handlers, health watchdogs, voice service |
@@ -55,7 +56,8 @@ flowchart TB
 | `internal/storage` + `internal/domain` | JSON datastore keyed by guild: command history, playback history, disabled commands |
 
 External process dependencies: **ffmpeg** (required, every parser decodes through it) and
-**yt-dlp** (optional, used by the `ytdlp-*` parsers). Binary paths default to `PATH` and can
+**yt-dlp** (optional, used by the `ytdlp-*` fallback parsers — the primary `ytnative`/`scnative`
+parsers extract natively over HTTP). Binary paths default to `PATH` and can
 be overridden via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`. `bwmarrin/discordgo` is replaced
 with the vendored fork in `pkg/discordgo-fork-dev` (panic fixes, stream handling).
 
@@ -109,10 +111,29 @@ queued tracks never hold expiring CDN links.
    is never used for matching; a new source must be added to this list explicitly).
 4. **Fallback** — radio, which validates the URL by probing its Content-Type.
 
-Searching is scraping-based: YouTube search scrapes the results page with a regex;
-SoundCloud search goes through DuckDuckGo HTML (`site:soundcloud.com`) because SoundCloud
-has no keyless API. Both are the most fragile parts of the system by design — when they
-break, only search breaks; direct URLs keep working.
+Search: YouTube search scrapes the results page with a regex (fragile by design — when it
+breaks, only search breaks; direct URLs keep working). SoundCloud search uses api-v2
+`/search/tracks` through the shared `soundcloudapi` client.
+
+### Native extraction (`ytnative` / `scnative`)
+
+Both primary parsers extract streams natively over plain HTTP — no external binaries, no
+JS engine, and deliberately **no signature deciphering** (that treadmill belongs to the
+kkdai/yt-dlp fallbacks):
+
+- **`ytnative`** POSTs YouTube's InnerTube `player` endpoint with the ANDROID_VR client
+  context (the plain ANDROID client was retired by YouTube in 2026), which returns
+  direct cipher-free audio URLs. `clientVersion` in
+  `pkg/music/parsers/ytnative/innertube.go` is the single maintenance knob — when YouTube
+  deprecates it, the parser fails fast and the fallback chain plays the track anyway.
+  Cipher-only responses return `ErrCipherOnly` immediately for the same reason.
+- **`scnative`** uses `pkg/music/soundcloudapi`: the rotating `client_id` is scraped from
+  the web player's JS bundles, cached, and refreshed automatically on 401/403; tracks are
+  resolved via `/resolve`, and the preferred transcoding (AAC HLS > HLS > progressive)
+  is exchanged for a signed CDN URL that ffmpeg consumes directly.
+
+Both packages have opt-in live tests (`MELODIX_LIVE_TESTS=1 go test -run Live -v ./...`)
+that act as canaries for endpoint drift.
 
 ---
 

@@ -184,7 +184,7 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			if track == nil {
 				continue
 			}
-			if err := s.UpdatePlaybackStatus(sess, nil, guildID, discordreply.NowPlayingEmbed(track.Title, track.URL)); err != nil {
+			if err := s.UpdatePlaybackStatus(sess, nil, guildID, discordreply.NowPlayingEmbed(track)); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 			}
 		case player.StatusStopped:

@@ -34,12 +34,22 @@ func logger() zerolog.Logger {
 // under tag via the package logger; exec.Cmd owns the stderr copy and Wait
 // synchronizes with it, so there is no StderrPipe-vs-Wait race.
 func NewPCMCommand(input string, seekSec float64, reconnect bool, tag string) *exec.Cmd {
-	args := make([]string, 0, 16)
+	return NewPCMCommandUA(input, seekSec, reconnect, tag, "")
+}
+
+// NewPCMCommandUA is NewPCMCommand with an HTTP User-Agent for URL inputs
+// ("" keeps ffmpeg's default). Some CDNs (e.g. googlevideo) reject requests
+// whose UA does not match the client that obtained the stream URL.
+func NewPCMCommandUA(input string, seekSec float64, reconnect bool, tag, userAgent string) *exec.Cmd {
+	args := make([]string, 0, 18)
 	if seekSec > 0 {
 		args = append(args, "-ss", fmt.Sprintf("%.3f", seekSec))
 	}
 	if reconnect {
 		args = append(args, "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5")
+	}
+	if userAgent != "" {
+		args = append(args, "-user_agent", userAgent)
 	}
 	args = append(args,
 		"-i", input,

@@ -9,7 +9,9 @@ import (
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
+	"github.com/keshon/melodix/pkg/music/parsers/scnative"
 	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
+	"github.com/keshon/melodix/pkg/music/parsers/ytnative"
 	"github.com/rs/zerolog"
 )
 
@@ -38,11 +40,13 @@ func (ts *TrackStream) Parser() string {
 
 // Registry maps parser names to streamer implementations
 var Registry = map[string]parsers.Streamer{
-	"ytdlp-link":  &ytdlp.Streamer{},
-	"ytdlp-pipe":  &ytdlp.Streamer{},
-	"kkdai-link":  &kkdai.Streamer{},
-	"kkdai-pipe":  &kkdai.Streamer{},
-	"ffmpeg-link": &ffmpeg.Streamer{},
+	"ytdlp-link":    &ytdlp.Streamer{},
+	"ytdlp-pipe":    &ytdlp.Streamer{},
+	"kkdai-link":    &kkdai.Streamer{},
+	"kkdai-pipe":    &kkdai.Streamer{},
+	"ffmpeg-link":   &ffmpeg.Streamer{},
+	"scnative-link": &scnative.Streamer{},
+	"ytnative-link": &ytnative.Streamer{},
 }
 
 // OpenTrack attempts to open a stream for a track, trying parsers in order

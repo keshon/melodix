@@ -75,5 +75,5 @@ func (s *Source) SourceName() string {
 }
 
 func (s *Source) AvailableParsers() []string {
-	return []string{"ytdlp-pipe", "ytdlp-link"}
+	return []string{"scnative-link", "ytdlp-pipe", "ytdlp-link"}
 }

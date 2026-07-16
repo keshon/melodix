@@ -78,5 +78,5 @@ func (y *Source) SourceName() string {
 }
 
 func (y *Source) AvailableParsers() []string {
-	return []string{"kkdai-link", "kkdai-pipe", "ytdlp-link", "ytdlp-pipe"}
+	return []string{"ytnative-link", "kkdai-link", "kkdai-pipe", "ytdlp-link", "ytdlp-pipe"}
 }

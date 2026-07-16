@@ -2,64 +2,32 @@ package soundcloud
 
 import (
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"regexp"
-	"time"
+
+	"github.com/keshon/melodix/pkg/music/soundcloudapi"
 )
 
-var (
-	trackLinkRegex  = regexp.MustCompile(`(?s)<a class="result__url"[^>]*>\s*(soundcloud\.com/[^<]+)\s*</a>`)
-	ErrNoTrackMatch = errors.New("no track found for the given query")
-)
+var ErrNoTrackMatch = errors.New("no track found for the given query")
 
-// Searcher turns a text query into a SoundCloud track URL.
+// Searcher turns a text query into a SoundCloud track URL via api-v2 search.
 type Searcher struct {
-	BaseURL string
-	Client  *http.Client
+	api *soundcloudapi.Client
 }
 
 func NewSearcher() *Searcher {
-	return &Searcher{
-		BaseURL: "https://soundcloud.com",
-		Client: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-	}
+	// The shared client keeps one client_id cache with the scnative parser.
+	return &Searcher{api: soundcloudapi.Default()}
 }
 
 func (r *Searcher) SearchFirstTrackURL(query string) (string, error) {
-	searchURL := fmt.Sprintf("https://duckduckgo.com/html/?q=site:soundcloud.com+%s", url.QueryEscape(query))
-
-	req, err := http.NewRequest("GET", searchURL, nil)
+	track, err := r.api.SearchFirstTrack(query)
 	if err != nil {
+		if errors.Is(err, soundcloudapi.ErrNoResults) {
+			return "", ErrNoTrackMatch
+		}
 		return "", err
 	}
-
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-	resp, err := r.Client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("DuckDuckGo search failed with status code %v", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	matches := trackLinkRegex.FindStringSubmatch(string(body))
-	if len(matches) < 2 {
+	if track.PermalinkURL == "" {
 		return "", ErrNoTrackMatch
 	}
-
-	trackURL := "https://" + matches[1]
-	return trackURL, nil
+	return track.PermalinkURL, nil
 }

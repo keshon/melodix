@@ -50,6 +50,8 @@ func (c *Play) SlashDefinition() *discordgo.ApplicationCommand {
 				Name:        "parser",
 				Description: "Override autodetect parser",
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "youtube native", Value: "ytnative-link"},
+					{Name: "soundcloud native", Value: "scnative-link"},
 					{Name: "ytdlp pipe", Value: "ytdlp-pipe"},
 					{Name: "ytdlp link", Value: "ytdlp-link"},
 					{Name: "kkdai pipe", Value: "kkdai-pipe"},
@@ -248,7 +250,7 @@ func (c *Play) Run(ctx interface{}) error {
 	embed := discordreply.TracksAddedEmbed()
 	if started {
 		if track := p.CurrentTrack(); track != nil {
-			embed = discordreply.NowPlayingEmbed(track.Title, track.URL)
+			embed = discordreply.NowPlayingEmbed(track)
 		}
 	}
 	if err := c.Bot.UpdatePlaybackStatus(s, e, guildID, embed); err != nil {
