@@ -346,6 +346,18 @@
     padding: 2px 9px; border-radius: 4px; font-size: 11.5px; margin-left: 8px;
   }
 
+  /* ============ small phones ============ */
+  @media (max-width: 560px) {
+    .wrap { padding: 0 18px; }
+    header { padding: 40px 0 32px; }
+    section { padding: 48px 0 6px; }
+    h1 { font-size: clamp(28px, 8.5vw, 40px); }
+    nav { flex-direction: column; align-items: flex-start; gap: 12px; padding: 18px 0; }
+    nav .links { margin-left: 0; gap: 16px; }
+    .rail .arrow { display: none; }
+    .stage { flex: 1 1 100%; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     .btn, .feat, .dl, .stage, nav .links a::after { transition: none; }
@@ -661,7 +673,11 @@
 
   var N = 96;
   var bars = [];
-  for (var i = 0; i <= N; i++) bars.push(0.25 + 0.6 * Math.abs(Math.sin(i * 0.35)) * (0.55 + 0.45 * Math.random()));
+  // Start from a low noise floor, then pre-warm with the running "play" generator
+  // so the opening frame already carries the animation's own organic texture
+  // instead of a regular, symmetrical sine profile.
+  for (var i = 0; i <= N; i++) bars.push(0.08 + Math.random() * 0.05);
+  for (var s = 0; s <= N; s++) simStep();
 
   function log(level, html) {
     var lvl = level === "WRN" ? '<span class="wrn">WRN</span>' : '<span class="inf">INF</span>';
@@ -745,13 +761,18 @@
     requestAnimationFrame(loop);
   }
 
-  // Seed the terminal so it never opens empty.
+  // Pre-fill the terminal so it opens looking mid-session (timestamps a few
+  // seconds apart; the buffer caps at 8 lines).
+  clock -= 24;
+  log("INF", 'track_now_playing <span class="val">parser=ytnative-link</span>'); clock += 5;
+  log("INF", 'stream_opened <span class="val">parser=ytnative-link</span> <span class="ok">✓</span>'); clock += 6;
+  log("WRN", 'parser_failed_try_next <span class="val">parser=ytnative-link</span>'); clock += 1;
+  log("INF", 'stream_opening <span class="val">parser=kkdai-link</span> seek=1:42 …'); clock += 4;
+  log("INF", 'stream_opened <span class="val">parser=kkdai-link</span> <span class="ok">✓</span>'); clock += 8;
   log("INF", 'track_now_playing <span class="val">parser=ytnative-link</span>');
 
   if (reduced) {
-    // Static waveform + a representative log tail; no motion.
-    log("WRN", 'parser_failed_try_next <span class="val">parser=ytnative-link</span>');
-    log("INF", 'stream_opened <span class="val">parser=kkdai-link</span> <span class="ok">✓</span>');
+    // Static frame, no motion — the pre-filled log already reads as a session.
     draw(0);
   } else {
     requestAnimationFrame(loop);

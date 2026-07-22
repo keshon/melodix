@@ -153,7 +153,7 @@ The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use packa
 
 - **Custom resolver**: implement `player.Resolver` to support new sources or search.
 - **Custom sink**: implement `sink.AudioSink` / `sink.Provider` to support new outputs.
-- **New parser**: implement `parsers.Streamer.Open` (returning an `opus.Reader`) and register it in `stream.Registry`.
+- **New parser**: implement `parsers.Streamer.Open` (returning an `opus.Reader`) and add it to `stream.registryEntries`.
 
 ## Requirements
 

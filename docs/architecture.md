@@ -272,7 +272,7 @@ Optional capabilities are discovered by interface assertion: `SlashProvider`,
 
 Caveat: the `source`/`parser` choice lists in `/play`'s slash definition
 (`internal/command/music/play/play.go`) are maintained by hand and must be kept in sync
-with the resolver and `stream.Registry`.
+with the resolver and `stream.registryEntries`.
 
 ---
 
@@ -305,7 +305,7 @@ Only tracks that actually start playing are recorded, via the `PlaybackRecorder`
    `opus.Demux` the HTTP body (passthrough); otherwise build ffmpeg with `ffmpeg.NewPCMCommand`
    and wrap it in `ffmpeg.OpusReader` (which encodes PCM → Opus packets). A parser with two
    modes (link/pipe) carries a `Mode` field on its streamer.
-2. Register the instance in `stream.Registry` (`pkg/music/stream/stream.go`) under its frozen
+2. Add the instance to `stream.registryEntries` (`pkg/music/stream/stream.go`) under its frozen
    key constant from `pkg/music/sources/parsers.go`.
 3. List it in the owning source's `AvailableParsers()` and `/play`'s `parser` choices.
 
@@ -318,7 +318,7 @@ nothing else needs touching.
 
 - `go test -race ./...` — the race detector is non-negotiable here; the player tests
   (`pkg/music/player/player_test.go`) include a concurrent hammer specifically to catch
-  locking regressions. Fakes swap `stream.Registry` (same pattern as
+  locking regressions. Fakes swap the registry via `stream.SetRegistry` (same pattern as
   `pkg/music/stream/recovery_test.go`) and stub the sink provider.
 - `internal/discord/voice/sink/sink_discord_test.go` pins the Opus-send contract: stop
   unblocks a stalled send; stall/closed channel → `ErrVoiceTransport`.

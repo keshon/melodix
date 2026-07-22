@@ -42,16 +42,15 @@ func (errFirst) ReadPacket() ([]byte, error) { return nil, io.EOF }
 func (errFirst) Close() error                { return nil }
 
 func TestRecoveryStream_ImmediateFail_SwitchesToNextParser(t *testing.T) {
-	orig := Registry
-	Registry = map[string]parsers.Streamer{
+	orig := SetRegistry(map[string]parsers.Streamer{
 		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
 			return errFirst{}, func() {}, nil
 		}},
 		"p2": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
 			return &pktReader{pkts: [][]byte{{0xAA}}}, func() {}, nil
 		}},
-	}
-	defer func() { Registry = orig }()
+	})
+	defer func() { SetRegistry(orig) }()
 
 	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
 	rs := NewRecoveryStream(track)
@@ -72,16 +71,15 @@ func TestRecoveryStream_ImmediateFail_SwitchesToNextParser(t *testing.T) {
 }
 
 func TestRecoveryStream_NaturalEOF_DoesNotFallback(t *testing.T) {
-	orig := Registry
-	Registry = map[string]parsers.Streamer{
+	orig := SetRegistry(map[string]parsers.Streamer{
 		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
 			return &pktReader{pkts: [][]byte{{0xAA}}}, func() {}, nil
 		}},
 		"p2": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
 			return &pktReader{pkts: [][]byte{{0xBB}}}, func() {}, nil
 		}},
-	}
-	defer func() { Registry = orig }()
+	})
+	defer func() { SetRegistry(orig) }()
 
 	track := &parsers.Track{
 		Duration:   1 * time.Microsecond, // tiny → EOF is a natural end

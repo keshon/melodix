@@ -79,7 +79,7 @@ branch if searchable; add the `/play` source choice.
 **A parser** — implement `parsers.Streamer.Open` returning an `opus.Reader` in
 `pkg/music/parsers/<name>/` (native Opus container → `opus.Demux`; otherwise
 ffmpeg via `ffmpeg.NewPCMCommand` wrapped in `ffmpeg.OpusReader`); add the key
-constant to `sources/parsers.go`; register the instance in `stream.Registry`;
+constant to `sources/parsers.go`; add the instance to `stream.registryEntries`;
 list it in the owning source's `AvailableParsers()` and the `/play` parser
 choices. If it talks to a live endpoint, add an opt-in live test
 (`MELODIX_LIVE_TESTS=1`) as a drift canary.
@@ -88,7 +88,7 @@ choices. If it talks to a live endpoint, add an opt-in live test
 
 - `go test -race ./...` is the bar; the race detector is non-negotiable for
   anything touching `Player`.
-- Fakes over mocks: swap `stream.Registry`, stub `sink.Provider`, httptest for
+- Fakes over mocks: swap the registry via `stream.SetRegistry`, stub `sink.Provider`, httptest for
   HTTP clients (base URLs are struct fields for exactly this reason).
 - Live-endpoint behavior gets opt-in `Live` tests, never unconditional ones.
 - Before a release: the manual matrix in [architecture.md](architecture.md#testing--verification)

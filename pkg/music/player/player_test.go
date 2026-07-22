@@ -27,9 +27,8 @@ func (s fakeStreamer) Open(track *parsers.Track, seek float64) (opus.Reader, fun
 
 func swapRegistry(t *testing.T, reg map[string]parsers.Streamer) {
 	t.Helper()
-	orig := stream.Registry
-	stream.Registry = reg
-	t.Cleanup(func() { stream.Registry = orig })
+	orig := stream.SetRegistry(reg)
+	t.Cleanup(func() { stream.SetRegistry(orig) })
 }
 
 // openLog records which tracks were opened, in order (mutex-guarded for the hammer test).
