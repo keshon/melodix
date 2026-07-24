@@ -28,6 +28,7 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/middleware"
+	"github.com/keshon/melodix/internal/musicwire"
 	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
@@ -70,6 +71,11 @@ func main() {
 	store, err := storage.NewStorage(rootCtx, cfg.StoragePath, log)
 	if err != nil {
 		log.Fatal().Err(err).Msg("storage_init_failed")
+	}
+
+	// Optional playback layers (cache + anti-skip buffer), set once before sessions run.
+	if err := musicwire.Apply(cfg, store, log); err != nil {
+		log.Fatal().Err(err).Msg("playback_layers_init_failed")
 	}
 
 	bot := discord.NewBot(cfg, store, log)

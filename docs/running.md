@@ -61,6 +61,11 @@ Optional variables:
 | `DISCORD_UNHEALTHY_WINDOW`| Window for `DISCORD_UNHEALTHY_GRACE` counting.             | `1m`                    |
 | `PLAYER_TRANSPORT_RECOVERY_MODE` | On voice transport failure: `hard` (rejoin VC) or `soft` (reopen stream first, then hard fallback). | `hard` |
 | `PLAYER_TRANSPORT_SOFT_ATTEMPTS` | In `soft` mode: how many soft retries before hard fallback. | `1` |
+| `CACHE_ENABLED`           | Cache played tracks to disk; later plays (any guild, or `/play <id>`) serve instantly with no extraction. | `false` |
+| `CACHE_DIR`               | Directory for cache blobs (wiped on boot when not persistent).           | `./data/cache`          |
+| `CACHE_MAX_BYTES`         | Global cache size cap; least-recently-used tracks are evicted past it.   | `2147483648` (2 GiB)    |
+| `CACHE_PERSISTENT`        | Keep the cache across restarts (`false` = transient, wiped on boot).     | `true`                  |
+| `BUFFER_AHEAD_MS`         | Anti-skip read-ahead depth (ms) masking short source stalls; `0` disables. | `10000`               |
 | `COMMAND_TIMEOUT`         | Hard timeout for a single command execution.               | `30s`                   |
 | `COMMAND_PARALLELISM`     | Max number of concurrently running command handlers.       | `16`                    |
 

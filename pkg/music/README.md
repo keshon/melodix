@@ -149,6 +149,20 @@ The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use packa
 2. Enqueue while something is playing — queue / status messages stay consistent.
 3. `/next` onto a broken next track — error text matches other failure paths (same length cap / phrasing family).
 
+## Track cache & anti-skip buffer (optional)
+
+Two opt-in playback layers wrap the parser stream inside `RecoveryStream`, both off by default:
+
+- **Track cache** (`stream.SetCache`) — while a track plays, `RecoveryStream` copies each
+  delivered Opus packet into a content-keyed disk blob (`cache.Key`: `youtube:<id>` /
+  `soundcloud:<url>`; radio is uncacheable), spanning parser switches and transport reopens and
+  committing only on a clean end. `Open` then tries the cache **before** the parser list, so later
+  plays (any consumer) serve from disk — instant, no extraction, no ffmpeg. Misses fall through to
+  the parser chain, so the cache never blocks playback. Global LRU size cap; persistent by default.
+- **Anti-skip buffer** (`stream.SetBufferAhead`) — `opus.BufferedReader` reads ahead so short
+  source stalls drain the buffered lead instead of stuttering, without disturbing the recovery
+  position.
+
 ## Key extension points
 
 - **Custom resolver**: implement `player.Resolver` to support new sources or search.
@@ -169,6 +183,7 @@ The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use packa
 - [sources](sources) — Source interface and track types
 - [parsers](parsers) — Streamer interface and track type
 - [stream](stream) — Track stream opening and recovery
+- [cache](cache) — Optional global, content-keyed track cache (opt-in)
 
 ## License
 

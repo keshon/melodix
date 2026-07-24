@@ -84,6 +84,9 @@ func (s *Storage) GuildRecord(guildID string) (*domain.Record, error) {
 func (s *Storage) Records() map[string]domain.Record {
 	mapStringRecord := make(map[string]domain.Record)
 	for _, key := range s.ds.Keys() {
+		if key == cacheIndexKey {
+			continue // reserved global collection, not a guild record
+		}
 		var record domain.Record
 		exists, err := s.ds.Get(key, &record)
 		if err != nil {

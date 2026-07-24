@@ -25,6 +25,12 @@ func passthroughTrack(source, parser string, d time.Duration) *parsers.Track {
 	return tr
 }
 
+func cachedTrack(source string, d time.Duration) *parsers.Track {
+	tr := track(source, "", "", d) // cache sets no CurrentParser
+	tr.Cached = true
+	return tr
+}
+
 func TestNowPlayingEmbedChips(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -35,6 +41,11 @@ func TestNowPlayingEmbedChips(t *testing.T) {
 			name:  "passthrough track",
 			track: passthroughTrack("youtube", "kkdai-pipe", 212*time.Second),
 			want:  "🎶 [Song](https://example.com/t)\n\n`youtube` `kkdai-pipe` `passthrough` `3:32`",
+		},
+		{
+			name:  "cached track shows cached chip, no parser/method",
+			track: cachedTrack("youtube", 212*time.Second),
+			want:  "🎶 [Song](https://example.com/t)\n\n`youtube` `cached` `3:32`",
 		},
 		{
 			name:  "ffmpeg track with artist",

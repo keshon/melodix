@@ -12,3 +12,4 @@ datastore_dump.json
 dump.bat
 /.cursor
 melodix-discord
+/data/cache/

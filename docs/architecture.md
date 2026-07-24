@@ -43,9 +43,10 @@ flowchart TB
 | `pkg/music/resolve` | `Resolver`: input → `[]TrackInfo`; source detection and precedence |
 | `pkg/music/sources` | `Source` interface + `youtube`, `soundcloud`, `radio` implementations |
 | `pkg/music/parsers` | `Streamer` interface + `ytnative`, `scnative`, `kkdai`, `ytdlp`, `ffmpeg` implementations |
-| `pkg/music/opus` | The engine's currency: `Reader` (20ms Opus packets), a zero-dep WebM demuxer (passthrough), and encode/decode adapters over `godeps/opus`; 48 kHz / stereo / 960-sample constants |
+| `pkg/music/opus` | The engine's currency: `Reader` (20ms Opus packets), a zero-dep WebM demuxer (passthrough), encode/decode adapters over `godeps/opus`, and a read-ahead `BufferedReader` (anti-skip); 48 kHz / stereo / 960-sample constants |
 | `pkg/music/soundcloudapi` | Minimal SoundCloud api-v2 client (rotating client_id, resolve, stream URLs, search) shared by `scnative` and the soundcloud source |
-| `pkg/music/stream` | Parser registry + `RecoveryStream` (packet-level recovery) |
+| `pkg/music/stream` | Parser registry + `RecoveryStream` (packet-level recovery; optional cache-first read, write-through tee, and read-ahead buffer) |
+| `pkg/music/cache` | Optional global, content-keyed track cache: tees played Opus packets to disk blobs and serves them on later plays (any guild); LRU size cap, persistent by default |
 | `pkg/music/sink` | `AudioSink`/`Provider` interfaces + speaker implementation |
 | `internal/discord` | The `Bot`: session lifecycle, handlers, health watchdogs, voice service |
 | `internal/discord/voice` | Per-guild players and sink providers; guild status messages; **survives session restarts** |
@@ -149,9 +150,33 @@ player's JS bundles, cached, and refreshed automatically on 401/403; tracks are 
 ffmpeg and encoded to Opus packets (SoundCloud's AAC isn't passthrough-able). Radio streams
 likewise transcode through ffmpeg.
 
-A track's `Now Playing` chip shows `passthrough` or `ffmpeg` so the active mode is visible at
-a glance. The passthrough packages have opt-in live tests
+A track's `Now Playing` chip shows `passthrough` or `ffmpeg` (or `cached`) so the active mode
+is visible at a glance. The passthrough packages have opt-in live tests
 (`MELODIX_LIVE_TESTS=1 go test -run Live -v ./...`) that act as canaries for endpoint drift.
+
+### Track cache & anti-skip buffer (optional, opt-in)
+
+Two independent playback layers wrap the parser stream inside `RecoveryStream`, both off by
+default and configured via env (see `docs/running.md`):
+
+- **Track cache** (`CACHE_ENABLED`). While a cacheable track plays, `RecoveryStream` copies each
+  20ms Opus packet it delivers into a disk blob keyed by content (`cache.Key`: `youtube:<id>` /
+  `soundcloud:<url>`; radio is uncacheable). The copy happens **above** the recovery logic, so a
+  single blob spans parser switches and voice-transport reopens, and is committed only when the
+  track plays through to a clean end — so a mid-track reconnect (common on flaky links) no longer
+  loses the cache. `RecoveryStream.Open` tries the cache **before** the parser list, so any later
+  play of that track (same link, `/play <id>`, or a different guild) serves from the blob:
+  instant, no extraction, no ffmpeg. A miss or a bad blob falls through to the normal parser
+  chain, so the cache never blocks playback. The index is a global, content-keyed collection in the datastore
+  (reserved key, LRU-evicted past `CACHE_MAX_BYTES`); blobs are `sha256(key)`-named custom
+  packet logs (not playable media files). Persistent by default. **Note:** caching stores
+  copyrighted audio to disk — it is opt-in and, kept transient (`CACHE_PERSISTENT=false`) plus
+  size-capped, behaves as a cache rather than an archive.
+- **Anti-skip buffer** (`BUFFER_AHEAD_MS`). `opus.BufferedReader` reads ahead into a bounded
+  queue so short source stalls drain the buffered lead instead of stuttering. It wraps the
+  reader *inside* `RecoveryStream`, so the playback position (`seekSec`) still counts packets as
+  they leave the buffer toward the sink — recovery reopens at the true played position, never
+  the read-ahead position.
 
 ---
 

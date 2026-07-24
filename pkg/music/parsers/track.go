@@ -23,6 +23,9 @@ type Track struct {
 	// Passthrough is true when the active stream forwards native Opus packets
 	// with no ffmpeg/transcode (set by the parser at open time; reset per attempt).
 	Passthrough bool
+	// Cached is true when the active stream is served from the local track cache
+	// (set by RecoveryStream at open; not persisted).
+	Cached bool
 	// SourceInfo is the resolver's original metadata, including the ordered
 	// parser preference list recovery iterates over.
 	SourceInfo sources.TrackInfo

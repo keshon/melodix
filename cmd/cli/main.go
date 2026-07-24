@@ -9,10 +9,13 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/applog"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/musicwire"
+	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
 	"github.com/keshon/melodix/pkg/music/sink"
@@ -46,6 +49,24 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Optional playback layers (cache + anti-skip buffer), shared with the bot.
+	// Storage is only needed to persist the cache index, so build it lazily.
+	var store *storage.Storage
+	if cfg.CacheEnabled {
+		store, err = storage.NewStorage(ctx, cfg.StoragePath, log)
+		if err != nil {
+			log.Fatal().Err(err).Msg("storage_init_failed")
+		}
+		defer func() {
+			closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelClose()
+			_ = store.Close(closeCtx)
+		}()
+	}
+	if err := musicwire.Apply(cfg, store, log); err != nil {
+		log.Fatal().Err(err).Msg("playback_layers_init_failed")
+	}
 
 	// Print status updates (e.g. "Now playing: ...") in the background
 	go func() {

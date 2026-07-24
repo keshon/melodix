@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/keshon/melodix/pkg/music/cache"
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
@@ -44,6 +45,40 @@ func Registry() map[string]parsers.Streamer { return *registry.Load() }
 // for tests, which restore the original in a cleanup/defer.
 func SetRegistry(r map[string]parsers.Streamer) map[string]parsers.Streamer {
 	return *registry.Swap(&r)
+}
+
+// activeCache and bufferAheadPackets are optional playback layers, set once at
+// boot (nil / 0 = disabled). They are never swapped after startup, so plain
+// package vars are safe — unlike the test-swapped Registry, which is atomic.
+var (
+	activeCache        *cache.Store
+	bufferAheadPackets int
+)
+
+// SetCache installs the global track cache used by RecoveryStream (nil disables
+// caching). Call once at startup, before playback.
+func SetCache(c *cache.Store) { activeCache = c }
+
+// SetBufferAhead sets the anti-skip read-ahead depth in milliseconds (<=0
+// disables the buffer). Call once at startup.
+func SetBufferAhead(ms int) {
+	if ms <= 0 {
+		bufferAheadPackets = 0
+		return
+	}
+	bufferAheadPackets = ms / opus.FrameMs
+}
+
+// bufferWrap adds the anti-skip read-ahead buffer around a reader, composing the
+// producer stop into the returned cleanup.
+func bufferWrap(reader opus.Reader, cleanup func()) (opus.Reader, func()) {
+	if bufferAheadPackets <= 0 {
+		return reader, cleanup
+	}
+	if buf, ok := opus.NewBufferedReader(reader, bufferAheadPackets).(*opus.BufferedReader); ok {
+		return buf, func() { buf.Stop(); cleanup() }
+	}
+	return reader, cleanup
 }
 
 // openWithParser opens the Opus packet stream for the given parser key.

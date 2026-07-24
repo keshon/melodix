@@ -58,7 +58,10 @@ func trackChips(track *parsers.Track) string {
 	if source != "" {
 		chips = append(chips, "`"+source+"`")
 	}
-	if track.CurrentParser != "" {
+	if track.Cached {
+		// Served from the local cache — "cached" subsumes the parser/method chip.
+		chips = append(chips, "`cached`")
+	} else if track.CurrentParser != "" {
 		chips = append(chips, "`"+track.CurrentParser+"`")
 		if track.Passthrough {
 			chips = append(chips, "`passthrough`")

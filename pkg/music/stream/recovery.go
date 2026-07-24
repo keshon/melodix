@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/keshon/melodix/pkg/music/cache"
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/rs/zerolog"
@@ -27,6 +28,10 @@ type RecoveryStream struct {
 	firstRead   bool           // detect immediate failure at start
 	pcm         io.ReadCloser  // lazily-built decode view (Read)
 	log         zerolog.Logger
+
+	fromCache     bool          // the active stream is served from the track cache
+	cacheDisabled bool          // cache failed for this stream; don't try it again
+	cacheWriter   *cache.Writer // active write-through blob (nil = not caching)
 }
 
 // NewRecoveryStream creates a resilient wrapper for a track.
@@ -47,6 +52,31 @@ func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *Reco
 // Open opens the packet stream for the current parser, advancing through the
 // track's parser list past any that fail or exhausted their recovery budget.
 func (rs *RecoveryStream) Open(seek float64) error {
+	// Cache-first: serve a completed blob for this track if one exists (shared
+	// across guilds). A miss or open failure falls through to the parser list.
+	if activeCache != nil && !rs.cacheDisabled {
+		if key, ok := cache.Key(rs.track); ok && activeCache.Has(key) {
+			reader, err := activeCache.OpenAt(key, opus.SeekPackets(seek))
+			if err != nil {
+				rs.log.Warn().Str("cache_key", key).Err(err).Msg("cache_open_failed")
+				rs.cacheDisabled = true
+			} else {
+				r, cleanup := bufferWrap(reader, func() { _ = reader.Close() })
+				rs.reader = r
+				rs.cleanup = cleanup
+				rs.seekSec = seek
+				rs.curParser = ""
+				rs.track.CurrentParser = ""
+				rs.track.Passthrough = true
+				rs.track.Cached = true
+				rs.fromCache = true
+				rs.firstRead = true
+				rs.log.Info().Str("cache_key", key).Float64("seek", seek).Msg("stream_opened_from_cache")
+				return nil
+			}
+		}
+	}
+
 	for i := rs.parserIndex; i < len(rs.track.SourceInfo.AvailableParsers); i++ {
 		parser := rs.track.SourceInfo.AvailableParsers[i]
 		if rs.retries[parser] >= maxRecoveryAttempts {
@@ -54,23 +84,70 @@ func (rs *RecoveryStream) Open(seek float64) error {
 			continue
 		}
 		rs.track.Passthrough = false // parser sets true if it opens passthrough
+		rs.track.Cached = false
 		reader, cleanup, err := openWithParser(rs.track, parser, seek)
 		if err != nil {
 			rs.log.Warn().Str("parser", parser).Err(err).Msg("stream_open_failed")
 			rs.retries[parser]++
 			continue
 		}
+		rs.startCacheWrite(seek)
+		reader, cleanup = bufferWrap(reader, cleanup)
 		rs.parserIndex = i
 		rs.reader = reader
 		rs.cleanup = cleanup
 		rs.seekSec = seek
 		rs.curParser = parser
 		rs.track.CurrentParser = parser
+		rs.fromCache = false
 		rs.firstRead = true
 		rs.log.Info().Str("parser", parser).Float64("seek", seek).Msg("stream_opened")
 		return nil
 	}
 	return errors.New("all parsers failed or exceeded recovery attempts")
+}
+
+// startCacheWrite begins caching a clean from-start play of an as-yet-uncached
+// track (once per stream). Writing happens in ReadPacket, above the recovery
+// logic, so a single blob spans parser switches and transport reopens; it is
+// committed only on the final natural EOF (see commitCache).
+func (rs *RecoveryStream) startCacheWrite(seek float64) {
+	if rs.cacheWriter != nil || activeCache == nil || seek != 0 {
+		return
+	}
+	key, ok := cache.Key(rs.track)
+	if !ok || activeCache.Has(key) {
+		return
+	}
+	w, err := activeCache.NewWriter(key, cache.Meta{Source: rs.track.SourceInfo.SourceName, Title: rs.track.Title})
+	if err != nil {
+		rs.log.Warn().Str("cache_key", key).Err(err).Msg("cache_writer_failed")
+		return
+	}
+	rs.cacheWriter = w
+	rs.log.Info().Str("cache_key", key).Msg("cache_write_started")
+}
+
+// commitCache finalizes the cached blob after the track ended cleanly.
+func (rs *RecoveryStream) commitCache() {
+	if rs.cacheWriter == nil {
+		return
+	}
+	if err := rs.cacheWriter.Commit(); err != nil {
+		rs.log.Warn().Err(err).Msg("cache_commit_failed")
+	} else {
+		rs.log.Info().Msg("cache_write_committed")
+	}
+	rs.cacheWriter = nil
+}
+
+// abortCache discards a partial blob (stop/skip before the end, or a failure).
+func (rs *RecoveryStream) abortCache() {
+	if rs.cacheWriter == nil {
+		return
+	}
+	_ = rs.cacheWriter.Abort()
+	rs.cacheWriter = nil
 }
 
 // ReadPacket returns the next 20ms Opus packet, applying recovery: an immediate
@@ -85,29 +162,61 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 		if err == nil {
 			rs.firstRead = false
 			rs.seekSec += float64(opus.FrameMs) / 1000
+			if rs.cacheWriter != nil {
+				if werr := rs.cacheWriter.Write(pkt); werr != nil {
+					rs.log.Warn().Err(werr).Msg("cache_write_failed")
+					rs.abortCache()
+				}
+			}
 			return pkt, nil
 		}
 
-		// "Instant fail": errored on the very first read → try the next parser.
+		// "Instant fail": errored on the very first read.
 		if rs.firstRead {
+			// A cache read that fails immediately (missing/corrupt blob): drop the
+			// cache and retry the real parser list from the current index — do NOT
+			// advance parserIndex, since the cache is not one of its entries.
+			if rs.fromCache {
+				rs.log.Warn().Err(err).Msg("cache_immediate_failure_falling_back")
+				rs.cacheDisabled = true
+				rs.fromCache = false
+				rs.closeCurrent()
+				if reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
+					rs.abortCache()
+					return nil, err
+				}
+				continue
+			}
+			// Otherwise advance to the next parser.
 			rs.retries[rs.curParser]++
 			rs.log.Warn().Str("parser", rs.curParser).Err(err).Msg("immediate_failure_switching_parser")
 			rs.closeCurrent()
 			rs.parserIndex++
 			if reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
+				rs.abortCache()
 				return nil, err
 			}
 			continue
 		}
 
 		// Early EOF before the track's end → reopen the same parser at seek.
-		if errors.Is(err, io.EOF) && rs.shouldRecover() {
+		// A cache blob is only committed on a clean EOF, so it is always
+		// complete: a cache EOF is a natural end, never an early one.
+		if errors.Is(err, io.EOF) && !rs.fromCache && rs.shouldRecover() {
 			if reopenErr := rs.reopen(); reopenErr != nil {
+				rs.abortCache()
 				return nil, io.EOF
 			}
 			continue
 		}
 
+		// Terminal: a clean EOF means the track ended → commit the cache; any
+		// other error means we gave up → discard the partial.
+		if errors.Is(err, io.EOF) {
+			rs.commitCache()
+		} else {
+			rs.abortCache()
+		}
 		return nil, err
 	}
 }
@@ -175,6 +284,7 @@ func (rs *RecoveryStream) closeCurrent() {
 
 // Close releases the active stream. Safe to call multiple times.
 func (rs *RecoveryStream) Close() error {
+	rs.abortCache() // stopped before the end → discard the partial (no-op if committed)
 	rs.closeCurrent()
 	return nil
 }
