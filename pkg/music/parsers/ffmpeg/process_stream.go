@@ -1,7 +1,9 @@
 package ffmpeg
 
 import (
+	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 )
@@ -52,18 +54,29 @@ func NewProcessStream(cmd *exec.Cmd, stdout io.ReadCloser) *ProcessStream {
 func (p *ProcessStream) Read(b []byte) (int, error) {
 	n, err := p.stdout.Read(b)
 
-	if err == io.EOF {
+	// io.EOF is a natural stream end; os.ErrClosed ("file already closed") is the
+	// same end seen through a race — cmd.Wait() closes the stdout pipe when the
+	// process exits, which can beat the final Read. Both mean the process is done,
+	// so wait for the exit status and classify by it.
+	if err == io.EOF || errors.Is(err, os.ErrClosed) {
 		<-p.done
-
-		if p.waitErr != nil {
-			if n == 0 {
-				return 0, p.waitErr
-			}
-			return n, nil
-		}
+		return classifyExit(n, p.waitErr)
 	}
 
 	return n, err
+}
+
+// classifyExit maps a terminal stdout read (EOF or a closed pipe) to clean-end
+// or process-error semantics: a failed exit with no data surfaces the error (so
+// recovery can act on it); everything else is a clean io.EOF.
+func classifyExit(n int, waitErr error) (int, error) {
+	if waitErr != nil {
+		if n == 0 {
+			return 0, waitErr
+		}
+		return n, nil
+	}
+	return n, io.EOF
 }
 
 func (p *ProcessStream) Close() error {
