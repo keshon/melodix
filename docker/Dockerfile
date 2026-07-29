@@ -46,5 +46,6 @@ WORKDIR /usr/project
 COPY --from=builder /usr/project/app ./app
 
 RUN mkdir -p data/store
+RUN mkdir -p data/cache
 
 ENTRYPOINT ["/usr/project/app"]
