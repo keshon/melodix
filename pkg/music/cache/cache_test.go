@@ -170,12 +170,15 @@ func TestLRUEviction(t *testing.T) {
 type memIdx struct{ m map[string]Entry }
 
 func (x *memIdx) Load() (map[string]Entry, error) { return x.m, nil }
-func (x *memIdx) Save(m map[string]Entry) error {
-	cp := make(map[string]Entry, len(m))
-	for k, v := range m {
-		cp[k] = v
+func (x *memIdx) Put(e Entry) error {
+	if x.m == nil {
+		x.m = map[string]Entry{}
 	}
-	x.m = cp
+	x.m[e.ID] = e
+	return nil
+}
+func (x *memIdx) Delete(id string) error {
+	delete(x.m, id)
 	return nil
 }
 

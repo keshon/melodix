@@ -10,7 +10,6 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
-	"github.com/keshon/melodix/internal/domain"
 )
 
 type History struct {
@@ -134,19 +133,19 @@ func (c *History) Run(ctx interface{}) error {
 
 	switch view {
 	case "counts":
-		counts := domain.AggregatePlaybackCounts(rows)
+		counts := aggregatePlaybackCounts(rows)
 		totalRows = len(counts)
 		embedTitle = "🎵 Playback history (by URL)"
 		footerExtra = historyFooterReplay
 		for _, r := range counts {
-			lines = append(lines, common.FormatCountsLine(r))
+			lines = append(lines, common.FormatCountsLine(r.RepresentativeID, r.Title, r.URL, r.Count))
 		}
 	default:
 		totalRows = len(rows)
 		embedTitle = "🎵 Playback history (timeline)"
 		footerExtra = "Chronological; " + historyFooterReplay
 		for _, m := range rows {
-			lines = append(lines, common.FormatTimelineLine(m))
+			lines = append(lines, common.FormatTimelineLine(m.ID, m.Title, m.URL, m.PlayedAt))
 		}
 	}
 

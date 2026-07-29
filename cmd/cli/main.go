@@ -4,14 +4,15 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/keshon/buildinfo"
+	"github.com/keshon/datastore"
 	"github.com/keshon/melodix/internal/applog"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/musicwire"
@@ -51,18 +52,22 @@ func main() {
 	defer cancel()
 
 	// Optional playback layers (cache + anti-skip buffer), shared with the bot.
-	// Storage is only needed to persist the cache index, so build it lazily.
+	// Storage is only needed to persist the cache index. The data directory takes
+	// an exclusive lock, so when the bot already holds it the CLI keeps playing
+	// with an in-memory cache index instead of refusing to start.
 	var store *storage.Storage
 	if cfg.CacheEnabled {
-		store, err = storage.NewStorage(ctx, cfg.StoragePath, log)
-		if err != nil {
-			log.Fatal().Err(err).Msg("storage_init_failed")
+		store, err = storage.NewStorage(cfg.StoragePath, log)
+		switch {
+		case errors.Is(err, datastore.ErrLocked):
+			log.Warn().Str("dir", cfg.StoragePath).
+				Msg("storage_locked_by_another_process_cache_index_not_persisted")
+			store = nil
+		case err != nil:
+			log.Fatal().Err(err).Str("dir", cfg.StoragePath).Msg("storage_init_failed")
+		default:
+			defer func() { _ = store.Close() }()
 		}
-		defer func() {
-			closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancelClose()
-			_ = store.Close(closeCtx)
-		}()
 	}
 	if err := musicwire.Apply(cfg, store, log); err != nil {
 		log.Fatal().Err(err).Msg("playback_layers_init_failed")

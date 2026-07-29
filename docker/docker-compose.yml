@@ -8,7 +8,7 @@ services:
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_GUILD_BLACKLIST=${DISCORD_GUILD_BLACKLIST}
-      - STORAGE_PATH=${STORAGE_PATH:-/usr/project/data/datastore.json}
+      - STORAGE_PATH=${STORAGE_PATH:-/usr/project/data/store}
       - INIT_SLASH_COMMANDS=${INIT_SLASH_COMMANDS}
       - DEVELOPER_ID=${DEVELOPER_ID}
       - VOICE_READY_DELAY_MS=${VOICE_READY_DELAY_MS:-500}

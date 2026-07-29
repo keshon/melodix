@@ -58,7 +58,7 @@ flowchart TB
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
 | `internal/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
-| `internal/storage` + `internal/domain` | JSON datastore keyed by guild: command history, playback history, disabled commands |
+| `internal/storage` | Persistence: schema (guild settings, command log, playback rows, cache index) and the collections/indexes declared on the embedded datastore |
 
 External process dependencies: **ffmpeg** (optional — used only by the *transcode* parsers:
 SoundCloud AAC, radio, and the `kkdai-link`/`ytdlp-*` fallbacks. YouTube plays by Opus
@@ -307,9 +307,17 @@ with the resolver and `stream.registryEntries`.
   status-message ids, notify channels.
 - **In-memory, per session** — `Bot`'s session context and exec guard (swapped atomically on
   each `RunSession`).
-- **Disk** — a single JSON datastore (`STORAGE_PATH`, `keshon/datastore`) keyed by guild:
-  disabled commands, command history (last 50), playback history (last 750, monotonic ids —
-  `/play <id>` replays an entry without re-resolving).
+- **Disk** — an embedded write-ahead-logged datastore (`keshon/datastore`) owning the
+  `STORAGE_PATH` **directory** (`LOCK`, `wal.log`, `snapshot-*.json`). Everything is held in
+  memory and every commit is appended and fsynced before it is acknowledged. Collections:
+  `guild_settings` (disabled command groups), `command_log` (last 50 per guild),
+  `playback` (last 750 per guild; `/play <id>` replays an entry without re-resolving) and
+  `cache_entries` (the global track-cache index). The per-guild collections are indexed by
+  guild id and keyed `"<guildID>:<zero-padded id>"`, so an index read returns a guild's rows
+  in chronological order; ids come from the store's persisted `tx.NextID` counters.
+
+The directory is **locked to one process**. The CLI therefore falls back to an in-memory
+cache index when the bot already holds it, rather than refusing to start.
 
 Only tracks that actually start playing are recorded, via the `PlaybackRecorder` hook.
 

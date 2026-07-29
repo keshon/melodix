@@ -1,65 +1,39 @@
 package storage
 
-import "github.com/keshon/melodix/internal/domain"
+import "slices"
 
+// DisableGroup marks a command group disabled for the guild (idempotent).
 func (s *Storage) DisableGroup(guildID, group string) error {
-	record, err := s.getOrCreateGuildRecord(guildID)
-	if err != nil {
-		return err
+	g := s.guildSettings(guildID)
+	if slices.Contains(g.CommandsDisabled, group) {
+		return nil
 	}
-
-	for _, g := range record.CommandsDisabled {
-		if g == group {
-			return nil
-		}
-	}
-
-	record.CommandsDisabled = append(record.CommandsDisabled, group)
-	return s.ds.Set(guildID, record)
+	g.CommandsDisabled = append(g.CommandsDisabled, group)
+	return s.settings.Put(g)
 }
 
+// EnableGroup re-enables a command group for the guild (idempotent).
 func (s *Storage) EnableGroup(guildID, group string) error {
-	record, err := s.getOrCreateGuildRecord(guildID)
-	if err != nil {
-		return err
-	}
-
-	updated := make([]string, 0, len(record.CommandsDisabled))
-	for _, g := range record.CommandsDisabled {
-		if g != group {
-			updated = append(updated, g)
+	g := s.guildSettings(guildID)
+	updated := make([]string, 0, len(g.CommandsDisabled))
+	for _, existing := range g.CommandsDisabled {
+		if existing != group {
+			updated = append(updated, existing)
 		}
 	}
-	record.CommandsDisabled = updated
-	return s.ds.Set(guildID, record)
+	if len(updated) == len(g.CommandsDisabled) {
+		return nil
+	}
+	g.CommandsDisabled = updated
+	return s.settings.Put(g)
 }
 
+// IsGroupDisabled reports whether a command group is disabled for the guild.
 func (s *Storage) IsGroupDisabled(guildID, group string) (bool, error) {
-	record, err := s.getOrCreateGuildRecord(guildID)
-	if err != nil {
-		return false, err
-	}
-	for _, g := range record.CommandsDisabled {
-		if g == group {
-			return true, nil
-		}
-	}
-	return false, nil
+	return slices.Contains(s.guildSettings(guildID).CommandsDisabled, group), nil
 }
 
+// DisabledGroups lists the guild's disabled command groups.
 func (s *Storage) DisabledGroups(guildID string) ([]string, error) {
-	record, err := s.getOrCreateGuildRecord(guildID)
-	if err != nil {
-		return nil, err
-	}
-	return record.CommandsDisabled, nil
-}
-
-func (s *Storage) CommandHistory(guildID string) ([]domain.CommandHistory, error) {
-	record, err := s.getOrCreateGuildRecord(guildID)
-	if err != nil {
-		return nil, err
-	}
-
-	return record.CommandsHistory, nil
+	return s.guildSettings(guildID).CommandsDisabled, nil
 }

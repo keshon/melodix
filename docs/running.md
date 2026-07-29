@@ -50,7 +50,7 @@ Optional variables:
 
 | Variable                  | Description                                                | Default                 |
 | ------------------------- | ---------------------------------------------------------- | ----------------------- |
-| `STORAGE_PATH`            | Path for bot data (e.g. command state).                    | `./data/datastore.json` |
+| `STORAGE_PATH`            | Directory the datastore owns (write-ahead log + snapshots). Locked to one process. | `./data/store` |
 | `INIT_SLASH_COMMANDS`     | Set to `true` to register slash commands on every startup. | `false`                 |
 | `DEVELOPER_ID`            | Your Discord user ID for developer-only commands.          | (none)                  |
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave.              | (none)                  |

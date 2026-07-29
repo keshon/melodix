@@ -3,9 +3,8 @@ package common
 import (
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
-
-	"github.com/keshon/melodix/internal/domain"
 )
 
 // historyMaxLineBytes caps rendered line length (embed row); long track titles get middle ellipsis.
@@ -60,22 +59,26 @@ func historyLine(id uint64, title, url, tail string) string {
 	return fmt.Sprintf("`%d` %s `%s`", id, title, tail)
 }
 
-func FormatTimelineLine(m domain.MusicPlayback) string {
-	tail := m.PlayedAt.Format("02 Jan 2006")
-	title := displayTrackTitle(m.Title)
+// FormatTimelineLine renders one chronological history row. It takes plain
+// values rather than a persisted struct so this presentation package stays
+// independent of the storage schema.
+func FormatTimelineLine(id uint64, title, url string, playedAt time.Time) string {
+	tail := playedAt.Format("02 Jan 2006")
+	name := displayTrackTitle(title)
 	build := func(tt string) string {
-		return historyLine(m.ID, tt, m.URL, tail)
+		return historyLine(id, tt, url, tail)
 	}
-	title = fitTitleToLineLimit(title, build)
-	return build(title)
+	name = fitTitleToLineLimit(name, build)
+	return build(name)
 }
 
-func FormatCountsLine(r domain.PlaybackCountRow) string {
-	tail := fmt.Sprintf("×%d", r.Count)
-	title := displayTrackTitle(r.Title)
+// FormatCountsLine renders one row of the "by URL" view, tailed with the play count.
+func FormatCountsLine(id uint64, title, url string, count int) string {
+	tail := fmt.Sprintf("×%d", count)
+	name := displayTrackTitle(title)
 	build := func(tt string) string {
-		return historyLine(r.RepresentativeID, tt, r.URL, tail)
+		return historyLine(id, tt, url, tail)
 	}
-	title = fitTitleToLineLimit(title, build)
-	return build(title)
+	name = fitTitleToLineLimit(name, build)
+	return build(name)
 }

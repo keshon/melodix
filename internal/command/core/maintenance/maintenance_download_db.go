@@ -12,7 +12,7 @@ import (
 
 func runDownloadDB(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
 	guildID := e.GuildID
-	record, err := storage.GuildRecord(guildID)
+	record, err := storage.ExportGuild(guildID)
 	if err != nil {
 		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Failed to fetch record: ```%v```", err),

@@ -1,20 +1,22 @@
-package domain
+package history
 
 import (
 	"testing"
 	"time"
+
+	"github.com/keshon/melodix/internal/storage"
 )
 
 func TestAggregatePlaybackCounts(t *testing.T) {
 	t.Parallel()
 	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	t2 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	h := []MusicPlayback{
+	h := []storage.PlaybackEntry{
 		{ID: 1, PlayedAt: t1, URL: "https://a.com", Title: "A"},
 		{ID: 2, PlayedAt: t2, URL: "https://a.com", Title: "A newer"},
 		{ID: 3, PlayedAt: t1, URL: "https://b.com", Title: "B"},
 	}
-	rows := AggregatePlaybackCounts(h)
+	rows := aggregatePlaybackCounts(h)
 	if len(rows) != 2 {
 		t.Fatalf("want 2 groups, got %d", len(rows))
 	}

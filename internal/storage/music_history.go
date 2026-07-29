@@ -6,20 +6,18 @@ import (
 	"slices"
 	"time"
 
-	"github.com/keshon/melodix/internal/domain"
+	"github.com/keshon/datastore"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-// Default cap for persisted playback rows per guild (trim oldest on append).
-var musicPlaybackHistoryLimit = 750
-
 // ErrMusicPlaybackNotFound is returned when no row matches the id (unknown, trimmed, or typo).
 var ErrMusicPlaybackNotFound = errors.New("music playback not found")
 
-func musicPlaybackFromTrack(id uint64, at time.Time, tp parsers.Track) domain.MusicPlayback {
-	return domain.MusicPlayback{
+func playbackFromTrack(id uint64, guildID string, at time.Time, tp parsers.Track) *PlaybackEntry {
+	return &PlaybackEntry{
 		ID:               id,
+		GuildID:          guildID,
 		PlayedAt:         at,
 		URL:              tp.URL,
 		Title:            tp.Title,
@@ -30,7 +28,7 @@ func musicPlaybackFromTrack(id uint64, at time.Time, tp parsers.Track) domain.Mu
 }
 
 // TrackInfoFromMusicPlayback rebuilds resolver metadata for enqueue. Current parser is first in AvailableParsers when possible.
-func TrackInfoFromMusicPlayback(m domain.MusicPlayback) sources.TrackInfo {
+func TrackInfoFromMusicPlayback(m PlaybackEntry) sources.TrackInfo {
 	parsersList := slices.Clone(m.AvailableParsers)
 	if m.CurrentParser != "" {
 		if i := slices.Index(parsersList, m.CurrentParser); i > 0 {
@@ -47,47 +45,40 @@ func TrackInfoFromMusicPlayback(m domain.MusicPlayback) sources.TrackInfo {
 	}
 }
 
-// AppendMusicPlayback assigns a monotonic id, appends, trims oldest rows, and persists.
+// AppendMusicPlayback assigns a per-guild monotonic id, stores the row and
+// trims the guild's oldest rows past the retention limit.
 func (s *Storage) AppendMusicPlayback(guildID string, track parsers.Track, at time.Time) (uint64, error) {
-	record, err := s.getOrCreateGuildRecord(guildID)
+	existing := s.playbackByGuild.Get(guildID)
+	var id uint64
+	err := s.db.Update(func(tx *datastore.Tx) error {
+		id = tx.NextID("playback:" + guildID)
+		col := datastore.In(tx, s.playback)
+		if err := col.Put(playbackFromTrack(id, guildID, at, track)); err != nil {
+			return err
+		}
+		return trimOldest(col, existing, musicPlaybackHistoryLimit)
+	})
 	if err != nil {
-		return 0, err
-	}
-
-	record.NextMusicHistoryID++
-	id := record.NextMusicHistoryID
-	row := musicPlaybackFromTrack(id, at, track)
-	record.MusicPlaybackHistory = append(record.MusicPlaybackHistory, row)
-
-	if len(record.MusicPlaybackHistory) > musicPlaybackHistoryLimit {
-		record.MusicPlaybackHistory = record.MusicPlaybackHistory[len(record.MusicPlaybackHistory)-musicPlaybackHistoryLimit:]
-	}
-
-	if err := s.ds.Set(guildID, record); err != nil {
 		return 0, fmt.Errorf("persist music playback: %w", err)
 	}
 	return id, nil
 }
 
 // MusicPlayback returns one row by id.
-func (s *Storage) MusicPlayback(guildID string, id uint64) (domain.MusicPlayback, error) {
-	record, err := s.getOrCreateGuildRecord(guildID)
-	if err != nil {
-		return domain.MusicPlayback{}, err
+func (s *Storage) MusicPlayback(guildID string, id uint64) (PlaybackEntry, error) {
+	row, ok := s.playback.Get(guildRowKey(guildID, id))
+	if !ok {
+		return PlaybackEntry{}, ErrMusicPlaybackNotFound
 	}
-	for _, row := range record.MusicPlaybackHistory {
-		if row.ID == id {
-			return row, nil
-		}
-	}
-	return domain.MusicPlayback{}, ErrMusicPlaybackNotFound
+	return *row, nil
 }
 
 // ListMusicPlaybackTimeline returns persisted rows oldest-first (chronological).
-func (s *Storage) ListMusicPlaybackTimeline(guildID string) ([]domain.MusicPlayback, error) {
-	record, err := s.getOrCreateGuildRecord(guildID)
-	if err != nil {
-		return nil, err
+func (s *Storage) ListMusicPlaybackTimeline(guildID string) ([]PlaybackEntry, error) {
+	rows := s.playbackByGuild.Get(guildID)
+	out := make([]PlaybackEntry, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, *r)
 	}
-	return slices.Clone(record.MusicPlaybackHistory), nil
+	return out, nil
 }

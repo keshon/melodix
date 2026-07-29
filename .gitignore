@@ -4,6 +4,7 @@
 /tools
 /.VSCodeCounter
 datastore.json*
+/data/store/
 *.txt
 *private*
 datastore_dump.json

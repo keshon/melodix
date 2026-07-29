@@ -68,9 +68,9 @@ func main() {
 		log.Fatal().Msg("config_missing_token")
 	}
 
-	store, err := storage.NewStorage(rootCtx, cfg.StoragePath, log)
+	store, err := storage.NewStorage(cfg.StoragePath, log)
 	if err != nil {
-		log.Fatal().Err(err).Msg("storage_init_failed")
+		log.Fatal().Err(err).Str("dir", cfg.StoragePath).Msg("storage_init_failed")
 	}
 
 	// Optional playback layers (cache + anti-skip buffer), set once before sessions run.
@@ -118,9 +118,7 @@ func main() {
 
 	wg.Wait()
 
-	closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelClose()
-	if err := store.Close(closeCtx); err != nil {
+	if err := store.Close(); err != nil {
 		log.Error().Err(err).Msg("storage_close_failed")
 	}
 

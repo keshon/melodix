@@ -25,9 +25,11 @@ type Meta struct {
 	Title  string
 }
 
-// Entry is one cached track (persisted in the global index).
+// Entry is one cached track (persisted in the global index). ID is the content
+// key (see Key); it is named ID rather than Key so persistence layers are free
+// to attach a Key() method.
 type Entry struct {
-	Key          string `json:"key"`
+	ID           string `json:"id"`
 	File         string `json:"file"` // basename under Config.Dir
 	Bytes        int64  `json:"bytes"`
 	Packets      int    `json:"packets"`
@@ -38,11 +40,13 @@ type Entry struct {
 	LastAccessAt int64  `json:"last_access_at"` // unix nanos; drives LRU eviction
 }
 
-// IndexStore persists the cache index (the store passes the full map on every
-// change; a nil IndexStore disables persistence, e.g. in tests).
+// IndexStore persists the cache index one entry at a time, so a single play
+// writes a single record rather than rewriting the whole index. A nil
+// IndexStore disables persistence (e.g. tests, or a read-only fallback).
 type IndexStore interface {
 	Load() (map[string]Entry, error)
-	Save(map[string]Entry) error
+	Put(Entry) error
+	Delete(id string) error
 }
 
 // Store is the global, content-keyed track cache.
@@ -107,13 +111,18 @@ func (s *Store) OpenAt(key string, seekPackets int) (opus.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	s.mu.Lock()
-	if cur, ok := s.byKey[key]; ok {
+	cur, touched := s.byKey[key]
+	if touched {
 		cur.LastAccessAt = s.stampLocked()
 		s.byKey[key] = cur
-		s.saveLocked()
 	}
 	s.mu.Unlock()
+
+	if touched {
+		s.persist(cur) // index I/O outside the lock
+	}
 	return r, nil
 }
 
@@ -143,13 +152,12 @@ func (s *Store) NewWriter(key string, meta Meta) (*Writer, error) {
 // register records a freshly-committed blob and runs eviction.
 func (s *Store) register(key, finalPath string, size int64, packets int, meta Meta) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if old, ok := s.byKey[key]; ok {
 		s.total -= old.Bytes // overwrite an existing entry
 	}
 	now := s.stampLocked()
-	s.byKey[key] = Entry{
-		Key:          key,
+	entry := Entry{
+		ID:           key,
 		File:         filepath.Base(finalPath),
 		Bytes:        size,
 		Packets:      packets,
@@ -159,15 +167,23 @@ func (s *Store) register(key, finalPath string, size int64, packets int, meta Me
 		CreatedAt:    now,
 		LastAccessAt: now,
 	}
+	s.byKey[key] = entry
 	s.total += size
-	s.evictLocked()
-	s.saveLocked()
+	evicted := s.evictLocked()
+	s.mu.Unlock()
+
+	// Index I/O outside the lock: a blocking write must not stall playback.
+	s.persist(entry)
+	for _, id := range evicted {
+		s.forget(id)
+	}
 }
 
 // evictLocked removes least-recently-accessed entries until the total is within
-// the cap. Always keeps at least one entry (the just-registered one has the
-// newest stamp, so it is never the victim).
-func (s *Store) evictLocked() {
+// the cap, returning the evicted ids. Always keeps at least one entry (the
+// just-registered one has the newest stamp, so it is never the victim).
+func (s *Store) evictLocked() []string {
+	var evicted []string
 	for s.cfg.MaxBytes > 0 && s.total > s.cfg.MaxBytes && len(s.byKey) > 1 {
 		var victim Entry
 		first := true
@@ -176,12 +192,14 @@ func (s *Store) evictLocked() {
 				victim, first = e, false
 			}
 		}
-		delete(s.byKey, victim.Key)
+		delete(s.byKey, victim.ID)
 		s.total -= victim.Bytes
 		if err := os.Remove(filepath.Join(s.cfg.Dir, victim.File)); err != nil && !os.IsNotExist(err) {
 			s.log.Warn().Err(err).Str("file", victim.File).Msg("cache_evict_remove_failed")
 		}
+		evicted = append(evicted, victim.ID)
 	}
+	return evicted
 }
 
 func (s *Store) stampLocked() int64 {
@@ -193,12 +211,24 @@ func (s *Store) stampLocked() int64 {
 	return n
 }
 
-func (s *Store) saveLocked() {
+// persist writes one index entry; a failure is logged, never fatal (the blob is
+// still on disk and simply won't be known after a restart).
+func (s *Store) persist(e Entry) {
 	if s.idx == nil {
 		return
 	}
-	if err := s.idx.Save(s.byKey); err != nil {
-		s.log.Warn().Err(err).Msg("cache_index_save_failed")
+	if err := s.idx.Put(e); err != nil {
+		s.log.Warn().Err(err).Str("cache_key", e.ID).Msg("cache_index_put_failed")
+	}
+}
+
+// forget removes one index entry after its blob was evicted.
+func (s *Store) forget(id string) {
+	if s.idx == nil {
+		return
+	}
+	if err := s.idx.Delete(id); err != nil {
+		s.log.Warn().Err(err).Str("cache_key", id).Msg("cache_index_delete_failed")
 	}
 }
 

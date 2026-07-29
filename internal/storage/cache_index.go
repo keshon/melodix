@@ -2,29 +2,25 @@ package storage
 
 import "github.com/keshon/melodix/pkg/music/cache"
 
-// cacheIndexKey is a reserved, non-guild datastore key holding the global track
-// cache index. Discord guild ids are numeric snowflakes, so this never collides;
-// Records() skips it.
-const cacheIndexKey = "__cache_index"
-
-// CacheIndex returns a cache.IndexStore backed by the datastore's reserved
-// global key, for wiring into cache.New.
+// CacheIndex returns a cache.IndexStore backed by the cache_entries collection,
+// for wiring into cache.New. Entries are written one at a time, so caching a
+// track appends a single small record.
 func (s *Storage) CacheIndex() cache.IndexStore { return cacheIndexStore{s} }
 
 type cacheIndexStore struct{ s *Storage }
 
 func (c cacheIndexStore) Load() (map[string]cache.Entry, error) {
-	var m map[string]cache.Entry
-	exists, err := c.s.ds.Get(cacheIndexKey, &m)
-	if err != nil {
-		return nil, err
+	out := make(map[string]cache.Entry, c.s.cacheIdx.Len())
+	for e := range c.s.cacheIdx.All() {
+		out[e.ID] = e.Entry
 	}
-	if !exists {
-		return nil, nil
-	}
-	return m, nil
+	return out, nil
 }
 
-func (c cacheIndexStore) Save(m map[string]cache.Entry) error {
-	return c.s.ds.Set(cacheIndexKey, m)
+func (c cacheIndexStore) Put(e cache.Entry) error {
+	return c.s.cacheIdx.Put(&CacheEntry{Entry: e})
+}
+
+func (c cacheIndexStore) Delete(id string) error {
+	return c.s.cacheIdx.Delete(id)
 }

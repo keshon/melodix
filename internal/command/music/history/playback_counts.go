@@ -1,12 +1,15 @@
-package domain
+package history
 
 import (
 	"sort"
 	"time"
+
+	"github.com/keshon/melodix/internal/storage"
 )
 
-// PlaybackCountRow is one distinct URL in counts mode (representative id is latest row for replay).
-type PlaybackCountRow struct {
+// playbackCountRow is one distinct URL in counts mode (representative id is the
+// latest row for that URL, so /play <id> replays the newest entry).
+type playbackCountRow struct {
 	RepresentativeID uint64
 	URL              string
 	Title            string
@@ -14,9 +17,9 @@ type PlaybackCountRow struct {
 	LastPlayed       time.Time
 }
 
-// AggregatePlaybackCounts groups history by canonical URL (string equality).
-// Representative id is the latest playback row's id for that URL. Sort: count desc, then last played desc.
-func AggregatePlaybackCounts(history []MusicPlayback) []PlaybackCountRow {
+// aggregatePlaybackCounts groups history by URL (string equality).
+// Sort: count desc, then last played desc.
+func aggregatePlaybackCounts(history []storage.PlaybackEntry) []playbackCountRow {
 	type agg struct {
 		latestID uint64
 		url      string
@@ -53,9 +56,9 @@ func AggregatePlaybackCounts(history []MusicPlayback) []PlaybackCountRow {
 		}
 	}
 
-	out := make([]PlaybackCountRow, 0, len(byURL))
+	out := make([]playbackCountRow, 0, len(byURL))
 	for _, a := range byURL {
-		out = append(out, PlaybackCountRow{
+		out = append(out, playbackCountRow{
 			RepresentativeID: a.latestID,
 			URL:              a.url,
 			Title:            a.title,
