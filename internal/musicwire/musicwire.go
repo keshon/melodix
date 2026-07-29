@@ -18,6 +18,13 @@ import (
 func Apply(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error {
 	stream.SetBufferAhead(cfg.BufferAheadMs)
 	if !cfg.CacheEnabled {
+		// Say so out loud. A cache that is off writes nothing and logs nothing,
+		// which is indistinguishable from a cache that is broken — and the usual
+		// cause is a deployment that never passed CACHE_ENABLED through to the
+		// process at all.
+		log.Info().
+			Int("buffer_ahead_ms", cfg.BufferAheadMs).
+			Msg("track_cache_disabled")
 		return nil
 	}
 	var index cache.IndexStore
