@@ -10,7 +10,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/keshon/buildinfo v0.1.0
 	github.com/keshon/command v0.1.0
-	github.com/keshon/datastore v1.1.0
+	github.com/keshon/datastore v1.3.0
 	github.com/kkdai/youtube/v2 v2.10.6
 	github.com/rs/zerolog v1.35.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1

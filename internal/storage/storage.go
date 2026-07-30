@@ -97,20 +97,25 @@ func (s *Storage) SetCommand(
 		Command:     command,
 		Datetime:    time.Now(),
 	}
-	existing := s.cmdLogByGuild.Get(guildID)
 	return s.db.Update(func(tx *datastore.Tx) error {
 		entry.ID = tx.NextID("cmdlog:" + guildID)
 		col := datastore.In(tx, s.cmdLog)
 		if err := col.Put(entry); err != nil {
 			return err
 		}
+		// Read the index inside the transaction: the rows we trim against are
+		// then the rows the commit sees, not a snapshot from before the writer
+		// slot was ours. (The entry staged above is not indexed until commit,
+		// so `existing` is the guild's rows without it — which is what the
+		// limit arithmetic in trimOldest expects.)
+		existing := datastore.InIndex(tx, s.cmdLogByGuild).Find(guildID)
 		return trimOldest(col, existing, commandHistoryLimit)
 	})
 }
 
 // CommandHistory returns the guild's recorded commands, oldest first.
 func (s *Storage) CommandHistory(guildID string) ([]CommandLogEntry, error) {
-	rows := s.cmdLogByGuild.Get(guildID)
+	rows := s.cmdLogByGuild.Find(guildID)
 	out := make([]CommandLogEntry, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, *r)

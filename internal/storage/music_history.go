@@ -48,7 +48,6 @@ func TrackInfoFromMusicPlayback(m PlaybackEntry) sources.TrackInfo {
 // AppendMusicPlayback assigns a per-guild monotonic id, stores the row and
 // trims the guild's oldest rows past the retention limit.
 func (s *Storage) AppendMusicPlayback(guildID string, track parsers.Track, at time.Time) (uint64, error) {
-	existing := s.playbackByGuild.Get(guildID)
 	var id uint64
 	err := s.db.Update(func(tx *datastore.Tx) error {
 		id = tx.NextID("playback:" + guildID)
@@ -56,6 +55,8 @@ func (s *Storage) AppendMusicPlayback(guildID string, track parsers.Track, at ti
 		if err := col.Put(playbackFromTrack(id, guildID, at, track)); err != nil {
 			return err
 		}
+		// Index read inside the transaction — see the note in SetCommand.
+		existing := datastore.InIndex(tx, s.playbackByGuild).Find(guildID)
 		return trimOldest(col, existing, musicPlaybackHistoryLimit)
 	})
 	if err != nil {
@@ -75,7 +76,7 @@ func (s *Storage) MusicPlayback(guildID string, id uint64) (PlaybackEntry, error
 
 // ListMusicPlaybackTimeline returns persisted rows oldest-first (chronological).
 func (s *Storage) ListMusicPlaybackTimeline(guildID string) ([]PlaybackEntry, error) {
-	rows := s.playbackByGuild.Get(guildID)
+	rows := s.playbackByGuild.Find(guildID)
 	out := make([]PlaybackEntry, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, *r)
