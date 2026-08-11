@@ -1,8 +1,14 @@
 package play
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
+	"os/exec"
+	"regexp"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command/music/common"
@@ -64,12 +70,154 @@ func (c *Play) SlashDefinition() *discordgo.ApplicationCommand {
 	}
 }
 
+var youtubeURLRegex = regexp.MustCompile(`https?://(?:www\.)?(?:youtube\.com|youtu\.be)/[^\s<>\]]+`)
+
+func normalizeInputURL(input string) string {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return ""
+	}
+	// Remove common escaping from Markdown/Discord
+	input = strings.ReplaceAll(input, `\&`, "&")
+	input = strings.ReplaceAll(input, `\_`, "_")
+	input = strings.ReplaceAll(input, `\?`, "?")
+	input = strings.ReplaceAll(input, `\=`, "=")
+	input = strings.ReplaceAll(input, `\#`, "#")
+	if match := youtubeURLRegex.FindString(input); match != "" {
+		input = match
+	}
+	input = strings.TrimSpace(input)
+	input = strings.TrimSuffix(input, `\`)
+	input = strings.TrimSuffix(input, ")")
+	input = strings.TrimSuffix(input, "]")
+	return input
+}
+
+func canonicalYouTubeURL(input string) string {
+	input = normalizeInputURL(input)
+	if input == "" {
+		return ""
+	}
+	parsedURL, err := url.Parse(input)
+	if err != nil {
+		return input
+	}
+	listID := parsedURL.Query().Get("list")
+	if listID == "" {
+		return input
+	}
+	return "https://www.youtube.com/playlist?list=" + url.QueryEscape(listID)
+}
+
+func isYouTubeURL(input string) bool {
+	input = normalizeInputURL(input)
+	return strings.Contains(input, "youtube.com") || strings.Contains(input, "youtu.be")
+}
+
+func isYouTubePlaylistURL(input string) bool {
+	input = normalizeInputURL(input)
+	if !isYouTubeURL(input) {
+		return false
+	}
+	parsedURL, err := url.Parse(input)
+	if err != nil {
+		return false
+	}
+	return parsedURL.Query().Get("list") != ""
+}
+
+// findYTDLP returns the path to yt-dlp executable.
+func findYTDLP() (string, error) {
+	path, err := exec.LookPath("yt-dlp")
+	if err != nil {
+		return "", fmt.Errorf("yt-dlp not found in PATH: %w", err)
+	}
+	return path, nil
+}
+
+// buildYTDLPArgs constructs the command line for yt-dlp.
+// It optionally uses cookies from file or browser via environment variables:
+//   - YTDLP_COOKIES  : path to cookies.txt
+//   - YTDLP_BROWSER  : browser name (firefox, chrome, etc.)
+func buildYTDLPArgs(playlistURL string) []string {
+	args := []string{
+		"--flat-playlist",
+		"--skip-download",
+		"--no-warnings",
+		"--print", "%(id)s",
+	}
+	if browser := strings.TrimSpace(os.Getenv("YTDLP_BROWSER")); browser != "" {
+		args = append([]string{"--cookies-from-browser", browser}, args...)
+	}
+	if cookies := strings.TrimSpace(os.Getenv("YTDLP_COOKIES")); cookies != "" {
+		args = append([]string{"--cookies", cookies}, args...)
+	}
+	args = append(args, playlistURL)
+	return args
+}
+
+// extractYouTubePlaylist returns a list of video IDs from a YouTube playlist.
+func extractYouTubePlaylist(input string) ([]string, error) {
+	playlistURL := canonicalYouTubeURL(input)
+	if playlistURL == "" {
+		return nil, errors.New("empty YouTube playlist URL")
+	}
+	ytDLP, err := findYTDLP()
+	if err != nil {
+		return nil, err
+	}
+	args := buildYTDLPArgs(playlistURL)
+	cmd := exec.Command(ytDLP, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	stdoutText := strings.TrimSpace(stdout.String())
+	stderrText := strings.TrimSpace(stderr.String())
+	if err != nil {
+		if stderrText == "" {
+			return nil, fmt.Errorf("yt-dlp failed: %w", err)
+		}
+		return nil, fmt.Errorf("yt-dlp failed: %w: %s", err, stderrText)
+	}
+	if stdoutText == "" {
+		return nil, fmt.Errorf("yt-dlp returned no playlist entries; stderr=%s", stderrText)
+	}
+	lines := strings.Split(stdoutText, "\n")
+	var ids []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Lines may contain warnings or extra text, but we only care about a single video ID (11 chars)
+		// We also allow for a tab if we used "%(id)s" only, it's just the ID.
+		// For safety, we extract the first non-empty token that looks like a YouTube ID.
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
+			continue
+		}
+		candidate := parts[0]
+		// Check if it looks like a YouTube video ID (11 chars, alphanumeric and _-)
+		if len(candidate) >= 10 && len(candidate) <= 12 && regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(candidate) {
+			ids = append(ids, candidate)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no usable video IDs; stdout=%s; stderr=%s", stdoutText, stderrText)
+	}
+	return ids, nil
+}
+
+// -----------------------------------------------------------------------------
+// Play command
+// -----------------------------------------------------------------------------
+
 func (c *Play) Run(ctx interface{}) error {
 	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
 	if !ok {
 		return nil
 	}
-
 	s := slashCtx.Session
 	e := slashCtx.Event
 	store := slashCtx.Storage
@@ -85,13 +233,14 @@ func (c *Play) Run(ctx interface{}) error {
 			parser = opt.StringValue()
 		}
 	}
-
 	if input == "" {
 		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🎵 Error",
 			Description: "Input is required.",
 		})
 	}
+
+	input = normalizeInputURL(input)
 
 	parsed, err := common.ParsePlayInput(input)
 	if err != nil {
@@ -105,6 +254,10 @@ func (c *Play) Run(ctx interface{}) error {
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Invalid input: %v", err),
 		})
+	}
+	parsed.Query = normalizeInputURL(parsed.Query)
+	for i := range parsed.URLs {
+		parsed.URLs[i] = normalizeInputURL(parsed.URLs[i])
 	}
 
 	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
@@ -124,7 +277,6 @@ func (c *Play) Run(ctx interface{}) error {
 		})
 		return nil
 	}
-
 	permOK, err := perm.CheckBotVoicePermissions(s, voiceState.ChannelID)
 	if err != nil || !permOK {
 		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -133,7 +285,6 @@ func (c *Play) Run(ctx interface{}) error {
 		})
 		return nil
 	}
-
 	c.Bot.SetGuildMusicNotifyChannel(guildID, e.ChannelID)
 
 	p := c.Bot.GetOrCreatePlayer(guildID)
@@ -144,6 +295,8 @@ func (c *Play) Run(ctx interface{}) error {
 		})
 		return nil
 	}
+
+	totalAdded := 0
 
 	switch parsed.Kind {
 	case common.PlayInputKindHistoryIDs:
@@ -178,11 +331,100 @@ func (c *Play) Run(ctx interface{}) error {
 				})
 				return nil
 			}
+			totalAdded++
 		}
 
 	case common.PlayInputKindURLs:
-		for _, u := range parsed.URLs {
+		for _, rawURL := range parsed.URLs {
+			u := normalizeInputURL(rawURL)
+			if isYouTubePlaylistURL(u) {
+				videoIDs, err := extractYouTubePlaylist(u)
+				if err != nil {
+					reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+						Title:       "🎵 Playlist Error",
+						Description: fmt.Sprintf("Could not extract the YouTube playlist.\n\n`%v`", err),
+					})
+					return nil
+				}
+				for _, id := range videoIDs {
+					videoURL := "https://www.youtube.com/watch?v=" + id
+					tracks, resErr := c.Bot.ResolveTracks(guildID, videoURL, source, parser)
+					if resErr != nil || len(tracks) == 0 {
+						slashCtx.AppLog.Warn().
+							Str("video_id", id).
+							Err(resErr).
+							Msg("Failed to resolve single video from playlist, skipping")
+						continue
+					}
+					for _, track := range tracks {
+						if err := p.EnqueueTrackInfo(track); err != nil {
+							reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+								Title:       "🎵 Queue Error",
+								Description: fmt.Sprintf("%v", err),
+							})
+							return nil
+						}
+						totalAdded++
+					}
+				}
+				continue
+			}
+			// Normal single URL
 			tracks, resErr := c.Bot.ResolveTracks(guildID, u, source, parser)
+			if resErr != nil || len(tracks) == 0 {
+				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					Title:       "🎵 Error",
+					Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
+				})
+				return nil
+			}
+			for _, track := range tracks {
+				if err := p.EnqueueTrackInfo(track); err != nil {
+					reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+						Title:       "🎵 Queue Error",
+						Description: fmt.Sprintf("%v", err),
+					})
+					return nil
+				}
+				totalAdded++
+			}
+		}
+
+	case common.PlayInputKindQuery:
+		query := normalizeInputURL(parsed.Query)
+		if isYouTubePlaylistURL(query) {
+			videoIDs, err := extractYouTubePlaylist(query)
+			if err != nil {
+				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					Title:       "🎵 Playlist Error",
+					Description: fmt.Sprintf("Could not extract the YouTube playlist.\n\n`%v`", err),
+				})
+				return nil
+			}
+			for _, id := range videoIDs {
+				videoURL := "https://www.youtube.com/watch?v=" + id
+				tracks, resErr := c.Bot.ResolveTracks(guildID, videoURL, source, parser)
+				if resErr != nil || len(tracks) == 0 {
+					slashCtx.AppLog.Warn().
+						Str("video_id", id).
+						Err(resErr).
+						Msg("Failed to resolve single video from playlist, skipping")
+					continue
+				}
+				for _, track := range tracks {
+					if err := p.EnqueueTrackInfo(track); err != nil {
+						reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+							Title:       "🎵 Queue Error",
+							Description: fmt.Sprintf("%v", err),
+						})
+						return nil
+					}
+					totalAdded++
+				}
+			}
+		} else {
+			// Normal search query
+			tracks, resErr := c.Bot.ResolveTracks(guildID, query, source, parser)
 			if resErr != nil || len(tracks) == 0 {
 				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 					Title:       "🎵 Error",
@@ -197,24 +439,16 @@ func (c *Play) Run(ctx interface{}) error {
 				})
 				return nil
 			}
+			totalAdded++
 		}
+	}
 
-	case common.PlayInputKindQuery:
-		tracks, resErr := c.Bot.ResolveTracks(guildID, parsed.Query, source, parser)
-		if resErr != nil || len(tracks) == 0 {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-				Title:       "🎵 Error",
-				Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
-			})
-			return nil
-		}
-		if err := p.EnqueueTrackInfo(tracks[0]); err != nil {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-				Title:       "🎵 Queue Error",
-				Description: fmt.Sprintf("%v", err),
-			})
-			return nil
-		}
+	if totalAdded == 0 {
+		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 Queue",
+			Description: "No tracks were added.",
+		})
+		return nil
 	}
 
 	started := false
@@ -246,14 +480,23 @@ func (c *Play) Run(ctx interface{}) error {
 		started = true
 	}
 
-	// The outcome is known here, so render it synchronously (async transitions such as
-	// auto-advance are handled by the voice service's status watcher).
-	embed := reply.TracksAddedEmbed()
+	var embed *discordgo.MessageEmbed
 	if started {
 		if track := p.CurrentTrack(); track != nil {
 			embed = reply.NowPlayingEmbed(track)
+			if totalAdded > 1 {
+				embed.Description = fmt.Sprintf("Added **%d** tracks to the queue.", totalAdded)
+			}
+		} else {
+			embed = reply.TracksAddedEmbed()
+		}
+	} else {
+		embed = reply.TracksAddedEmbed()
+		if totalAdded > 1 {
+			embed.Description = fmt.Sprintf("Added **%d** tracks to the queue.", totalAdded)
 		}
 	}
+
 	if err := c.Bot.UpdatePlaybackStatus(s, e, guildID, embed); err != nil {
 		slashCtx.AppLog.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 	}
