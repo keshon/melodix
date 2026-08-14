@@ -284,10 +284,25 @@ type helloOp struct {
 const FailedHeartbeatAcks time.Duration = 5 * time.Millisecond
 
 // HeartbeatLatency returns the latency between heartbeat acknowledgement and heartbeat send.
+//
+// The two timestamps are guarded by different locks — LastHeartbeatAck by the
+// Session mutex, LastHeartbeatSent by wsMutex — so reading both directly was a
+// data race. The ack is read under RLock and the send from an atomic mirror,
+// which also avoids waiting on wsMutex while it is held across a websocket write.
+//
+// Note that the result is the latency of the last completed exchange: on a dead
+// connection it goes stale and then negative, so it is not a liveness signal.
+// Compare time.Since(LastHeartbeatAck) for that.
 func (s *Session) HeartbeatLatency() time.Duration {
+	s.RLock()
+	ack := s.LastHeartbeatAck
+	s.RUnlock()
 
-	return s.LastHeartbeatAck.Sub(s.LastHeartbeatSent)
-
+	sentNano := s.lastHeartbeatSentNano.Load()
+	if sentNano == 0 {
+		return 0 // nothing sent yet
+	}
+	return ack.Sub(time.Unix(0, sentNano).UTC())
 }
 
 // heartbeat sends regular heartbeats to Discord so it knows the client
@@ -312,7 +327,9 @@ func (s *Session) heartbeat(wsConn *websocket.Conn, listening <-chan interface{}
 		sequence := atomic.LoadInt64(s.sequence)
 		s.log(LogDebug, "sending gateway websocket heartbeat seq %d", sequence)
 		s.wsMutex.Lock()
-		s.LastHeartbeatSent = time.Now().UTC()
+		sentAt := time.Now().UTC()
+		s.LastHeartbeatSent = sentAt
+		s.lastHeartbeatSentNano.Store(sentAt.UnixNano())
 		err = wsConn.WriteJSON(heartbeatOp{1, sequence})
 		s.wsMutex.Unlock()
 		if err != nil || time.Now().UTC().Sub(last) > (heartbeatIntervalMsec*FailedHeartbeatAcks) {

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -100,11 +101,21 @@ type Session struct {
 	// The user agent used for REST APIs
 	UserAgent string
 
-	// Stores the last HeartbeatAck that was received (in UTC)
+	// Stores the last HeartbeatAck that was received (in UTC).
+	// Guarded by the Session's RWMutex; read it under RLock.
 	LastHeartbeatAck time.Time
 
-	// Stores the last Heartbeat sent (in UTC)
+	// Stores the last Heartbeat sent (in UTC).
+	// Written under wsMutex, which is also held across the websocket write, so
+	// readers must not wait on it — HeartbeatLatency reads the atomic mirror
+	// below instead.
 	LastHeartbeatSent time.Time
+
+	// lastHeartbeatSentNano mirrors LastHeartbeatSent for lock-free reads.
+	// LastHeartbeatAck and LastHeartbeatSent are guarded by different locks, so
+	// reading both together was a data race; this makes the send side readable
+	// without taking wsMutex and blocking behind a network write.
+	lastHeartbeatSentNano atomic.Int64
 
 	// used to deal with rate limits
 	Ratelimiter *RateLimiter
