@@ -55,7 +55,7 @@ Optional variables:
 | `DEVELOPER_ID`            | Your Discord user ID for developer-only commands.          | (none)                  |
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave.              | (none)                  |
 | `VOICE_READY_DELAY_MS`    | Delay after joining VC before sending Opus (avoids OP4 race). | `500`                 |
-| `WS_SILENCE_TIMEOUT`      | Treat gateway as unhealthy after this long without messages. | `2m`                  |
+| `WS_SILENCE_TIMEOUT`      | Treat gateway as unhealthy after this long without **both** events and heartbeat ACKs. | `2m`         |
 | `DISCORD_UNHEALTHY_MODE`  | Action on unhealthy: `restart-session`, `restart-voice`, `ignore`. | `restart-session` |
 | `DISCORD_UNHEALTHY_GRACE` | In `restart-session`: ignore first N unhealthy signals within window (still invalidates sinks). | `0` |
 | `DISCORD_UNHEALTHY_WINDOW`| Window for `DISCORD_UNHEALTHY_GRACE` counting.             | `1m`                    |
