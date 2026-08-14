@@ -84,12 +84,21 @@ func (b *Bot) startSessionHealthWatchers(
 		func(meta watchdog.WSSilenceMeta) {
 			b.log.Warn().
 				Dur("since_last_ws", meta.SinceLastWS).
+				Dur("since_last_heartbeat_ack", meta.SinceLastHeartbeatAck).
 				Dur("timeout", meta.Timeout).
 				Dur("heartbeat_latency", meta.HeartbeatLatency).
 				Msg("gateway_silent")
 			notifyUnhealthy()
 		},
-		watchdog.WSSilenceOptions{SettleDelay: 15 * time.Second, Tick: 10 * time.Second},
+		watchdog.WSSilenceOptions{
+			SettleDelay: 15 * time.Second,
+			Tick:        10 * time.Second,
+			LastHeartbeatAck: func() time.Time {
+				dg.RLock()
+				defer dg.RUnlock()
+				return dg.LastHeartbeatAck
+			},
+		},
 	).Run(sessionCtx)
 
 	go func() {
