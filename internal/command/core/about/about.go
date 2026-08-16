@@ -15,7 +15,7 @@ type About struct{}
 func (c *About) Name() string        { return "about" }
 func (c *About) Description() string { return "Discover the origin of this bot" }
 func (c *About) Group() string       { return "core" }
-func (c *About) Category() string    { return "🕯️ Information" }
+func (c *About) Category() string    { return "ℹ️ Information" }
 func (c *About) UserPermissions() []int64 {
 	return []int64{}
 }

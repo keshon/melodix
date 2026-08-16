@@ -1,7 +1,7 @@
 package config
 
 var CategoryWeights = map[string]int{
-	"🕯️ Information": 0,
+	"ℹ️ Information": 0,
 	"📢 Utilities":    10,
 	"🎲 Gameplay":     20,
 	"🎭 Roleplay":     30,

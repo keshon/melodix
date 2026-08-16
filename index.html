@@ -391,11 +391,10 @@
             <p class="eyebrow">discord music bot · self-hosted · go · open source</p>
             <h1>Playback should <mark>survive</mark>.</h1>
             <p class="lede">Melodix streams YouTube, SoundCloud and internet
-              radio into your
-              Discord server — and treats every failure as a recoverable event.
-              <strong>Flaky streams, dead voice connections, gateway
-                reconnects:</strong>
-              the music keeps playing.</p>
+              radio into your Discord server. It treats every failure as
+              something to recover from, not something to crash on — a flaky
+              stream, a dead voice connection, a gateway reconnect. The music
+              just keeps playing.</p>
             <div class="cta-row">
               <a class="btn btn-primary" href="#downloads">Download
                 Binaries</a>
@@ -451,20 +450,21 @@
       <section id="survives">
         <p class="kicker">why it survives</p>
         <h2>Every track carries its own fallback chain.</h2>
-        <p class="prose">Public music bots come and go, usually with a
-          cease-and-desist attached. Melodix is the opposite deal: a small
-          binary you run yourself, with your own token, on your own machine —
-          built around the assumption that <strong>sources break, and that's
-          fine.</strong></p>
-        <p class="prose">When someone pastes a link, Melodix has to turn that web
-          page into an actual audio stream it can pipe into a voice channel. The
-          component that does this is called a <em>parser</em> — and YouTube
-          fights it constantly, reshuffling its internals every few weeks. So
-          Melodix never bets on a single one. It keeps a <strong>chain</strong> of
-          parsers, ordered fastest-first, and walks down it until one delivers a
-          playable stream. The panel above is that chain running live: the embed
-          your users see, and the log stream underneath. Tap each backend to see
-          what it actually is.</p>
+        <p class="prose">Public music bots tend to disappear eventually, usually
+          with a cease-and-desist attached. Melodix skips that risk: it's a
+          small binary you run yourself, with your own token, on your own
+          machine. Sources break sometimes. That's just assumed going in,
+          not treated as a special case.</p>
+        <p class="prose">When someone pastes a link, Melodix has to turn that
+          web page into an actual audio stream it can pipe into a voice
+          channel. The component that does this is called a <em>parser</em>,
+          and YouTube fights it constantly — reshuffling its internals every
+          few weeks. So Melodix doesn't bet everything on one parser. It
+          keeps a <strong>chain</strong> of them, ordered fastest-first, and
+          works down the list until one returns a playable stream. The panel
+          above shows that chain running live: the embed your users would
+          see, and the log underneath it. Click a backend below for what it
+          actually does.</p>
 
         <div class="rail" role="tablist" aria-label="Extraction backends">
           <button class="stage" type="button" role="tab" id="tab-0"
@@ -479,20 +479,23 @@
 
         <div class="tab-detail" id="detail" role="tabpanel">
           <h3 id="detailTitle">ytnative <span class="chip">built in-house · zero deps</span></h3>
-          <p id="detailBody">Melodix's own extractor, written for this project. It
-            speaks YouTube's private <em>InnerTube</em> API — the same protocol the
-            official phone and TV apps use — posing as the Android VR client, which
-            hands back direct audio links with nothing to decrypt. No external
-            programs, no embedded JavaScript engine: just plain HTTP calls from Go.
-            It's the fastest route and the default. When YouTube eventually changes
-            something, ytnative <strong>fails instantly instead of hanging</strong>,
-            and the fix on our side is usually a single version number.</p>
+          <p id="detailBody">Melodix's own extractor, written specifically for
+            this project. It speaks YouTube's private <em>InnerTube</em> API —
+            the same protocol the official phone and TV apps use — pretending
+            to be the Android VR client, which hands back direct audio links
+            with nothing to decrypt. No external programs and no embedded
+            JavaScript engine, just plain HTTP calls from Go. It's the
+            fastest route and the default one. When YouTube changes
+            something, which it will, ytnative tends to <strong>fail
+            instantly</strong> rather than hang, and fixing it is usually a
+            one-line version bump.</p>
         </div>
-        <p class="rail-note">SoundCloud gets the same treatment through its own
-          in-house extractor (<span class="mono">scnative</span>, built on
-          SoundCloud's api-v2), and internet-radio URLs are handed straight to
-          ffmpeg. Same idea everywhere: a fast native path first, sturdier
-          fallbacks behind it.</p>
+        <p class="rail-note">SoundCloud gets similar treatment through its own
+          in-house extractor, <span class="mono">scnative</span>, built on
+          SoundCloud's api-v2. Internet-radio URLs skip straight to ffmpeg,
+          since there's nothing to extract there in the first place. The
+          pattern repeats: try the fast native path, keep sturdier fallbacks
+          in reserve.</p>
 
         <div class="feat-grid">
           <div class="feat">
@@ -590,7 +593,7 @@
       <footer>
         <div class="cols">
           <span>MIT ·
-            Built by one person, on purpose</span>
+            Built and maintained solo</span>
           <span>
             <a
               href="https://github.com/keshon/melodix/blob/main/docs/architecture.md">Architecture</a>
@@ -783,17 +786,17 @@
     {
       title: "ytnative",
       badge: "built in-house · zero deps",
-      body: 'Melodix’s own extractor, written for this project. It speaks YouTube’s private <em>InnerTube</em> API — the same protocol the official phone and TV apps use — posing as the Android VR client, which hands back direct audio links with nothing to decrypt. No external programs, no embedded JavaScript engine: just plain HTTP calls from Go. It’s the fastest route and the default. When YouTube eventually changes something, ytnative <strong>fails instantly instead of hanging</strong>, and the fix on our side is usually a single version number.'
+      body: 'Melodix’s own extractor, written specifically for this project. It speaks YouTube’s private <em>InnerTube</em> API — the same protocol the official phone and TV apps use — pretending to be the Android VR client, which hands back direct audio links with nothing to decrypt. No external programs and no embedded JavaScript engine, just plain HTTP calls from Go. It’s the fastest route and the default one. When YouTube changes something, which it will, ytnative tends to <strong>fail instantly</strong> rather than hang, and fixing it is usually a one-line version bump.'
     },
     {
       title: "kkdai",
       badge: "open-source library",
-      body: '<a href="https://github.com/kkdai/youtube" target="_blank" rel="noopener">kkdai/youtube</a> is a popular open-source Go library for pulling audio from YouTube. Where ytnative avoids the hard parts, kkdai takes them on: it unscrambles YouTube’s obfuscated <em>signature cipher</em> through an embedded JavaScript interpreter, unlocking streams the native client is refused. Heavier and slower, but it rescues protected and age-restricted tracks the fast path can’t — and it still runs <strong>entirely inside the Melodix binary</strong>, nothing to install.'
+      body: '<a href="https://github.com/kkdai/youtube" target="_blank" rel="noopener">kkdai/youtube</a> is a popular open-source Go library for pulling audio from YouTube. It handles the part ytnative deliberately skips: unscrambling YouTube’s obfuscated <em>signature cipher</em> through an embedded JavaScript interpreter, which unlocks streams the native client gets refused. It’s heavier and slower, but it recovers protected and age-restricted tracks the fast path can’t touch, and it still runs <strong>inside the Melodix binary</strong> with nothing extra to install.'
     },
     {
       title: "yt-dlp",
       badge: "external tool · optional",
-      body: '<a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a> is the industry-standard command-line downloader — a community-maintained successor to youtube-dl that supports over a thousand sites. Melodix only reaches for it once both native parsers have failed; if yt-dlp can’t play a track, effectively nothing can. It’s the one backend that lives <em>outside</em> the binary, which makes it <strong>entirely optional</strong>: skip installing it and the chain simply ends one rung sooner.'
+      body: '<a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a> is the industry-standard command-line downloader, a community-maintained successor to youtube-dl supporting well over a thousand sites. Melodix only reaches for it once both native parsers have already failed. If yt-dlp can’t play something, pretty much nothing can. It’s the one backend living outside the binary, so it’s genuinely optional — skip installing it and the fallback chain just ends one step sooner.'
     }
   ];
 

@@ -6,26 +6,32 @@
 
 A self-hosted Discord music bot written in Go, with a terminal player thrown in.
 It streams YouTube, SoundCloud and internet radio, and it's built around one
-stubborn idea: **playback should survive** — flaky streams, dead voice
+stubborn idea: playback should survive — flaky streams, dead voice
 connections, gateway reconnects, all of it.
 
-Public music bots come and go, usually with a cease-and-desist attached.
-Melodix is the opposite deal: a small binary you run yourself, with your own
-token, on your own machine. Nobody can turn it off for you.
+Public music bots tend to disappear eventually, usually with a
+cease-and-desist attached. Melodix skips that risk: it's a small binary you
+run yourself, with your own token, on your own machine. Nobody can turn it
+off for you.
 
 ## What it does well
 
-- **Refuses to drop a track.** Every track has several extraction backends
-  (yt-dlp, kkdai, plain ffmpeg). If a stream dies mid-play, Melodix reopens it
-  at the same position; if a backend keeps failing, it falls through to the next.
-- **Survives Discord too.** A silent gateway or a dead voice connection is
-  detected and recovered automatically, and queues live through session restarts.
-- **Keeps a memory.** `/history` shows what was played; `/play 42` replays
-  entry 42. No link hunting.
-- **Stays small.** One binary plus ffmpeg (yt-dlp recommended). Storage is a
-  single JSON file — no database to babysit.
-- **Doubles as a terminal player.** The same engine drives `melodix-cli`,
-  which plays straight to your speakers. Good for testing, also just for listening.
+- Melodix refuses to drop a track. Every track has several extraction
+  backends behind it (native extractors, kkdai, yt-dlp). If a stream dies
+  mid-play, it reopens at the same position; if a backend keeps failing, it
+  falls through to the next one.
+- It survives Discord too — a silent gateway or a dead voice connection
+  gets detected and recovered automatically, and queues live through
+  session restarts.
+- It keeps a memory: `/history` shows what was played, and `/play 42`
+  replays entry 42. No digging through chat for the original link.
+- It stays small. Just one binary, and for YouTube alone that's genuinely
+  all you need — no ffmpeg required. Add ffmpeg for SoundCloud and internet
+  radio, and yt-dlp as a last-resort fallback if you want the extra
+  reliability. Storage is a single JSON file, no database to babysit.
+- It doubles as a terminal player. The same engine drives `melodix-cli`,
+  which plays straight to your speakers — handy for testing, or just for
+  listening.
 
 ## Try it
 
@@ -46,9 +52,10 @@ go build -o melodix-cli ./cmd/cli
 ./melodix-cli
 ```
 
-You need FFmpeg in `PATH`; yt-dlp is optional but recommended. The full setup
-guide — creating the bot, invite link, every config knob, Docker — is in
-[docs/running.md](docs/running.md).
+FFmpeg is only needed for SoundCloud and internet radio — a YouTube-only bot
+doesn't need it at all. yt-dlp is optional too, used as a last-resort
+fallback. The full setup guide — creating the bot, invite link, every config
+knob, Docker — is in [docs/running.md](docs/running.md).
 
 ## Commands
 
@@ -82,4 +89,4 @@ half (vet, race-enabled tests, a lint config that passes with zero findings).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © Innokentiy Sokolov (Señor Mega / Big M)

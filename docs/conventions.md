@@ -1,106 +1,138 @@
 # Conventions
 
-The house rules. Everything here is enforced either by tooling (gofmt, go vet,
-staticcheck via golangci-lint, `go test -race`) or by review discipline. When a
-rule and pragmatism conflict, pragmatism wins — but note the exception in code.
+These are the house rules. Most are enforced by tooling (gofmt, go vet,
+staticcheck via golangci-lint, `go test -race`); the rest by review. If a rule
+gets in the way of something that genuinely needs doing, pragmatism wins —
+just leave a note in the code explaining the exception.
 
 ## Design principles
 
-- **Minimal Go.** No frameworks, no speculative abstraction. An interface earns
-  its existence by having two real implementations or a real test seam.
-  Everything else is concrete.
-- **Three extension layers, nothing else.** `sources.Source` (input → metadata),
-  `parsers.Streamer` (track → Opus packets), `sink.AudioSink`/`Provider` (Opus
-  packets → audio). The engine's currency is 20ms Opus packets (`opus.Reader`) end
-  to end. New capability should arrive as an implementation of one of these, not as
-  a new layer. See [architecture.md](architecture.md).
-- **The engine (`pkg/music`) never imports Discord.** The CLI existing proves
-  it; keep it that way. Discord-specific behavior lives in `internal/`.
-- **Parsers are expendable.** They fail fast with a clear error; the
-  `RecoveryStream` fallback chain is the reliability mechanism. Never add
-  retries inside a parser that recovery already provides outside it.
-- **No signature deciphering, ever.** When a platform requires it, that track
-  falls through to kkdai/yt-dlp. This is a load-bearing decision, not a TODO.
+Go stays minimal here. No frameworks, no speculative abstraction — an
+interface only exists if it has two real implementations or a real test seam
+behind it. Everything else stays concrete.
+
+There are exactly three extension points, and new capability should show up
+as an implementation of one of them rather than as a new layer:
+`sources.Source` (input → metadata), `parsers.Streamer` (track → Opus
+packets), and `sink.AudioSink`/`Provider` (Opus packets → audio). The whole
+engine speaks 20ms Opus packets (`opus.Reader`) end to end. See
+[architecture.md](architecture.md) for how these fit together.
+
+`pkg/music` never imports Discord. The CLI is proof this holds — it's the
+same engine, no Discord in sight — and it should stay that way. Anything
+Discord-specific belongs in `internal/`.
+
+Parsers are expendable by design. They're expected to fail fast with a clear
+error, and `RecoveryStream`'s fallback chain is what actually provides
+reliability. Don't add retry logic inside a parser — recovery already covers
+that from outside.
+
+And no signature deciphering, ever. If a platform requires it, the track
+falls through to kkdai or yt-dlp instead. That's a deliberate boundary, not
+something waiting to be fixed later.
 
 ## Naming
 
-- The playback entity is `parsers.Track`; the resolver's product is
-  `sources.TrackInfo`. Don't introduce a third track-ish type.
-- Package names are single lowercase words describing the role (`reply`,
-  `perm`, `watchdog`). A package wrapping one dependency may be named after it
-  (`kkdai`, `goja`-style) — that's honest, not lazy.
-- Behavior-selecting strings get a named type + constants
-  (`player.TransportRecoveryMode`); identifier strings get constants
-  (`sources.Parser*`, `sources.YouTube`). Raw string literals for either are a
-  review flag.
+The playback entity is `parsers.Track`; whatever the resolver produces is
+`sources.TrackInfo`. Please don't add a third track-shaped type.
+
+Package names are single lowercase words describing what the package does
+(`reply`, `perm`, `watchdog`). A package that just wraps one dependency can be
+named after it (`kkdai`, in the `goja` style) — that's just being honest
+about what it is, not laziness.
+
+Strings that select behavior get a named type plus constants (see
+`player.TransportRecoveryMode`); identifier strings get constants too
+(`sources.Parser*`, `sources.YouTube`). Raw string literals for either are
+worth flagging in review.
 
 ## Frozen identifiers
 
-Parser registry keys (`ytnative-link`, `kkdai-pipe`, …) and source names
-(`youtube`, …) are **persisted in guild playback history** and shown as slash
-choices. Never rename an existing key — only add new ones. The constants live
-in `pkg/music/sources/parsers.go` and `sources.go`; the registry mapping lives
-in `pkg/music/stream/stream.go` (`stream.Entry` decides link vs pipe dispatch).
+Parser registry keys (`ytnative-link`, `kkdai-pipe`, and so on) and source
+names (`youtube`, etc.) get persisted in guild playback history and shown as
+slash-command choices, so they can't just be renamed later — add new ones
+instead of touching existing ones. The constants live in
+`pkg/music/sources/parsers.go` and `sources.go`; the registry mapping lives in
+`pkg/music/stream/stream.go`, where `stream.Entry` decides link vs. pipe
+dispatch.
 
 ## Concurrency contracts
 
-- `Player.PlayerStatus` has **exactly one long-lived consumer** per player
-  (the voice service's `watchPlayerStatus`, or the CLI loop). Never attach
-  per-interaction listeners; competing receivers steal events. Interaction
-  outcomes are rendered synchronously by the handler that knows them.
-- Callback fields on `Player` are set once at construction via
-  `player.Options` and never mutated afterwards.
-- Every goroutine has an owner and an exit condition; per-run channels
-  (`stopPlayback`/`playbackDone`) belong to one playback run only, and a run
-  identifies its state by its own `*parsers.Track` pointer (`clearIfCurrent`),
-  never by reading shared fields.
-- Package-level loggers use `atomic.Pointer[zerolog.Logger]` + `SetLogger` +
-  a `Nop` fallback (see `parsers/ffmpeg/pcm.go`); wired once in
-  `internal/discord/session_bootstrap.go`.
+`Player.PlayerStatus` is meant to have exactly one long-lived consumer per
+player — the voice service's `watchPlayerStatus`, or the CLI's own loop.
+Don't attach per-interaction listeners to it; competing receivers will steal
+events from each other. Interaction outcomes should instead be rendered
+synchronously by the handler that already knows the result.
+
+Callback fields on `Player` are set once, at construction, via
+`player.Options`, and never touched again after that.
+
+Every goroutine has an owner and a clear way to exit. Per-run channels
+(`stopPlayback`/`playbackDone`) belong to exactly one playback run, and a run
+should identify its own state by its own `*parsers.Track` pointer
+(`clearIfCurrent`) rather than by reading anything shared.
+
+Package-level loggers use `atomic.Pointer[zerolog.Logger]` with `SetLogger`
+and a `Nop` fallback (see `parsers/ffmpeg/pcm.go` for the pattern), wired once
+in `internal/discord/session_bootstrap.go`.
 
 ## Errors and logging
 
-- Library errors are prefixed with the package name: `ytnative: player
-  request: …`. Sentinel errors (`ErrCipherOnly`, `ErrNoTracksInQueue`) are
-  exported and matched with `errors.Is`; error *text* is display-only and never
-  pattern-matched.
-- Log events are lowercase snake_case verbs-last (`playback_running`,
-  `stream_open_failed`), with structured fields, never interpolated messages.
-- External process stderr goes through `ffmpeg.NewPCMCommand`'s classifier,
-  not raw to the process stderr.
+Library errors carry the package name as a prefix, like `ytnative: player
+request: …`. Sentinel errors (`ErrCipherOnly`, `ErrNoTracksInQueue`) are
+exported and matched with `errors.Is` — the error text itself is for display
+only and should never be pattern-matched against.
+
+Log events are lowercase, snake_case, verb-last (`playback_running`,
+`stream_open_failed`), with structured fields rather than interpolated
+strings.
+
+External process stderr should go through `ffmpeg.NewPCMCommand`'s
+classifier rather than straight to the process's own stderr.
 
 ## Adding things
 
-**A source** — implement `sources.Source` in `pkg/music/sources/<name>/`; add
-the name constant to `sources/sources.go`; register in `resolve.New()` *and*
-the auto-detect precedence list in `Resolver.Resolve`; extend the bare-query
-branch if searchable; add the `/play` source choice.
+To add a source: implement `sources.Source` under
+`pkg/music/sources/<name>/`, add the name constant to `sources/sources.go`,
+register it in `resolve.New()` and add it to the auto-detect precedence list
+in `Resolver.Resolve`. If it's searchable by bare query, extend that branch
+too, and add it to `/play`'s source choices.
 
-**A parser** — implement `parsers.Streamer.Open` returning an `opus.Reader` in
-`pkg/music/parsers/<name>/` (native Opus container → `opus.Demux`; otherwise
-ffmpeg via `ffmpeg.NewPCMCommand` wrapped in `ffmpeg.OpusReader`); add the key
-constant to `sources/parsers.go`; add the instance to `stream.registryEntries`;
-list it in the owning source's `AvailableParsers()` and the `/play` parser
-choices. If it talks to a live endpoint, add an opt-in live test
-(`MELODIX_LIVE_TESTS=1`) as a drift canary.
+To add a parser: implement `parsers.Streamer.Open` returning an
+`opus.Reader`, under `pkg/music/parsers/<name>/` — use `opus.Demux` if the
+source is a native Opus container, otherwise go through ffmpeg via
+`ffmpeg.NewPCMCommand` wrapped in `ffmpeg.OpusReader`. Add the key constant to
+`sources/parsers.go`, add the instance to `stream.registryEntries`, and list
+it in the owning source's `AvailableParsers()` plus `/play`'s parser choices.
+If it talks to a live endpoint, add an opt-in live test
+(`MELODIX_LIVE_TESTS=1`) so drift gets caught early.
 
 ## Testing & verification
 
-- `go test -race ./...` is the bar; the race detector is non-negotiable for
-  anything touching `Player`.
-- Fakes over mocks: swap the registry via `stream.SetRegistry`, stub `sink.Provider`, httptest for
-  HTTP clients (base URLs are struct fields for exactly this reason).
-- Live-endpoint behavior gets opt-in `Live` tests, never unconditional ones.
-- Before a release: the manual matrix in [architecture.md](architecture.md#testing--verification)
-  (multi-track auto-advance, `/stop` mid-track, natural queue end, one `/play`
-  per parser override).
+`go test -race ./...` is the bar to clear — the race detector isn't optional
+for anything that touches `Player`.
+
+Prefer fakes over mocks: swap the registry via `stream.SetRegistry`, stub
+`sink.Provider`, and use httptest for HTTP clients (base URLs are struct
+fields specifically so this works).
+
+Live-endpoint behavior only gets opt-in `Live` tests, never unconditional
+ones.
+
+Before cutting a release, run through the manual matrix in
+[architecture.md](architecture.md#testing--verification): multi-track
+auto-advance, `/stop` mid-track, a natural queue end, and one `/play` per
+parser override.
 
 ## Formatting & CI
 
-- gofmt-clean, `go vet`-clean, and the `.golangci.yml` set passes with zero
-  findings — it's curated so a finding always means something.
-- CI (`.github/workflows/build.yml`) runs vet + race tests + lint on every
-  push/PR, then cross-compiles all release targets.
-- `README.md` is generated: edit `README.md.tmpl` and run
-  `go run ./cmd/discord -readme` from the repo root. The bot never writes
-  files at runtime.
+Code should be gofmt-clean and `go vet`-clean, and the `.golangci.yml` set
+should pass with zero findings — it's kept deliberately curated so that a
+finding actually means something when it shows up.
+
+CI (`.github/workflows/build.yml`) runs vet, race tests, and lint on every
+push and PR, then cross-compiles all release targets.
+
+`README.md` is generated, not hand-edited: change `README.md.tmpl` and run
+`go run ./cmd/discord -readme` from the repo root. The bot itself never
+writes files at runtime.

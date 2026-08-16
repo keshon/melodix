@@ -3,12 +3,13 @@
 > House rules (naming, concurrency contracts, how to add sources/parsers) live
 > in [conventions.md](conventions.md); this document covers how the system works.
 
-Melodix is a Discord music bot built around a reusable, Discord-agnostic playback engine.
-The repository ships two binaries on top of the same engine:
+Melodix is a Discord music bot built on top of a playback engine that doesn't
+know Discord exists. The repo ships two binaries against that same engine:
 
-- **`cmd/discord`** — the Discord bot (slash commands, voice, persistence, health watchdogs).
-- **`cmd/cli`** — a REPL that plays to the local speaker. It exists both as a debugging tool
-  and as proof that `pkg/music` has no Discord dependency.
+- **`cmd/discord`** — the actual Discord bot: slash commands, voice, persistence,
+  health watchdogs.
+- **`cmd/cli`** — a small REPL that plays to your local speaker. It's a debugging
+  tool, and also the proof that `pkg/music` really has no Discord dependency.
 
 ```mermaid
 flowchart TB
@@ -60,12 +61,15 @@ flowchart TB
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
 | `internal/storage` | Persistence: schema (guild settings, command log, playback rows, cache index) and the collections/indexes declared on the embedded datastore |
 
-External process dependencies: **ffmpeg** (optional — used only by the *transcode* parsers:
-SoundCloud AAC, radio, and the `kkdai-link`/`ytdlp-*` fallbacks. YouTube plays by Opus
-**passthrough** — `ytnative-link` and `kkdai-pipe` — with no ffmpeg) and **yt-dlp** (optional,
-`ytdlp-*` last resort). A YouTube-first bot needs neither binary. Paths default to `PATH`,
-overridable via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`. `bwmarrin/discordgo` is replaced with the vendored
-fork in `pkg/discordgo-fork-dev` (panic fixes, stream handling).
+External process dependencies: **ffmpeg** is optional, used only by the
+*transcode* parsers — SoundCloud AAC, radio, and the `kkdai-link`/`ytdlp-*`
+fallbacks. YouTube itself plays back via Opus **passthrough**
+(`ytnative-link` and `kkdai-pipe`), with no ffmpeg involved at all, so a
+YouTube-first bot doesn't need either binary. **yt-dlp** is also optional —
+it's the last resort in the `ytdlp-*` chain. Both paths default to `PATH` but
+can be overridden (`ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`). `bwmarrin/discordgo`
+is replaced with a vendored fork at `pkg/discordgo-fork-dev` (panic fixes,
+stream handling).
 
 ---
 
@@ -98,85 +102,110 @@ type Provider interface {
 }
 ```
 
-`TrackInfo` deliberately carries only a page URL, title, source name, and an ordered parser
-preference list. Actual stream URLs are resolved lazily by the parser at open time, so
-queued tracks never hold expiring CDN links.
+`TrackInfo` deliberately carries just a page URL, a title, the source name,
+and an ordered parser preference list — nothing more. Actual stream URLs are
+resolved lazily, by the parser, at open time, so a queued track never holds
+an expiring CDN link.
 
 ---
 
 ## Resolution
 
-`resolve.New()` registers the three sources. `Resolve(input, source, parser)` applies, in order:
+`resolve.New()` registers the three sources. `Resolve(input, source, parser)`
+tries these in order:
 
-1. **Explicit source selected** — validate the parser, then: bare query → allowed only for
-   YouTube/SoundCloud (searchable sources); URL → must pass `Match`.
+1. **An explicit source was selected** — validate the parser, then: a bare
+   query is only allowed for the searchable sources (YouTube, SoundCloud); a
+   URL has to pass `Match`.
 2. **Auto-detect, bare query** — always routed to YouTube.
-3. **Auto-detect, URL** — deterministic precedence: YouTube, then SoundCloud (map iteration
-   is never used for matching; a new source must be added to this list explicitly).
+3. **Auto-detect, URL** — deterministic precedence: YouTube first, then
+   SoundCloud. (Map iteration is deliberately never used for matching — a new
+   source has to be added to this list by hand.)
 4. **Fallback** — radio, which validates the URL by probing its Content-Type.
 
-Search: YouTube search scrapes the results page with a regex (fragile by design — when it
-breaks, only search breaks; direct URLs keep working). SoundCloud search uses api-v2
-`/search/tracks` through the shared `soundcloudapi` client.
+For search: YouTube scrapes its own results page with a regex. That's
+fragile on purpose — when it breaks, only search breaks, and direct URLs
+keep working regardless. SoundCloud search goes through api-v2's
+`/search/tracks`, via the shared `soundcloudapi` client.
 
 ### YouTube: Opus passthrough (two paths) and the fallback chain
 
-YouTube audio (itag 251) is *already* 48kHz stereo Opus in a WebM container — Discord's exact
-wire format. So the goal is to **forward it untouched**: `pkg/music/opus`'s zero-dep WebM
-demuxer (`opus.Passthrough`) extracts the Opus packets and hands them straight to the sink,
-with *no ffmpeg, no decode, no re-encode*. It validates the first packet's framing (must be a
-single 20ms frame — Discord's sender assumption) and falls back otherwise. The YouTube parser
-chain, in order:
+YouTube audio (itag 251) is *already* 48kHz stereo Opus inside a WebM
+container — which happens to be Discord's exact wire format. So the goal
+becomes simple: forward it untouched. `pkg/music/opus`'s zero-dep WebM
+demuxer (`opus.Passthrough`) pulls the Opus packets out and hands them
+straight to the sink, with no ffmpeg, no decode, and no re-encode anywhere in
+between. It checks the first packet's framing (has to be a single 20ms
+frame, since that's what Discord's sender expects) and falls back if that
+check fails. The YouTube parser chain, in order:
 
-- **`ytnative-link`** (passthrough) — POSTs YouTube's InnerTube `player` endpoint with the
-  ANDROID_VR client (the plain ANDROID client was retired in 2026), gets a direct cipher-free
-  URL, streams it, and passes the packets through. `clientVersion` in
-  `pkg/music/parsers/ytnative/innertube.go` is the single maintenance knob. Its weakness: the
-  bare token-less client is often bot-checked (`LOGIN_REQUIRED`), so it fails fast a lot.
-- **`kkdai-pipe`** (passthrough) — the workhorse. `kkdai/youtube`'s signature-decipher path
-  resolves a WebM/Opus stream and *bypasses the bot-check that blocks ytnative*; we demux that
-  stream directly. This is the path that actually lands passthrough in today's climate.
-- **`kkdai-link`, `ytdlp-*`** (transcode) — ffmpeg-encode fallbacks: ffmpeg decodes the source
-  and `opus.Encode` re-encodes to packets. Used only when both passthrough paths are exhausted.
+- **`ytnative-link`** (passthrough) — POSTs to YouTube's InnerTube `player`
+  endpoint using the ANDROID_VR client (the plain ANDROID client got retired
+  in 2026), gets back a direct cipher-free URL, and passes the stream
+  through. The single maintenance knob here is `clientVersion`, in
+  `pkg/music/parsers/ytnative/innertube.go`. Its main weakness: the
+  token-less client gets bot-checked a lot (`LOGIN_REQUIRED`), so it tends to
+  fail fast and often.
+- **`kkdai-pipe`** (passthrough) — the real workhorse. `kkdai/youtube`'s
+  signature-decipher path resolves a WebM/Opus stream and gets past the
+  bot-check that blocks ytnative, and that stream gets demuxed directly. In
+  today's climate, this is the path that actually lands passthrough most of
+  the time.
+- **`kkdai-link`, `ytdlp-*`** (transcode) — the ffmpeg-encode fallbacks:
+  ffmpeg decodes the source and `opus.Encode` re-encodes it into packets.
+  These only get used once both passthrough paths are exhausted.
 
-`ytnative` cipher-only responses return `ErrCipherOnly`; a passthrough that can't validate
-framing returns `opus.ErrNotPassthrough` — either way recovery walks to the next parser.
+`ytnative` returns `ErrCipherOnly` on cipher-only responses; a passthrough
+that fails framing validation returns `opus.ErrNotPassthrough`. Either way,
+recovery just moves on to the next parser.
 
 ### SoundCloud (`scnative`)
 
-`scnative` uses `pkg/music/soundcloudapi`: the rotating `client_id` is scraped from the web
-player's JS bundles, cached, and refreshed automatically on 401/403; tracks are resolved via
-`/resolve`, and the preferred transcoding (AAC HLS > HLS > progressive) is transcoded by
-ffmpeg and encoded to Opus packets (SoundCloud's AAC isn't passthrough-able). Radio streams
-likewise transcode through ffmpeg.
+`scnative` runs on `pkg/music/soundcloudapi`: the rotating `client_id` gets
+scraped from the web player's JS bundles, cached, and refreshed automatically
+whenever it hits a 401/403. Tracks resolve via `/resolve`, and whichever
+transcoding is preferred (AAC HLS over HLS over progressive) gets transcoded
+by ffmpeg and encoded to Opus packets — SoundCloud's AAC just isn't
+passthrough-able. Radio streams go through the same ffmpeg transcode path.
 
-A track's `Now Playing` chip shows `passthrough` or `ffmpeg` (or `cached`) so the active mode
-is visible at a glance. The passthrough packages have opt-in live tests
-(`MELODIX_LIVE_TESTS=1 go test -run Live -v ./...`) that act as canaries for endpoint drift.
+A track's "Now Playing" chip shows `passthrough`, `ffmpeg`, or `cached`, so
+you can tell at a glance which mode is actually active. The passthrough
+packages also have opt-in live tests
+(`MELODIX_LIVE_TESTS=1 go test -run Live -v ./...`) that act as canaries for
+endpoint drift.
 
 ### Track cache & anti-skip buffer (optional, opt-in)
 
-Two independent playback layers wrap the parser stream inside `RecoveryStream`, both off by
-default and configured via env (see `docs/running.md`):
+Two independent playback layers wrap the parser stream inside
+`RecoveryStream`. Both are off by default and configured through env vars
+(see `docs/running.md`):
 
-- **Track cache** (`CACHE_ENABLED`). While a cacheable track plays, `RecoveryStream` copies each
-  20ms Opus packet it delivers into a disk blob keyed by content (`cache.Key`: `youtube:<id>` /
-  `soundcloud:<url>`; radio is uncacheable). The copy happens **above** the recovery logic, so a
-  single blob spans parser switches and voice-transport reopens, and is committed only when the
-  track plays through to a clean end — so a mid-track reconnect (common on flaky links) no longer
-  loses the cache. `RecoveryStream.Open` tries the cache **before** the parser list, so any later
-  play of that track (same link, `/play <id>`, or a different guild) serves from the blob:
-  instant, no extraction, no ffmpeg. A miss or a bad blob falls through to the normal parser
-  chain, so the cache never blocks playback. The index is a global, content-keyed collection in the datastore
-  (reserved key, LRU-evicted past `CACHE_MAX_BYTES`); blobs are `sha256(key)`-named custom
-  packet logs (not playable media files). Persistent by default. **Note:** caching stores
-  copyrighted audio to disk — it is opt-in and, kept transient (`CACHE_PERSISTENT=false`) plus
-  size-capped, behaves as a cache rather than an archive.
-- **Anti-skip buffer** (`BUFFER_AHEAD_MS`). `opus.BufferedReader` reads ahead into a bounded
-  queue so short source stalls drain the buffered lead instead of stuttering. It wraps the
-  reader *inside* `RecoveryStream`, so the playback position (`seekSec`) still counts packets as
-  they leave the buffer toward the sink — recovery reopens at the true played position, never
-  the read-ahead position.
+- **Track cache** (`CACHE_ENABLED`). While a cacheable track plays,
+  `RecoveryStream` copies every 20ms Opus packet into a disk blob keyed by
+  content (`cache.Key`: `youtube:<id>` or `soundcloud:<url>`; radio can't be
+  cached). This copy happens above the recovery logic, so a single blob
+  spans parser switches and voice-transport reopens, and it only gets
+  committed once the track plays through to a clean end — meaning a
+  mid-track reconnect, which happens fairly often on flaky links, no longer
+  throws the cache away. `RecoveryStream.Open` checks the cache before the
+  parser list, so any later play of that track — same link, `/play <id>`, or
+  even a different guild — serves straight from the blob: instant, no
+  extraction, no ffmpeg. A miss or a bad blob just falls through to the
+  normal parser chain, so the cache can never block playback. The index
+  itself is a global, content-keyed collection in the datastore (a reserved
+  key, LRU-evicted once `CACHE_MAX_BYTES` is hit), and the blobs are
+  `sha256(key)`-named custom packet logs rather than playable media files.
+  Persistent by default. One thing worth flagging: this stores copyrighted
+  audio to disk. It's opt-in, and kept transient
+  (`CACHE_PERSISTENT=false`) plus size-capped it behaves like a cache rather
+  than an archive — but that's a real tradeoff to be aware of, not just a
+  footnote.
+- **Anti-skip buffer** (`BUFFER_AHEAD_MS`). `opus.BufferedReader` reads ahead
+  into a bounded queue, so a short stall on the source drains from the
+  buffer instead of stuttering audibly. It wraps the reader inside
+  `RecoveryStream`, so the playback position (`seekSec`) still counts
+  packets as they leave the buffer toward the sink — recovery reopens at the
+  position actually played, never at the read-ahead position.
 
 ---
 
@@ -212,67 +241,83 @@ sequenceDiagram
 
 Key mechanics:
 
-- **Queue** — a plain `[]Track` under `p.mu`. `playNextMu` serializes dequeue+open so
-  two tracks can never start concurrently.
-- **Completion chain** — `runPlayback → completion goroutine → PlayNext → startTrack → new
-  runPlayback`. Iteration happens via fresh goroutines, not recursion. Queue-end disconnect
-  has a single decision point: `PlayNext` returning `ErrNoTracksInQueue` → `Stop(true)`.
-- **Per-run ownership** — each run gets its own `stopPlayback`/`playbackDone` channels and
-  its own track pointer. A stale run's goroutine can never clobber a newer run's state
-  (`clearIfCurrent` compares track identity before resetting).
-- **Discord sink** — reads 20ms Opus packets and **forwards them** to `OpusSend` (no encode):
-  a 10-packet warm-up primes the pipeline, then leading near-silent packets (tiny under VBR)
-  are skipped as dead air. Every `OpusSend` is a `select` against the stop channel and a send
-  timeout, so `Stop()` always unblocks the streaming goroutine and a stalled voice connection
-  surfaces as `ErrVoiceTransport` instead of a hang.
-- **Pause/Resume** — intentionally unsupported (the sink owns the read loop); commands get
-  `ErrPauseNotSupported`.
+- **Queue** — a plain `[]Track` under `p.mu`. `playNextMu` serializes
+  dequeue and open, so two tracks can never start at the same time.
+- **Completion chain** — the flow runs `runPlayback → completion goroutine →
+  PlayNext → startTrack → new runPlayback`. Iteration happens through fresh
+  goroutines rather than recursion, and queue-end disconnect has exactly one
+  decision point: `PlayNext` returning `ErrNoTracksInQueue` leads straight to
+  `Stop(true)`.
+- **Per-run ownership** — each run gets its own `stopPlayback`/`playbackDone`
+  channels and its own track pointer, so a stale run's goroutine can never
+  clobber a newer run's state (`clearIfCurrent` checks track identity before
+  resetting anything).
+- **Discord sink** — reads 20ms Opus packets and forwards them to `OpusSend`
+  with no encoding step: a 10-packet warm-up primes the pipeline, then any
+  leading near-silent packets (tiny under VBR) get skipped as dead air.
+  Every `OpusSend` call is a `select` against the stop channel plus a send
+  timeout, so `Stop()` always unblocks the streaming goroutine, and a
+  stalled voice connection surfaces as `ErrVoiceTransport` rather than
+  hanging silently.
+- **Pause/Resume** — not supported, on purpose, since the sink owns the read
+  loop. Commands that try get `ErrPauseNotSupported` back.
 
 ### Status delivery (single-consumer contract)
 
-`Player.PlayerStatus` is a buffered channel with **exactly one long-lived consumer per
-player**. For the bot that consumer is `voice.Service.watchPlayerStatus`, spawned once when
-the guild's player is created; it handles only *asynchronous* transitions (auto-advance →
-edit "Now Playing", natural queue end → "Playback Finished"). Interaction-driven outcomes
-("Now Playing" after `/play`, "Track(s) Added") are rendered synchronously by the handler,
-which knows the result of `PlayNext` directly. Do not attach per-interaction listeners to
-the channel — competing receivers steal events.
+`Player.PlayerStatus` is a buffered channel meant to have exactly one
+long-lived consumer per player. On the bot side that's
+`voice.Service.watchPlayerStatus`, spawned once when the guild's player is
+created; it only handles *asynchronous* transitions (auto-advance →
+edit "Now Playing", natural queue end → "Playback Finished"). Anything
+interaction-driven — "Now Playing" after `/play`, "Track(s) Added" — is
+instead rendered synchronously by the handler, since it already knows what
+`PlayNext` returned. Don't attach per-interaction listeners to the channel;
+competing receivers will end up stealing events from each other.
 
-The guild status UI is a single message per guild (`voice.Service.UpdatePlaybackStatus`):
-created via interaction followup on first use, edited thereafter — which is also why updates
+The guild status UI is a single message per guild
+(`voice.Service.UpdatePlaybackStatus`): created via interaction followup the
+first time, edited from then on — which incidentally is also why updates
 keep working past the 15-minute interaction-token expiry.
 
 ---
 
 ## Failure handling
 
-Three distinct failure classes, three distinct mechanisms:
+There are three distinct failure classes here, each with its own mechanism:
 
-1. **Media failures** (`stream.RecoveryStream`, per track):
-   - *Instant fail* — error/EOF on the very first read → advance to the next parser in the
-     track's preference list.
-   - *Early EOF* — EOF before ~95 % of known duration → reopen the same parser at the
-     current seek position (up to 3 attempts per parser), computed from bytes read.
-   - Natural EOF passes through untouched.
-2. **Voice transport failures** (`player.runPlayback`, up to 3 attempts): `ErrVoiceTransport`
-   from the sink → `hard` mode invalidates the sink (forces a VC rejoin) or `soft` mode
-   retries the stream first (`PLAYER_TRANSPORT_RECOVERY_MODE`, `PLAYER_TRANSPORT_SOFT_ATTEMPTS`),
-   then reopens media at the current position without touching the media retry budget.
-3. **Session failures** (`internal/discord`): a gateway-silence watchdog
-   (`WS_SILENCE_TIMEOUT`) and a 30-second API probe (3 strikes) mark the session unhealthy;
-   `DISCORD_UNHEALTHY_MODE` picks the reaction (`restart-session`, `restart-voice`, `ignore`).
-   `main.go` runs `RunSession` in a restart loop; the **voice service outlives sessions**, so
-   queues and players survive reconnects and sinks are simply invalidated and re-acquired.
+1. **Media failures**, handled by `stream.RecoveryStream` on a per-track
+   basis. An instant fail — an error or EOF on the very first read — moves
+   on to the next parser in the track's preference list. An early EOF,
+   meaning EOF before roughly 95% of the known duration, reopens the same
+   parser at the current seek position, computed from bytes read, up to
+   three attempts per parser. A natural EOF just passes through untouched.
+2. **Voice transport failures**, handled in `player.runPlayback`, up to
+   three attempts. An `ErrVoiceTransport` from the sink triggers either
+   `hard` mode (invalidate the sink, forcing a voice-channel rejoin) or
+   `soft` mode (retry the stream first — governed by
+   `PLAYER_TRANSPORT_RECOVERY_MODE` and `PLAYER_TRANSPORT_SOFT_ATTEMPTS`),
+   then reopens media at the current position without touching the media
+   retry budget.
+3. **Session failures**, handled in `internal/discord`. A gateway-silence
+   watchdog (`WS_SILENCE_TIMEOUT`) plus a 30-second API probe with three
+   strikes marks the session unhealthy, and `DISCORD_UNHEALTHY_MODE` decides
+   what happens next (`restart-session`, `restart-voice`, or `ignore`).
+   `main.go` runs `RunSession` in a restart loop, and since the voice
+   service outlives individual sessions, queues and players survive
+   reconnects — sinks just get invalidated and re-acquired.
 
-User-facing error flow: synchronous failures are answered directly by the handler
-(ephemeral embed). Asynchronous failures (a track dies mid-play) travel
+On the user-facing side: synchronous failures get answered directly by the
+handler, as an ephemeral embed. Asynchronous failures — a track dying
+mid-play — travel through
 `runPlayback → markPlaybackFailed → Options.OnPlaybackFailed → voice.Service.notifyPlaybackFailed`,
-which edits the guild status message, falling back to a public message in the last-used
-command channel. `internal/playbackerr` humanizes the raw error text.
+which edits the guild status message, falling back to a public message in
+the last-used command channel if needed. `internal/playbackerr` turns the
+raw error text into something a person can actually read.
 
-`ProcessStream` (ffmpeg wrapper) converts a zero-byte EOF from a failed process into the
-real process error, so an instant ffmpeg failure (403, bad URL) is never mistaken for a
-clean track end. The transcode parsers build ffmpeg via `ffmpeg.NewPCMCommand` and wrap its
+`ProcessStream` (the ffmpeg wrapper) converts a zero-byte EOF from a failed
+process into the real underlying error, so an instant ffmpeg failure — a
+403, a bad URL — never gets mistaken for a clean track end. The transcode
+parsers build ffmpeg via `ffmpeg.NewPCMCommand` and wrap its
 PCM output in `ffmpeg.OpusReader` (which encodes to Opus packets via `opus.Encode`); ffmpeg
 stderr is captured and classified (403/forbidden/conversion failures at Warn).
 
@@ -280,84 +325,100 @@ stderr is captured and classified (403/forbidden/conversion failures at Warn).
 
 ## Discord command layer
 
-Commands implement the melodix `Handler` interface and are registered through
-`cmdadapter.Register` into `keshon/command`'s `DefaultRegistry`, wrapped in middleware
-(guild-only, per-guild disabled-command gate, permission check, invocation logging).
-Optional capabilities are discovered by interface assertion: `SlashProvider`,
+Commands implement the melodix `Handler` interface and get registered
+through `cmdadapter.Register` into `keshon/command`'s `DefaultRegistry`,
+wrapped in middleware for guild-only checks, per-guild disabled-command
+gating, permission checks, and invocation logging. Optional capabilities are
+discovered through interface assertion: `SlashProvider`,
 `ContextMenuProvider`, `ComponentInteractionHandler`.
 
-- **Dispatch** — `onInteractionCreate` routes slash/context-menu commands through
-  `execguard` (parallelism cap `COMMAND_PARALLELISM`, timeout `COMMAND_TIMEOUT`); message
-  components are matched by `customID` prefix convention (`name`, `name:`, `name_`).
-- **Slash sync** — `cmdsync.Syncer` diffs desired vs. existing per-guild commands by
-  name+type+fingerprint when `INIT_SLASH_COMMANDS=true`.
-- **README generation** — `go run ./cmd/discord -readme` regenerates the command listing in
-  `README.md` from the registry (dev step, run from the repo root; the bot never writes
-  files at runtime).
+Dispatch happens through `onInteractionCreate`, which routes slash and
+context-menu commands through `execguard` (parallelism capped by
+`COMMAND_PARALLELISM`, timed out by `COMMAND_TIMEOUT`); message components
+are matched by a `customID` prefix convention (`name`, `name:`, `name_`).
+Slash-command sync is handled by `cmdsync.Syncer`, which diffs desired
+against existing per-guild commands by name, type, and fingerprint whenever
+`INIT_SLASH_COMMANDS=true`. And `go run ./cmd/discord -readme` regenerates
+the command listing in `README.md` straight from the registry — that's a dev
+step, run from the repo root; the bot itself never writes files at runtime.
 
-Caveat: the `source`/`parser` choice lists in `/play`'s slash definition
-(`internal/command/music/play/play.go`) are maintained by hand and must be kept in sync
-with the resolver and `stream.registryEntries`.
+One thing to watch: the `source`/`parser` choice lists in `/play`'s slash
+definition (`internal/command/music/play/play.go`) are maintained by hand,
+and need to be kept in sync with the resolver and `stream.registryEntries`
+manually.
 
 ---
 
 ## State & persistence
 
-- **In-memory, per guild, survives reconnects** — `voice.Service`: players, sink providers,
-  status-message ids, notify channels.
-- **In-memory, per session** — `Bot`'s session context and exec guard (swapped atomically on
-  each `RunSession`).
-- **Disk** — an embedded write-ahead-logged datastore (`keshon/datastore`) owning the
-  `STORAGE_PATH` **directory** (`LOCK`, `wal.log`, `snapshot-*.json`). Everything is held in
-  memory and every commit is appended and fsynced before it is acknowledged. Collections:
-  `guild_settings` (disabled command groups), `command_log` (last 50 per guild),
-  `playback` (last 750 per guild; `/play <id>` replays an entry without re-resolving) and
-  `cache_entries` (the global track-cache index). The per-guild collections are indexed by
-  guild id and keyed `"<guildID>:<zero-padded id>"`, so an index read returns a guild's rows
-  in chronological order; ids come from the store's persisted `tx.NextID` counters.
+State lives in three places. In memory, per guild, and surviving reconnects:
+`voice.Service` holds players, sink providers, status-message IDs, and
+notify channels. In memory, per session: the `Bot`'s session context and
+exec guard, swapped atomically on each `RunSession`. And on disk: an
+embedded write-ahead-logged datastore (`keshon/datastore`) that owns the
+entire `STORAGE_PATH` directory (`LOCK`, `wal.log`, `snapshot-*.json`).
+Everything's held in memory, and every commit is appended and fsynced before
+it's acknowledged. The collections are `guild_settings` (disabled command
+groups), `command_log` (last 50 per guild), `playback` (last 750 per guild —
+`/play <id>` replays an entry without re-resolving it), and `cache_entries`
+(the global track-cache index). Per-guild collections are indexed by guild
+ID and keyed `"<guildID>:<zero-padded id>"`, so reading an index returns a
+guild's rows in chronological order; the IDs themselves come from the
+store's persisted `tx.NextID` counters.
 
-The directory is **locked to one process**. The CLI therefore falls back to an in-memory
-cache index when the bot already holds it, rather than refusing to start.
+The storage directory is locked to a single process, so the CLI falls back
+to an in-memory cache index if the bot already holds the lock, rather than
+just refusing to start.
 
-Only tracks that actually start playing are recorded, via the `PlaybackRecorder` hook.
+Only tracks that actually start playing get recorded, through the
+`PlaybackRecorder` hook.
 
 ---
 
 ## Adding a new source or parser
 
-**Source** (metadata only, reuses existing parsers):
-1. New package under `pkg/music/sources/<name>/` implementing `Source`.
+To add a **source** (metadata only, reusing existing parsers):
+1. New package under `pkg/music/sources/<name>/`, implementing `Source`.
 2. Add the name constant to `pkg/music/sources/sources.go`.
-3. Register it in `resolve.New()` **and** add it to the auto-detect precedence list in
-   `Resolver.Resolve` (deliberately explicit).
-4. If searchable by bare query, extend the query branch in the resolver.
+3. Register it in `resolve.New()`, and add it to the auto-detect precedence
+   list in `Resolver.Resolve` — this is deliberately explicit, not automatic.
+4. If it's searchable by bare query, extend the query branch in the
+   resolver.
 5. Add it to `/play`'s `source` choices.
 
-**Parser** (new playback backend) — implement `Streamer.Open` returning an `opus.Reader`:
-1. New package under `pkg/music/parsers/<name>/`. If the source is a native Opus container,
-   `opus.Demux` the HTTP body (passthrough); otherwise build ffmpeg with `ffmpeg.NewPCMCommand`
-   and wrap it in `ffmpeg.OpusReader` (which encodes PCM → Opus packets). A parser with two
-   modes (link/pipe) carries a `Mode` field on its streamer.
-2. Add the instance to `stream.registryEntries` (`pkg/music/stream/stream.go`) under its frozen
-   key constant from `pkg/music/sources/parsers.go`.
-3. List it in the owning source's `AvailableParsers()` and `/play`'s `parser` choices.
+To add a **parser** (a new playback backend), implement `Streamer.Open`
+returning an `opus.Reader`:
+1. New package under `pkg/music/parsers/<name>/`. If the source is a native
+   Opus container, use `opus.Demux` on the HTTP body for passthrough;
+   otherwise build ffmpeg with `ffmpeg.NewPCMCommand` and wrap it in
+   `ffmpeg.OpusReader`, which encodes PCM to Opus packets. A parser that
+   supports both link and pipe modes carries a `Mode` field on its streamer.
+2. Add the instance to `stream.registryEntries`
+   (`pkg/music/stream/stream.go`), under its frozen key constant from
+   `pkg/music/sources/parsers.go`.
+3. List it in the owning source's `AvailableParsers()` and in `/play`'s
+   `parser` choices.
 
-The player, queue, recovery, sinks, and persistence are source- and parser-agnostic —
-nothing else needs touching.
+That's it — the player, queue, recovery, sinks, and persistence are all
+source- and parser-agnostic, so nothing else needs touching.
 
 ---
 
 ## Testing & verification
 
-- `go test -race ./...` — the race detector is non-negotiable here; the player tests
-  (`pkg/music/player/player_test.go`) include a concurrent hammer specifically to catch
-  locking regressions. Fakes swap the registry via `stream.SetRegistry` (same pattern as
-  `pkg/music/stream/recovery_test.go`) and stub the sink provider.
-- `internal/discord/voice/sink/sink_discord_test.go` pins the Opus-send contract: stop
-  unblocks a stalled send; stall/closed channel → `ErrVoiceTransport`.
-- Manual smoke checklist (needs a real guild): `/play` multi-track batch — the status
-  message must update on every auto-advance; `/play` while playing → "Track(s) Added";
-  `/next`; `/stop` mid-track returns promptly; natural queue end → single VC disconnect and
-  "Playback Finished"; one `/play` per parser override.
-- `cmd/cli` exercises the whole engine minus Discord: `go run ./cmd/cli`, then
-  `play <url>`, `next`, `stop`, `queue`, `status`.
+- `go test -race ./...` — the race detector isn't optional here. The player
+  tests (`pkg/music/player/player_test.go`) include a concurrent hammer
+  specifically to catch locking regressions. Fakes swap the registry via
+  `stream.SetRegistry` (same pattern as `pkg/music/stream/recovery_test.go`)
+  and stub the sink provider.
+- `internal/discord/voice/sink/sink_discord_test.go` pins down the Opus-send
+  contract: stop unblocks a stalled send, and a stalled or closed channel
+  produces `ErrVoiceTransport`.
+- Manual smoke checklist, which needs a real guild: a `/play` multi-track
+  batch, checking the status message updates on every auto-advance; `/play`
+  while already playing, which should give "Track(s) Added"; `/next`;
+  `/stop` mid-track, which should return promptly; a natural queue end,
+  which should give a single voice disconnect and "Playback Finished"; and
+  one `/play` per parser override.
+- `cmd/cli` exercises the whole engine minus Discord: `go run ./cmd/cli`,
+  then `play <url>`, `next`, `stop`, `queue`, `status`.

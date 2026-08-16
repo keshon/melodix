@@ -13,7 +13,7 @@ type Help struct{}
 func (c *Help) Name() string        { return "help" }
 func (c *Help) Description() string { return "Get a list of available commands" }
 func (c *Help) Group() string       { return "core" }
-func (c *Help) Category() string    { return "🕯️ Information" }
+func (c *Help) Category() string    { return "ℹ️ Information" }
 func (c *Help) UserPermissions() []int64 {
 	return []int64{}
 }
