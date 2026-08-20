@@ -118,6 +118,7 @@ func (c *Play) Run(ctx interface{}) error {
 		return nil
 	}
 	p := target.Player
+	added := 0
 
 	switch parsed.Kind {
 	case common.PlayInputKindHistoryIDs:
@@ -152,6 +153,7 @@ func (c *Play) Run(ctx interface{}) error {
 			playback.QueueError(s, e, err)
 			return nil
 		}
+		added = len(batch)
 
 	case common.PlayInputKindURLs:
 		batch := make([]sources.TrackInfo, 0, len(parsed.URLs))
@@ -170,6 +172,7 @@ func (c *Play) Run(ctx interface{}) error {
 			playback.QueueError(s, e, err)
 			return nil
 		}
+		added = len(batch)
 
 	case common.PlayInputKindQuery:
 		tracks, resErr := c.Bot.ResolveTracks(guildID, parsed.Query, source, parser)
@@ -184,8 +187,9 @@ func (c *Play) Run(ctx interface{}) error {
 			playback.QueueError(s, e, err)
 			return nil
 		}
+		added = len(tracks)
 	}
 
-	playback.StartAndRender(c.Bot, s, e, slashCtx.AppLog, target)
+	playback.StartAndRender(c.Bot, s, e, slashCtx.AppLog, target, added)
 	return nil
 }

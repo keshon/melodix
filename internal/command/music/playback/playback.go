@@ -68,12 +68,14 @@ func Join(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.InteractionCr
 }
 
 // StartAndRender starts playback when the player is idle, then renders the
-// outcome into the guild's music status message.
+// outcome into the guild's music status message. added is how many tracks the
+// caller just queued, which is what the reply reports when something was
+// already playing.
 //
 // The outcome is known here, so it is rendered synchronously; asynchronous
 // transitions such as auto-advance and queue end belong to the voice service's
 // status watcher instead.
-func StartAndRender(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.InteractionCreate, log zerolog.Logger, t Target) {
+func StartAndRender(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.InteractionCreate, log zerolog.Logger, t Target, added int) {
 	started := false
 	if !t.Player.IsPlaying() {
 		if err := t.Player.PlayNext(t.ChannelID); err != nil {
@@ -83,7 +85,7 @@ func StartAndRender(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.Int
 		started = true
 	}
 
-	embed := reply.TracksAddedEmbed()
+	embed := reply.TracksAddedEmbed(added)
 	if started {
 		if track := t.Player.CurrentTrack(); track != nil {
 			embed = reply.NowPlayingEmbed(track)

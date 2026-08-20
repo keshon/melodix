@@ -9,6 +9,7 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
 type Queue struct {
@@ -66,8 +67,12 @@ func (c *Queue) Run(ctx interface{}) error {
 		if n == 1 {
 			noun = "track"
 		}
+		// The per-link cap is named here because this is where someone counts the
+		// tracks and wonders why a 300-track playlist became fewer. It is per
+		// link, not per queue: several playlists still stack up.
 		embed.Footer = &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("%d %s queued · skip with /next", n, noun),
+			Text: fmt.Sprintf("%d %s queued · up to %d per playlist link · skip with /next",
+				n, noun, youtube.MaxPlaylistItems),
 		}
 	}
 	reply.FollowupEmbedEphemeral(s, e, embed)

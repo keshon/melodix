@@ -92,11 +92,20 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
-// TracksAddedEmbed builds the status embed for tracks queued while something is playing.
-func TracksAddedEmbed() *discordgo.MessageEmbed {
+// TracksAddedEmbed builds the status embed for tracks queued while something is
+// playing. The count matters for playlists: it is the only place the caller
+// learns how many of them actually arrived.
+func TracksAddedEmbed(added int) *discordgo.MessageEmbed {
+	desc := "Added to queue"
+	switch {
+	case added == 1:
+		desc = "Added 1 track to the queue"
+	case added > 1:
+		desc = fmt.Sprintf("Added %d tracks to the queue", added)
+	}
 	return &discordgo.MessageEmbed{
 		Title:       "🎶 Track(s) Added",
-		Description: "Added to queue",
+		Description: desc,
 		Color:       EmbedColor,
 	}
 }

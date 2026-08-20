@@ -76,10 +76,11 @@ knob, Docker — is in [docs/running.md](docs/running.md).
 /play 42                                            replay entry 42 from /history
 ```
 
-A playlist link queues the whole list, up to 100 tracks; `/queue` shows what
-is waiting. A link that names both a video and a playlist
-(`watch?v=...&list=PL...`) plays just that video — the one exception is a mix,
-which has no other link shape.
+Any link carrying a `list=` queues the whole list, up to 100 tracks, and
+`/queue` shows what is waiting. A link that names a video *and* a list
+(`watch?v=...&list=...`) starts at that video and continues through the rest,
+the same as opening it on YouTube. To play a single track, link it without the
+`list=` part.
 
 ## Under the hood
 

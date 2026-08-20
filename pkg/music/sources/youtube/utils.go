@@ -12,11 +12,6 @@ func isYouTubeURL(input string) bool {
 	return youtubeRegex.MatchString(input)
 }
 
-// isYouTubePlaylistURL matches a standalone list page: /playlist?list=…
-func isYouTubePlaylistURL(s string) bool {
-	return strings.Contains(s, "youtube.com/playlist")
-}
-
 // ExtractListID returns the list id from any YouTube URL, or "" when there is
 // none. It does not judge what to do with it — see shouldExpandList.
 func ExtractListID(raw string) string {
@@ -39,21 +34,16 @@ func ExtractVideoID(raw string) string {
 	return u.Query().Get("v")
 }
 
-// shouldExpandList decides whether a URL means "play this whole list" or "play
-// this one video". The rule:
+// shouldExpandList decides whether a URL means "play this list".
 //
-//   - /playlist?list=… names a list and nothing else, so it expands.
-//   - watch?v=…&list=PL… names one specific video, so only that video plays.
-//     This is the link you get from clicking a video inside a playlist, where
-//     expanding the surrounding list would be a surprise.
-//   - watch?v=…&list=RD… expands anyway, because a mix has no standalone page —
-//     that URL is the only shape a mix ever takes, and the linked video is the
-//     mix's own first entry, so nothing is lost by treating it as a list.
-func shouldExpandList(raw, listID string) bool {
-	if listID == "" {
-		return false
-	}
-	return isYouTubePlaylistURL(raw) || IsMixID(listID)
+// Any link carrying a list id does, which is what YouTube itself means by one:
+// opening watch?v=X&list=L plays X and then continues through L. The video is
+// not ignored — it becomes the first track (see seedFirst) — so expanding costs
+// the caller nothing, while treating the list as decoration would throw away
+// the part of the link that is harder to reconstruct. To play a single video,
+// link it without the list.
+func shouldExpandList(listID string) bool {
+	return listID != ""
 }
 
 func isYouTubeVideoURL(s string) bool {

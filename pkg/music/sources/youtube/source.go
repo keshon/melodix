@@ -47,15 +47,17 @@ func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 	preferred := source.PreferParser(parsers, selectedParser)
 
 	// playlist or mix: one link expands to many tracks
-	if listID := ExtractListID(input); shouldExpandList(input, listID) {
-		result, err := y.playlists.Fetch(listID, ExtractVideoID(input))
+	if listID := ExtractListID(input); shouldExpandList(listID) {
+		seed := ExtractVideoID(input)
+		result, err := y.playlists.Fetch(listID, seed)
 		if err != nil {
 			return nil, err
 		}
-		tracks := make([]source.TrackInfo, 0, len(result.Entries))
-		for _, e := range result.Entries {
+		entries := seedFirst(result.Entries, seed)
+		tracks := make([]source.TrackInfo, 0, len(entries))
+		for _, e := range entries {
 			tracks = append(tracks, source.TrackInfo{
-				URL:              "https://www.youtube.com/watch?v=" + e.VideoID,
+				URL:              VideoURL(e.VideoID),
 				Title:            e.Title,
 				SourceName:       Name,
 				AvailableParsers: preferred,

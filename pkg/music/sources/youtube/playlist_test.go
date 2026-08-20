@@ -108,8 +108,8 @@ func TestFetchPlaylistStopsAtCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(got.Entries) != maxPlaylistItems {
-		t.Fatalf("entries = %d, want cap %d", len(got.Entries), maxPlaylistItems)
+	if len(got.Entries) != MaxPlaylistItems {
+		t.Fatalf("entries = %d, want cap %d", len(got.Entries), MaxPlaylistItems)
 	}
 }
 
@@ -247,16 +247,47 @@ func TestShouldExpandList(t *testing.T) {
 		why  string
 	}{
 		{"https://www.youtube.com/playlist?list=PL123456789012", true, "a list page is only a list"},
-		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123456789012", false, "names one video inside a playlist"},
+		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123456789012", true, "YouTube plays the video then continues the list"},
 		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ", true, "a mix has no other URL shape"},
 		{"https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVMdQw4w9WgXcQ", true, "song radio is a mix"},
 		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ", false, "no list at all"},
 		{"https://youtu.be/dQw4w9WgXcQ", false, "short link, no list"},
 	}
 	for _, c := range cases {
-		if got := shouldExpandList(c.url, ExtractListID(c.url)); got != c.want {
+		if got := shouldExpandList(ExtractListID(c.url)); got != c.want {
 			t.Errorf("shouldExpandList(%q) = %v, want %v (%s)", c.url, got, c.want, c.why)
 		}
+	}
+}
+
+func TestSeedFirst(t *testing.T) {
+	t.Parallel()
+	list := []PlaylistEntry{
+		{VideoID: "aaaaaaaaaaa", Title: "A"},
+		{VideoID: "bbbbbbbbbbb", Title: "B"},
+		{VideoID: "ccccccccccc", Title: "C"},
+	}
+
+	// Linking track 2 of 3 asks for 2 onwards.
+	got := seedFirst(list, "bbbbbbbbbbb")
+	if len(got) != 2 || got[0].VideoID != "bbbbbbbbbbb" {
+		t.Fatalf("trim to seed: %+v", got)
+	}
+
+	// Already first: unchanged.
+	if got := seedFirst(list, "aaaaaaaaaaa"); len(got) != 3 {
+		t.Fatalf("seed already first: %+v", got)
+	}
+
+	// Not a member, or past the cap: the linked video still plays, first.
+	got = seedFirst(list, "zzzzzzzzzzz")
+	if len(got) != 4 || got[0].VideoID != "zzzzzzzzzzz" {
+		t.Fatalf("missing seed must be prepended: %+v", got)
+	}
+
+	// No seed at all (a /playlist link) leaves the list alone.
+	if got := seedFirst(list, ""); len(got) != 3 || got[0].VideoID != "aaaaaaaaaaa" {
+		t.Fatalf("no seed: %+v", got)
 	}
 }
 

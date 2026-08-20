@@ -233,7 +233,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 		return nil
 	}
 
-	playback.StartAndRender(c.Bot, s, e, compCtx.AppLog, target)
+	playback.StartAndRender(c.Bot, s, e, compCtx.AppLog, target, len(tracks))
 	return nil
 }
 

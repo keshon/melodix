@@ -24,10 +24,12 @@ import (
 // has no browsable page at all — /browse answers "This playlist type is
 // unviewable" — and comes from /next instead.
 const (
-	// maxPlaylistItems caps how many tracks one link may contribute. Playlists
+	// MaxPlaylistItems caps how many tracks one link may contribute. Playlists
 	// run to thousands of entries and mixes are formally endless, so an
-	// unbounded expansion is a way to fill a guild's queue by accident.
-	maxPlaylistItems = 100
+	// unbounded expansion is a way to fill a guild's queue by accident. It is
+	// exported because a limit nobody can see is indistinguishable from a bug:
+	// /queue names it in its footer.
+	MaxPlaylistItems = 100
 
 	// playlistPageSize is what /browse returns per continuation. Informational:
 	// paging stops on the cap or a missing token, never on this number.
@@ -93,7 +95,7 @@ func (p *PlaylistFetcher) Fetch(listID, seedVideoID string) (PlaylistResult, err
 }
 
 // fetchPlaylist walks /browse, following legacy continuation tokens until the
-// list ends or maxPlaylistItems is reached.
+// list ends or MaxPlaylistItems is reached.
 func (p *PlaylistFetcher) fetchPlaylist(listID string) (PlaylistResult, error) {
 	body := innertube.Context()
 	body["browseId"] = "VL" + listID
@@ -139,7 +141,7 @@ func (p *PlaylistFetcher) fetchPlaylist(listID string) (PlaylistResult, error) {
 				VideoID: item.PlaylistVideoRenderer.VideoID,
 				Title:   item.PlaylistVideoRenderer.Title.String(),
 			})
-			if len(out.Entries) >= maxPlaylistItems {
+			if len(out.Entries) >= MaxPlaylistItems {
 				return out, nil
 			}
 		}
@@ -198,7 +200,7 @@ func (p *PlaylistFetcher) fetchMix(listID, seedVideoID string) (PlaylistResult, 
 			VideoID: item.PlaylistPanelVideoRenderer.VideoID,
 			Title:   item.PlaylistPanelVideoRenderer.Title.String(),
 		})
-		if len(out.Entries) >= maxPlaylistItems {
+		if len(out.Entries) >= MaxPlaylistItems {
 			break
 		}
 	}
@@ -260,4 +262,23 @@ func (p *PlaylistFetcher) post(path string, body map[string]any, userAgent strin
 		return fmt.Errorf("youtube: decode %s response: %w", strings.TrimPrefix(path, "/youtubei/v1/"), err)
 	}
 	return nil
+}
+
+// seedFirst makes the video the link named the one that plays first, which is
+// what "play this video, then continue the list" means.
+//
+// Found in the list, everything before it is dropped: linking track 40 of 50
+// asks for 40 onwards, not the whole thing. Not found — the list was capped
+// before reaching it, or the video simply is not a member — it is prepended, so
+// the video the user actually pointed at never goes missing.
+func seedFirst(entries []PlaylistEntry, seedVideoID string) []PlaylistEntry {
+	if seedVideoID == "" || len(entries) == 0 {
+		return entries
+	}
+	for i, e := range entries {
+		if e.VideoID == seedVideoID {
+			return entries[i:]
+		}
+	}
+	return append([]PlaylistEntry{{VideoID: seedVideoID}}, entries...)
 }
