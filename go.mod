@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/ebitengine/oto/v3 v3.4.0
+	github.com/ebitengine/oto/v3 v3.4.1
 	github.com/godeps/opus v1.0.3
 	github.com/joho/godotenv v1.5.1
 	github.com/keshon/buildinfo v0.1.0
@@ -18,9 +18,9 @@ require (
 
 require (
 	github.com/bitly/go-simplejson v0.5.1 // indirect
-	github.com/cloudflare/circl v1.6.4 // indirect
-	github.com/dlclark/regexp2/v2 v2.2.2 // indirect
-	github.com/dop251/goja v0.0.0-20260618133527-c9b2ea77db59 // indirect
+	github.com/cloudflare/circl v1.6.5 // indirect
+	github.com/dlclark/regexp2/v2 v2.7.1 // indirect
+	github.com/dop251/goja v0.0.0-20260806115107-493f22071ef6 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/google/pprof v0.0.0-20260604005048-7023385849c0 // indirect
@@ -28,10 +28,10 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
-	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )
 
 replace github.com/bwmarrin/discordgo => ./pkg/discordgo-fork-dev
