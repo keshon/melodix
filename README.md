@@ -74,6 +74,7 @@ knob, Docker — is in [docs/running.md](docs/running.md).
 - **/history** — Show recently played tracks (replay by id with /play)
 - **/next** — Skip to the next track
 - **/play** — Play a music track
+- **/queue** — Show what is playing and what is queued next
 - **/stop** — Stop playback and clear queue
 
 ### ⚙️ Settings
