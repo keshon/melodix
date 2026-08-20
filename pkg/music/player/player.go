@@ -106,6 +106,15 @@ type Player struct {
 	guildID string
 	// recorder persists successful starts (nil for CLI).
 	recorder PlaybackRecorder
+	// confirmedParser is the parser that last produced audio for the current track
+	// ("" before the first packet, and while serving from the cache).
+	confirmedParser string
+	// announcedParser is the parser the last emitted status told the UI about.
+	// It can differ from confirmedParser when a parser opens, is announced, then
+	// dies on its first read — the case this whole handshake exists to correct.
+	announcedParser string
+	// recorded is true once a history row has been written for the current track.
+	recorded bool
 
 	log zerolog.Logger
 
@@ -296,17 +305,13 @@ func (p *Player) PlayNext(target string) error {
 			continue
 		}
 
-		playedAt := time.Now()
-		p.mu.Lock()
-		gid := p.guildID
-		rec := p.recorder
-		p.mu.Unlock()
-		if rec != nil && gid != "" {
-			// Future: listened-duration aggregation would require completion callbacks from here or runPlayback.
-			rec.Record(gid, playedAt, cloneTrack(track))
-		}
-
-		p.log.Info().Str("title", track.Title).Int("queue_len", len(p.Queue())).Msg("track_now_playing")
+		// History is written from onParserConfirmed, once a parser has actually
+		// produced audio — opening one proves nothing (see RecoveryStream.Open).
+		p.log.Info().
+			Str("title", track.Title).
+			Str("parser", track.CurrentParser).
+			Int("queue_len", len(p.Queue())).
+			Msg("track_now_playing")
 		return nil
 	}
 }
@@ -410,9 +415,13 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	p.starting = true
 	p.playing = false
 	p.currTrack = track
+	p.confirmedParser = ""
+	p.announcedParser = ""
+	p.recorded = false
 	p.mu.Unlock()
 
 	rs := stream.NewRecoveryStreamWithLogger(track, p.log)
+	rs.SetOnParserConfirmed(func(parser string) { p.onParserConfirmed(track, parser) })
 	if err := rs.Open(0); err != nil {
 		p.log.Error().Err(err).Msg("stream_open_failed")
 		p.mu.Lock()
@@ -425,17 +434,18 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	if resumed {
 		p.clearPlaybackUserError()
 		p.emitStatus(StatusResumed)
-		p.log.Info().Str("title", track.Title).Msg("track_resuming")
+		p.log.Info().Str("title", track.Title).Str("parser", track.CurrentParser).Msg("track_resuming")
 	} else {
 		p.clearPlaybackUserError()
 		p.emitStatus(StatusPlaying)
-		p.log.Info().Str("title", track.Title).Msg("track_starting")
+		p.log.Info().Str("title", track.Title).Str("parser", track.CurrentParser).Msg("track_starting")
 	}
 
 	p.mu.Lock()
 	p.starting = false
 	p.playing = true
 	p.currTrack = track
+	p.announcedParser = track.CurrentParser
 	stopCh := p.stopPlayback
 	doneCh := p.playbackDone
 	p.mu.Unlock()
@@ -492,7 +502,7 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 	p.mu.Unlock()
 
 	failedSnapshot := cloneTrack(*track)
-	p.log.Info().Str("title", track.Title).Msg("playback_running")
+	p.log.Info().Str("title", track.Title).Str("parser", track.CurrentParser).Msg("playback_running")
 
 	var err error
 	softUsed := 0
@@ -563,11 +573,57 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 	return nil
 }
 
+// onParserConfirmed runs when RecoveryStream proves a parser is actually
+// producing audio. It is the single point where "what is playing" becomes known,
+// so it owns both the history row and the UI refresh: a mid-track switch (the
+// previous parser opened, then died on its first read) re-emits StatusPlaying so
+// the Now Playing embed stops naming a parser that never played.
+// Called from the playback goroutine; must not be called with p.mu held.
+func (p *Player) onParserConfirmed(track *parsers.Track, parser string) {
+	p.mu.Lock()
+	if p.currTrack != track {
+		p.mu.Unlock() // a newer run owns the player; this stream is being torn down
+		return
+	}
+	// Compare against what the UI was told, not against the previous confirmation:
+	// when the announced parser dies on its first read, the very first confirmation
+	// is already a different parser and still needs a redraw.
+	stale := p.announcedParser != parser
+	announced := p.announcedParser
+	p.confirmedParser = parser
+	p.announcedParser = parser
+	gid := p.guildID
+	rec := p.recorder
+	record := rec != nil && gid != "" && !p.recorded
+	if record {
+		p.recorded = true
+	}
+	p.mu.Unlock()
+
+	if record {
+		// Future: listened-duration aggregation would require completion callbacks from here or runPlayback.
+		rec.Record(gid, time.Now(), cloneTrack(*track))
+	}
+	if !stale {
+		return // the UI already names this parser (same parser reopened)
+	}
+	// Not a duplicate of recovery's immediate_failure_switching_parser: that line
+	// reports the media switch, this one reports its user-visible consequence --
+	// the Now Playing embed still names `announced`, which never produced audio.
+	p.log.Info().
+		Str("title", track.Title).
+		Str("announced", announced).
+		Str("parser", parser).
+		Msg("now_playing_parser_corrected")
+	p.emitStatus(StatusPlaying)
+}
+
 func (p *Player) emitStatus(status Status) {
 	select {
 	case p.PlayerStatus <- status:
 	default:
-		p.log.Debug().Str("status", string(status)).Msg("player_status_dropped")
+		// Nobody is draining the channel: the UI goes stale with no other signal.
+		p.log.Warn().Str("status", string(status)).Msg("player_status_dropped")
 	}
 }
 

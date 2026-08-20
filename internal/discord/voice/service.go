@@ -190,7 +190,14 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			}
 			if err := s.UpdatePlaybackStatus(sess, nil, guildID, reply.NowPlayingEmbed(track)); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
+				continue
 			}
+			// Traces the embed itself, so a chip that stayed stale can be told apart
+			// from a correction that was computed but never rendered.
+			s.log.Info().
+				Str("guild_id", guildID).
+				Str("parser", track.CurrentParser).
+				Msg("now_playing_rendered")
 		case player.StatusStopped:
 			// A transient Stopped fires between tracks; only render the final one.
 			if p.IsPlaying() || len(p.Queue()) > 0 {
