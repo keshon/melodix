@@ -236,7 +236,7 @@ sequenceDiagram
   H->>H: render "Now Playing" synchronously
   S->>RS: ReadPacket (first)
   RS->>P: parser confirmed — audio is really flowing
-  P->>P: write history row; re-render if it differs from what was announced
+  P->>P: write history row, correct "Now Playing" if the parser changed
   loop every 20ms
     S->>RS: ReadPacket (Opus)
     S->>S: forward packet → OpusSend (stop/timeout-guarded)
