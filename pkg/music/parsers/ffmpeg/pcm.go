@@ -38,8 +38,10 @@ func NewPCMCommand(input string, seekSec float64, reconnect bool, tag string) *e
 }
 
 // NewPCMCommandUA is NewPCMCommand with an HTTP User-Agent for URL inputs
-// ("" keeps ffmpeg's default). Some CDNs (e.g. googlevideo) reject requests
-// whose UA does not match the client that obtained the stream URL.
+// ("" keeps ffmpeg's default). Callers pass the UA of the client that obtained
+// the stream URL so the fetch stays faithful to it; some CDNs do gate on it.
+// googlevideo, measured, does not — what it gates on is the issuing InnerTube
+// client (see kkdai.VisionOSClient), so don't treat this as a 403 remedy.
 func NewPCMCommandUA(input string, seekSec float64, reconnect bool, tag, userAgent string) *exec.Cmd {
 	args := make([]string, 0, 18)
 	if seekSec > 0 {

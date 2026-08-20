@@ -56,7 +56,7 @@ func TestLivePassthrough(t *testing.T) {
 	}
 }
 
-// TestLiveInnerTube hits the real InnerTube API with the ANDROID_VR client and checks
+// TestLiveInnerTube hits the real InnerTube API with the configured client and checks
 // that a direct (cipher-free) audio URL comes back and the CDN accepts our UA.
 // This is the canary for clientVersion rot.
 // Opt-in: MELODIX_LIVE_TESTS=1 go test -run Live -v ./pkg/music/parsers/ytnative

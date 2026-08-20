@@ -31,8 +31,9 @@ const (
 	visitorTTL = 6 * time.Hour
 	// visitorRetryWait keeps a failing bootstrap from running on every play.
 	visitorRetryWait = 5 * time.Minute
-	// bootstrapUA fetches the home page as a browser -- the ANDROID_VR UA gets a
-	// page shape that carries no ytcfg blob.
+	// bootstrapUA fetches the home page as a browser. An app client's UA gets a
+	// page shape that carries no ytcfg blob, so this deliberately does not reuse
+	// clientUserAgent.
 	bootstrapUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 

@@ -61,9 +61,10 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
-	// googlevideo binds a stream URL to the client that obtained it. yt-dlp reports
-	// the headers it used in http_headers precisely so the fetch can be handed off;
-	// without them ffmpeg asks as Lavf/… and the CDN answers 403 on the first read.
+	// yt-dlp reports the headers it used in http_headers so the fetch can be handed
+	// off; passing the UA on keeps ffmpeg's request faithful to the one that
+	// resolved the URL. Measured against googlevideo, the UA does not decide a 403
+	// — the issuing InnerTube client does — so this is hygiene, not a fix.
 	cmd := ffmpegparser.NewPCMCommandUA(link, seekSec, true, "ytdlp-link", headerValue(headers, "User-Agent"))
 	return ffmpegparser.OpusReader(cmd, "ytdlp")
 }

@@ -71,8 +71,10 @@ type Resolver interface {
 	Resolve(input, source, parser string) ([]sources.TrackInfo, error)
 }
 
-// PlaybackRecorder is called after a track successfully starts (after Open), e.g. to persist guild playback history.
-// Discord wiring sets guildID; CLI/examples leave recorder nil.
+// PlaybackRecorder is called once a track has actually produced audio — the first
+// packet, not a successful Open — e.g. to persist guild playback history. Track
+// carries the parser that produced it, so a parser that opened and then died is
+// never recorded. Discord wiring sets guildID; CLI/examples leave recorder nil.
 type PlaybackRecorder interface {
 	Record(guildID string, playedAt time.Time, track parsers.Track)
 }
@@ -197,7 +199,8 @@ func (p *Player) SetGuildID(guildID string) {
 	p.mu.Unlock()
 }
 
-// SetRecorder sets an optional callback invoked after a track successfully starts. Pass nil to disable.
+// SetRecorder sets an optional callback invoked once a track has actually
+// produced audio (see PlaybackRecorder). Pass nil to disable.
 func (p *Player) SetRecorder(r PlaybackRecorder) {
 	p.mu.Lock()
 	p.recorder = r

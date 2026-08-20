@@ -140,20 +140,30 @@ frame, since that's what Discord's sender expects) and falls back if that
 check fails. The YouTube parser chain, in order:
 
 - **`ytnative-link`** (passthrough) — POSTs to YouTube's InnerTube `player`
-  endpoint using the ANDROID_VR client (the plain ANDROID client got retired
-  in 2026), gets back a direct cipher-free URL, and passes the stream
-  through. The single maintenance knob here is `clientVersion`, in
-  `pkg/music/parsers/ytnative/innertube.go`. Its main weakness: the
-  token-less client gets bot-checked a lot (`LOGIN_REQUIRED`), so it tends to
-  fail fast and often.
-- **`kkdai-pipe`** (passthrough) — the real workhorse. `kkdai/youtube`'s
-  signature-decipher path resolves a WebM/Opus stream and gets past the
-  bot-check that blocks ytnative, and that stream gets demuxed directly. In
-  today's climate, this is the path that actually lands passthrough most of
-  the time.
+  endpoint using the VISIONOS client, gets back a direct cipher-free URL, and
+  passes the stream through. It carries a `visitorData` session id,
+  bootstrapped from the home page and refreshed from every player response;
+  without one, InnerTube answers `LOGIN_REQUIRED` whichever client you use.
+  The maintenance knobs are the client constants in
+  `pkg/music/parsers/ytnative/innertube.go`, `clientVersion` first among them.
+- **`kkdai-pipe`** (passthrough) — `kkdai/youtube` resolves a WebM/Opus stream
+  and downloads it in chunks, which gets demuxed directly. It rides the same
+  InnerTube client: kkdai's `DefaultClient` is pointed at VISIONOS in
+  `pkg/music/parsers/kkdai/streamer.go`.
 - **`kkdai-link`, `ytdlp-*`** (transcode) — the ffmpeg-encode fallbacks:
   ffmpeg decodes the source and `opus.Encode` re-encodes it into packets.
   These only get used once both passthrough paths are exhausted.
+
+**Why the client choice matters.** googlevideo applies per-issuing-client
+rules to the stream URLs it hands out. An `ANDROID_VR` URL answers 403 to
+*any* open-ended request — a plain GET, or `Range: bytes=0-` — and serves
+only bounded ranges of roughly 1 MiB. A `VISIONOS` URL serves all of those
+shapes. Both of our readers ask open-ended (passthrough sends a plain GET,
+ffmpeg sends `Range: bytes=0-`), so under `ANDROID_VR` every YouTube parser
+died on its first read and the chain walked all the way down to yt-dlp.
+Neither the User-Agent nor an `n` parameter is involved — both were measured
+against the live CDN and ruled out. `TestLiveOpenEndedRequestAccepted` pins
+the invariant, so a future regression points here instead of at those.
 
 `ytnative` returns `ErrCipherOnly` on cipher-only responses; a passthrough
 that fails framing validation returns `opus.ErrNotPassthrough`. Either way,
@@ -220,10 +230,13 @@ sequenceDiagram
   H->>P: EnqueueTrackInfo(track)
   H->>P: PlayNext(voiceChannelID)
   P->>P: dequeue under playNextMu
-  P->>RS: Open(0) — first working parser
+  P->>RS: Open(0) — first parser that opens
   P->>P: spawn runPlayback goroutine
   P-->>H: nil (track started)
   H->>H: render "Now Playing" synchronously
+  S->>RS: ReadPacket (first)
+  RS->>P: parser confirmed — audio is really flowing
+  P->>P: write history row; re-render if it differs from what was announced
   loop every 20ms
     S->>RS: ReadPacket (Opus)
     S->>S: forward packet → OpusSend (stop/timeout-guarded)
@@ -286,7 +299,10 @@ keep working past the 15-minute interaction-token expiry.
 There are three distinct failure classes here, each with its own mechanism:
 
 1. **Media failures**, handled by `stream.RecoveryStream` on a per-track
-   basis. An instant fail — an error or EOF on the very first read — moves
+   basis. Opening a parser proves nothing on its own — the ffmpeg-backed ones
+   only spawn a process, so a CDN 403 surfaces on the first read — which is
+   why `Open` logs `stream_opening` and the real `stream_opened` waits for the
+   first packet. An instant fail — an error or EOF on that first read — moves
    on to the next parser in the track's preference list. An early EOF,
    meaning EOF before roughly 95% of the known duration, reopens the same
    parser at the current seek position, computed from bytes read, up to
@@ -317,7 +333,8 @@ raw error text into something a person can actually read.
 `ProcessStream` (the ffmpeg wrapper) converts a zero-byte EOF from a failed
 process into the real underlying error, so an instant ffmpeg failure — a
 403, a bad URL — never gets mistaken for a clean track end. The transcode
-parsers build ffmpeg via `ffmpeg.NewPCMCommand` and wrap its
+parsers build ffmpeg via `ffmpeg.NewPCMCommand` (or `NewPCMCommandUA`, which
+adds the extracting client's User-Agent) and wrap its
 PCM output in `ffmpeg.OpusReader` (which encodes to Opus packets via `opus.Encode`); ffmpeg
 stderr is captured and classified (403/forbidden/conversion failures at Warn).
 

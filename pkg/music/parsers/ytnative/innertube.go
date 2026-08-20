@@ -13,9 +13,11 @@ import (
 
 // Thin InnerTube client using the VISIONOS client context (the YouTube app on
 // Apple Vision Pro), which returns direct (cipher-free) stream URLs anonymously
-// and needs no PO token. Deliberately NO signature/nsig deciphering — that
-// treadmill belongs to kkdai/yt-dlp, which stay registered as fallbacks. When
-// this client can't produce a plain URL it fails fast and the chain moves on.
+// and needs no PO token. Deliberately NO signature/nsig deciphering: the URLs
+// this client returns carry no n parameter to solve, and if that ever changes
+// the answer is to fall through to the yt-dlp fallback, not to grow a JS engine
+// here. When this client can't produce a plain URL it fails fast and the
+// recovery chain moves on.
 //
 // The client choice is not cosmetic, and this is why it is VISIONOS and not
 // ANDROID_VR: googlevideo enforces different request rules per issuing client.
@@ -71,7 +73,7 @@ type playerResponse struct {
 }
 
 // fetchPlayer POSTs the ANDROID-client player request. InnerTube accepts keyless
-// requests; no poToken is sent — android_vr is one of the clients that does not
+// requests; no poToken is sent — visionos is one of the clients that does not
 // require one. A visitorData session id is sent when one could be obtained (see
 // visitor.go), both in the client context and as X-Goog-Visitor-Id.
 func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse, error) {
