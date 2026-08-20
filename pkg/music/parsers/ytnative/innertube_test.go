@@ -134,3 +134,48 @@ func TestExtractVideoID(t *testing.T) {
 		}
 	}
 }
+
+func TestBitrateCapPicksTheBestThatFits(t *testing.T) {
+	// Roughly what YouTube offers for one track: itags 249, 250, 251.
+	offered := []format{
+		{URL: "u249", MimeType: `audio/webm; codecs="opus"`, Bitrate: 49000},
+		{URL: "u250", MimeType: `audio/webm; codecs="opus"`, Bitrate: 66000},
+		{URL: "u251", MimeType: `audio/webm; codecs="opus"`, Bitrate: 137000},
+	}
+
+	SetMaxBitrate(0)
+	defer SetMaxBitrate(0)
+	if f, ok := pickOpusFormat(offered); !ok || f.URL != "u251" {
+		t.Fatalf("no cap should take the best: %+v", f)
+	}
+
+	SetMaxBitrate(70000)
+	if f, ok := pickOpusFormat(offered); !ok || f.URL != "u250" {
+		t.Fatalf("cap 70k should take 66k: %+v", f)
+	}
+
+	SetMaxBitrate(66000)
+	if f, ok := pickOpusFormat(offered); !ok || f.URL != "u250" {
+		t.Fatalf("the cap is inclusive: %+v", f)
+	}
+
+	// A cap under everything on offer must not mean silence.
+	SetMaxBitrate(1000)
+	if f, ok := pickOpusFormat(offered); !ok || f.URL != "u251" {
+		t.Fatalf("an impossible cap should be ignored, got %+v", f)
+	}
+}
+
+func TestBitrateCapAppliesToTheFfmpegFallbackToo(t *testing.T) {
+	offered := []format{
+		{URL: "m4a", MimeType: "audio/mp4", Bitrate: 131000},
+		{URL: "low", MimeType: "audio/mp4", Bitrate: 50000},
+	}
+	SetMaxBitrate(60000)
+	defer SetMaxBitrate(0)
+
+	f, err := pickAudioFormat(offered)
+	if err != nil || f.URL != "low" {
+		t.Fatalf("got %+v, err %v", f, err)
+	}
+}

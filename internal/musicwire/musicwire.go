@@ -7,6 +7,7 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/cache"
+	"github.com/keshon/melodix/pkg/music/parsers/ytnative"
 	"github.com/keshon/melodix/pkg/music/stream"
 	"github.com/rs/zerolog"
 )
@@ -17,6 +18,7 @@ import (
 // the CLI's fallback when the bot holds the data directory lock.
 func Apply(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error {
 	stream.SetBufferAhead(cfg.BufferAheadMs)
+	ytnative.SetMaxBitrate(cfg.MaxAudioBitrate)
 	if !cfg.CacheEnabled {
 		// Say so out loud. A cache that is off writes nothing and logs nothing,
 		// which is indistinguishable from a cache that is broken — and the usual
@@ -24,6 +26,7 @@ func Apply(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error
 		// process at all.
 		log.Info().
 			Int("buffer_ahead_ms", cfg.BufferAheadMs).
+			Int("max_audio_bitrate", cfg.MaxAudioBitrate).
 			Msg("track_cache_disabled")
 		return nil
 	}
@@ -46,6 +49,7 @@ func Apply(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error
 		Bool("persistent", cfg.CachePersistent).
 		Bool("index_persisted", index != nil).
 		Int("buffer_ahead_ms", cfg.BufferAheadMs).
+		Int("max_audio_bitrate", cfg.MaxAudioBitrate).
 		Msg("track_cache_enabled")
 	return nil
 }

@@ -57,6 +57,13 @@ type Config struct {
 	// buffered second per guild and does not pre-fill, so raising it delays
 	// nothing. Independent of the cache.
 	BufferAheadMs int `env:"BUFFER_AHEAD_MS" envDefault:"30000"`
+	// MaxAudioBitrate caps which YouTube audio format the native parser picks, in
+	// bits per second (0 = take the best on offer). The same track is usually
+	// offered near 49, 66 and 137 kbps; a Discord voice channel carries 64 kbps
+	// unless the guild is boosted, so the top format mostly buys bandwidth the
+	// channel will not use. On a slow or lossy link a cap is worth real money,
+	// because a reopened stream is re-fetched from the start.
+	MaxAudioBitrate int `env:"MAX_AUDIO_BITRATE" envDefault:"0"`
 
 	// Logging (applog / zerolog). LOG_FILE empty = stderr only (pretty console).
 	LogLevel      string `env:"LOG_LEVEL" envDefault:"info"`

@@ -120,10 +120,11 @@ func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse,
 }
 
 // pickOpusFormat returns the highest-bitrate WebM/Opus audio format with a direct
-// URL (itag 251/250/249) — the passthrough candidate. ok is false if none exist.
+// URL (itag 251/250/249) that fits under the configured bitrate cap — the
+// passthrough candidate. ok is false if none exist.
 func pickOpusFormat(formats []format) (format, bool) {
 	var best format
-	for _, f := range formats {
+	for _, f := range withinBitrateCap(formats) {
 		if f.URL == "" {
 			continue
 		}
@@ -137,13 +138,14 @@ func pickOpusFormat(formats []format) (format, bool) {
 	return best, best.URL != ""
 }
 
-// pickAudioFormat returns the highest-bitrate audio format with a direct URL.
+// pickAudioFormat returns the highest-bitrate audio format with a direct URL
+// that fits under the configured bitrate cap.
 // Audio formats that exist only as signatureCipher mean this client context is
 // being served protected streams — fail fast so the fallback parsers engage.
 func pickAudioFormat(formats []format) (format, error) {
 	var best format
 	cipherOnly := false
-	for _, f := range formats {
+	for _, f := range withinBitrateCap(formats) {
 		if !strings.HasPrefix(f.MimeType, "audio/") {
 			continue
 		}
