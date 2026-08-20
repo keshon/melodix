@@ -11,6 +11,8 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/pkg/music/sources"
+	"github.com/keshon/melodix/pkg/music/sources/soundcloud"
 	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
@@ -29,8 +31,13 @@ const componentPrefix = "search"
 // id from the very first version, even though only YouTube is offered today —
 // adding SoundCloud later is then a new case here rather than a format change
 // that silently mis-routes every chooser still on screen.
+//
+// The payload is the source's own compact id, never a URL: SoundCloud
+// permalinks run past 130 characters and 8 in 100 already exceed the budget
+// below, so a URL-shaped payload would silently drop results from the chooser.
 const (
-	sourceYouTube = "yt"
+	sourceYouTube    = "yt"
+	sourceSoundCloud = "sc"
 
 	// customIDLimit is Discord's cap on a component id. YouTube ids are fixed
 	// at 11 characters so the budget is never close, but a source whose payload
@@ -49,15 +56,16 @@ func buttonID(source, payload string) (string, bool) {
 var _ cmdadapter.ComponentInteractionHandler = (*Search)(nil)
 
 // Search offers a pick-one chooser for a query instead of /play's
-// take-the-first-hit. It is YouTube-only: the other sources have no ranked
-// search to choose from.
+// take-the-first-hit. Radio is absent on purpose: a stream has nothing to rank.
 type Search struct {
-	Bot      discord.VoiceAPI
-	searcher *youtube.Searcher
+	Bot discord.VoiceAPI
+
+	yt *youtube.Searcher
+	sc *soundcloud.Searcher
 }
 
 func (c *Search) Name() string             { return componentPrefix }
-func (c *Search) Description() string      { return "Search YouTube and pick a track to play" }
+func (c *Search) Description() string      { return "Search and pick a track to play" }
 func (c *Search) Group() string            { return "music" }
 func (c *Search) Category() string         { return "🎵 Music" }
 func (c *Search) UserPermissions() []int64 { return []int64{} }
@@ -70,8 +78,17 @@ func (c *Search) SlashDefinition() *discordgo.ApplicationCommand {
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Name:        "query",
-				Description: "What to search for on YouTube",
+				Description: "What to search for",
 				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "source",
+				Description: "Where to search (YouTube by default)",
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "YouTube", Value: sources.YouTube},
+					{Name: "SoundCloud", Value: sources.SoundCloud},
+				},
 			},
 		},
 	}
@@ -85,11 +102,21 @@ func (c *Search) Run(ctx interface{}) error {
 	s := slashCtx.Session
 	e := slashCtx.Event
 
-	var query string
+	var query, wanted string
 	for _, opt := range e.ApplicationCommandData().Options {
-		if opt.Name == "query" {
+		switch opt.Name {
+		case "query":
 			query = strings.TrimSpace(opt.StringValue())
+		case "source":
+			wanted = opt.StringValue()
 		}
+	}
+	searcher, tag, err := c.pick(wanted)
+	if err != nil {
+		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 Error",
+			Description: fmt.Sprintf("%v", err),
+		})
 	}
 	if query == "" {
 		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
@@ -104,7 +131,7 @@ func (c *Search) Run(ctx interface{}) error {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	hits, err := c.results().Search(query, resultCount)
+	hits, err := searcher.Search(query, resultCount)
 	if err != nil {
 		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🔎 Search",
@@ -120,12 +147,12 @@ func (c *Search) Run(ctx interface{}) error {
 		// The pick travels entirely in the button id, so choosing needs no
 		// server-side memory of what was offered: the chooser survives a bot
 		// restart, and two people searching at once cannot interfere.
-		id, ok := buttonID(sourceYouTube, h.VideoID)
+		id, ok := buttonID(tag, h.ID)
 		if !ok {
 			continue
 		}
 		pos := len(lines) + 1
-		lines = append(lines, common.FormatSearchLine(pos, h.Title, h.URL(), h.Author, h.Duration))
+		lines = append(lines, common.FormatSearchLine(pos, h.Title, h.URL, h.Author, h.Duration))
 		buttons = append(buttons, discordgo.Button{
 			Label:    fmt.Sprintf("%d", pos),
 			Style:    discordgo.SecondaryButton,
@@ -160,8 +187,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 	if !ok {
 		return nil
 	}
-	url, ok := trackURL(source, payload)
-	if !ok {
+	if !knownSource(source) {
 		// A chooser from a future version, or a hand-crafted id.
 		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 			Title:       "🔎 Search",
@@ -182,6 +208,15 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	target, ok := playback.Join(c.Bot, s, e)
 	if !ok {
+		return nil
+	}
+
+	url, err := c.trackURL(source, payload)
+	if err != nil {
+		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			Title:       "🎵 Error",
+			Description: fmt.Sprintf("Could not look that track up again: %v", err),
+		})
 		return nil
 	}
 
@@ -215,20 +250,47 @@ func parseButtonID(customID string) (source, payload string, ok bool) {
 	return source, payload, true
 }
 
-// trackURL turns a button payload back into a resolvable URL.
-func trackURL(source, payload string) (string, bool) {
+func knownSource(source string) bool {
+	return source == sourceYouTube || source == sourceSoundCloud
+}
+
+// trackURL turns a button payload back into a resolvable page URL. YouTube ids
+// rebuild into a watch URL offline; a SoundCloud id has to be looked up, which
+// is the price of a payload that fits in a component id.
+func (c *Search) trackURL(source, payload string) (string, error) {
 	switch source {
 	case sourceYouTube:
-		return "https://www.youtube.com/watch?v=" + payload, true
+		return youtube.VideoURL(payload), nil
+	case sourceSoundCloud:
+		return c.soundcloud().PermalinkByID(payload)
 	default:
-		return "", false
+		return "", fmt.Errorf("unknown search source %q", source)
 	}
 }
 
-// results lazily builds the searcher so a zero-value Search is usable.
-func (c *Search) results() *youtube.Searcher {
-	if c.searcher == nil {
-		c.searcher = youtube.NewSearcher()
+// pick maps the slash option to a searcher and the tag its buttons carry.
+func (c *Search) pick(wanted string) (sources.Searcher, string, error) {
+	switch wanted {
+	case "", sources.YouTube:
+		return c.youtube(), sourceYouTube, nil
+	case sources.SoundCloud:
+		return c.soundcloud(), sourceSoundCloud, nil
+	default:
+		return nil, "", fmt.Errorf("%s cannot be searched", wanted)
 	}
-	return c.searcher
+}
+
+// The searchers are built lazily so a zero-value Search stays usable.
+func (c *Search) youtube() *youtube.Searcher {
+	if c.yt == nil {
+		c.yt = youtube.NewSearcher()
+	}
+	return c.yt
+}
+
+func (c *Search) soundcloud() *soundcloud.Searcher {
+	if c.sc == nil {
+		c.sc = soundcloud.NewSearcher()
+	}
+	return c.sc
 }

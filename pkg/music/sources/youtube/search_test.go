@@ -58,7 +58,7 @@ func TestSearchParsesHits(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("results = %d, want 2", len(got))
 	}
-	if got[0].VideoID != "K0HSD_i2DvA" || got[0].Title != "Around The World" || got[0].Author != "Daft Punk" {
+	if got[0].ID != "K0HSD_i2DvA" || got[0].Title != "Around The World" || got[0].Author != "Daft Punk" {
 		t.Fatalf("first = %+v", got[0])
 	}
 	if got[0].Duration != 242*time.Second {
@@ -67,8 +67,8 @@ func TestSearchParsesHits(t *testing.T) {
 	if got[1].Duration != 3602*time.Second {
 		t.Fatalf("hh:mm:ss duration = %v", got[1].Duration)
 	}
-	if got[0].URL() != "https://www.youtube.com/watch?v=K0HSD_i2DvA" {
-		t.Fatalf("url = %q", got[0].URL())
+	if got[0].URL != "https://www.youtube.com/watch?v=K0HSD_i2DvA" {
+		t.Fatalf("url = %q", got[0].URL)
 	}
 	// Without the filter the results carry channels and playlists too.
 	if body["params"] != videoOnlyParams {
@@ -121,7 +121,7 @@ func TestSearchSkipsNonVideoItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if len(got) != 1 || got[0].VideoID != "K0HSD_i2DvA" {
+	if len(got) != 1 || got[0].ID != "K0HSD_i2DvA" {
 		t.Fatalf("got %+v", got)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/keshon/melodix/pkg/music/innertube"
+	source "github.com/keshon/melodix/pkg/music/sources"
 )
 
 // ErrNoVideoMatch means the query returned no usable video.
@@ -21,18 +22,9 @@ var ErrNoVideoMatch = errors.New("youtube: no video found for the given query")
 // playlists and shelves never reach the caller.
 const videoOnlyParams = "EgIQAQ%3D%3D"
 
-// SearchResult is one search hit. Duration is zero when YouTube reports none,
-// which is what a live stream looks like.
-type SearchResult struct {
-	VideoID  string
-	Title    string
-	Author   string
-	Duration time.Duration
-}
-
-// URL returns the canonical watch URL for the hit.
-func (r SearchResult) URL() string {
-	return "https://www.youtube.com/watch?v=" + r.VideoID
+// VideoURL returns the canonical watch URL for a video id.
+func VideoURL(videoID string) string {
+	return "https://www.youtube.com/watch?v=" + videoID
 }
 
 // Searcher turns a text query into video results. BaseURL and Client are fields
@@ -57,7 +49,7 @@ func NewSearcher() *Searcher {
 // This goes through InnerTube rather than scraping the results page: the page
 // only ever yielded video ids, and a chooser needs titles, authors and
 // durations to be worth showing.
-func (r *Searcher) Search(query string, limit int) ([]SearchResult, error) {
+func (r *Searcher) Search(query string, limit int) ([]source.SearchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, errors.New("youtube: empty search query")
@@ -96,15 +88,16 @@ func (r *Searcher) Search(query string, limit int) ([]SearchResult, error) {
 		return nil, fmt.Errorf("youtube: decode search response: %w", err)
 	}
 
-	out := make([]SearchResult, 0, limit)
+	out := make([]source.SearchResult, 0, limit)
 	for _, section := range parsed.Contents.SectionList.Contents {
 		for _, item := range section.ItemSection.Contents {
 			v := item.CompactVideoRenderer
 			if v == nil || v.VideoID == "" {
 				continue
 			}
-			out = append(out, SearchResult{
-				VideoID:  v.VideoID,
+			out = append(out, source.SearchResult{
+				ID:       v.VideoID,
+				URL:      VideoURL(v.VideoID),
 				Title:    v.Title.String(),
 				Author:   v.ShortByline.String(),
 				Duration: parseClockDuration(v.LengthText.String()),

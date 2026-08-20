@@ -2,6 +2,7 @@ package soundcloudapi
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 )
@@ -24,10 +25,14 @@ type Transcoding struct {
 
 // Track is the api-v2 track resource (only the fields Melodix needs).
 type Track struct {
+	ID           int64  `json:"id"`
 	Title        string `json:"title"`
 	DurationMS   int64  `json:"duration"`
 	PermalinkURL string `json:"permalink_url"`
-	Media        struct {
+	User         struct {
+		Username string `json:"username"`
+	} `json:"user"`
+	Media struct {
 		Transcodings []Transcoding `json:"transcodings"`
 	} `json:"media"`
 }
@@ -91,14 +96,46 @@ func isAAC(t Transcoding) bool {
 
 // SearchFirstTrack returns the top track for a text query via api-v2 search.
 func (c *Client) SearchFirstTrack(query string) (*Track, error) {
+	tracks, err := c.SearchTracks(query, 1)
+	if err != nil {
+		return nil, err
+	}
+	return &tracks[0], nil
+}
+
+// SearchTracks returns up to limit tracks for a text query via api-v2 search.
+func (c *Client) SearchTracks(query string, limit int) ([]Track, error) {
+	if limit < 1 {
+		limit = 1
+	}
 	var out struct {
 		Collection []Track `json:"collection"`
 	}
-	if err := c.getJSON(c.APIBase+"/search/tracks?q="+url.QueryEscape(query)+"&limit=1", &out); err != nil {
+	endpoint := fmt.Sprintf("%s/search/tracks?q=%s&limit=%d", c.APIBase, url.QueryEscape(query), limit)
+	if err := c.getJSON(endpoint, &out); err != nil {
 		return nil, err
 	}
 	if len(out.Collection) == 0 {
 		return nil, ErrNoResults
 	}
-	return &out.Collection[0], nil
+	return out.Collection, nil
+}
+
+// TrackByID fetches one track by its numeric api-v2 id.
+//
+// This exists because a track id is the only form of a SoundCloud track short
+// enough to survive a round trip through a Discord component id: permalinks run
+// past 130 characters, well over that budget.
+func (c *Client) TrackByID(id string) (*Track, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrNoResults
+	}
+	var t Track
+	if err := c.getJSON(c.APIBase+"/tracks/"+url.PathEscape(id), &t); err != nil {
+		return nil, err
+	}
+	if t.PermalinkURL == "" {
+		return nil, ErrNoResults
+	}
+	return &t, nil
 }

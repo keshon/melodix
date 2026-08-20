@@ -101,9 +101,9 @@ func TestLiveSearch(t *testing.T) {
 		t.Fatalf("results = %d, want 5", len(got))
 	}
 	for i, r := range got {
-		if r.VideoID == "" || strings.TrimSpace(r.Title) == "" {
+		if r.ID == "" || strings.TrimSpace(r.Title) == "" {
 			t.Fatalf("result %d is unusable for a chooser: %+v", i, r)
 		}
-		t.Logf("%d. %s | %s | %s | %v", i+1, r.VideoID, r.Title, r.Author, r.Duration)
+		t.Logf("%d. %s | %s | %s | %v", i+1, r.ID, r.Title, r.Author, r.Duration)
 	}
 }

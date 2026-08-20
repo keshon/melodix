@@ -75,7 +75,7 @@ knob, Docker — is in [docs/running.md](docs/running.md).
 - **/next** — Skip to the next track
 - **/play** — Play a music track
 - **/queue** — Show what is playing and what is queued next
-- **/search** — Search YouTube and pick a track to play
+- **/search** — Search and pick a track to play
 - **/stop** — Stop playback and clear queue
 
 ### ⚙️ Settings

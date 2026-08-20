@@ -91,7 +91,7 @@ func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 	// history both persist whatever lands here.
 	return []source.TrackInfo{
 		{
-			URL:              hits[0].URL(),
+			URL:              hits[0].URL,
 			Title:            hits[0].Title,
 			SourceName:       Name,
 			AvailableParsers: preferred,
