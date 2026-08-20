@@ -11,27 +11,33 @@ import (
 	"strings"
 )
 
-// Thin InnerTube client using the ANDROID_VR client context (the YouTube app on
-// Meta Quest), which returns direct (cipher-free) stream URLs anonymously. The
-// plain ANDROID client stopped working in 2026 ("Precondition check failed");
-// ANDROID_VR is what yt-dlp ships as a default for the same reason. Deliberately
-// NO signature/nsig deciphering — that treadmill belongs to kkdai/yt-dlp, which
-// stay registered as fallbacks. When this client can't produce a plain URL it
-// fails fast and the recovery chain moves on.
+// Thin InnerTube client using the VISIONOS client context (the YouTube app on
+// Apple Vision Pro), which returns direct (cipher-free) stream URLs anonymously
+// and needs no PO token. Deliberately NO signature/nsig deciphering — that
+// treadmill belongs to kkdai/yt-dlp, which stay registered as fallbacks. When
+// this client can't produce a plain URL it fails fast and the chain moves on.
+//
+// The client choice is not cosmetic, and this is why it is VISIONOS and not
+// ANDROID_VR: googlevideo enforces different request rules per issuing client.
+// An ANDROID_VR stream URL rejects any open-ended request with 403 — a plain
+// GET, or Range: bytes=0- — and serves only bounded ranges up to about 1 MiB.
+// Both this package's passthrough (a plain GET) and ffmpeg (Range: bytes=0-)
+// ask open-ended, so every ANDROID_VR playback died on its first read. VISIONOS
+// URLs serve all three shapes, which is also how yt-dlp streams without a JS
+// runtime. Verified against the live CDN, not inferred.
 const (
-	clientName = "ANDROID_VR"
+	clientName = "VISIONOS"
 	// clientVersion is THE maintenance knob of this package: when YouTube
 	// deprecates it, playback falls back to kkdai/yt-dlp and bumping this
-	// constant (current YouTube VR app version, see yt-dlp's innertube client
-	// list for a known-good value) is the whole fix.
-	clientVersion     = "1.65.10"
-	deviceMake        = "Oculus"
-	deviceModel       = "Quest 3"
-	osName            = "Android"
-	osVersion         = "12L"
-	androidSDKVersion = 32
-	clientUserAgent   = "com.google.android.apps.youtube.vr.oculus/" + clientVersion + " (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
-	playerEndpoint    = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
+	// constant (see yt-dlp's INNERTUBE_CLIENTS for a known-good value) is the
+	// whole fix.
+	clientVersion   = "1.02"
+	deviceMake      = "Apple"
+	deviceModel     = "RealityDevice17,1"
+	osName          = "visionOS"
+	osVersion       = "26.5.23O471"
+	clientUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+	playerEndpoint  = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
 )
 
 var (
@@ -70,15 +76,14 @@ type playerResponse struct {
 // visitor.go), both in the client context and as X-Goog-Visitor-Id.
 func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse, error) {
 	client := map[string]any{
-		"clientName":        clientName,
-		"clientVersion":     clientVersion,
-		"deviceMake":        deviceMake,
-		"deviceModel":       deviceModel,
-		"osName":            osName,
-		"osVersion":         osVersion,
-		"androidSdkVersion": androidSDKVersion,
-		"userAgent":         clientUserAgent,
-		"hl":                "en",
+		"clientName":    clientName,
+		"clientVersion": clientVersion,
+		"deviceMake":    deviceMake,
+		"deviceModel":   deviceModel,
+		"osName":        osName,
+		"osVersion":     osVersion,
+		"userAgent":     clientUserAgent,
+		"hl":            "en",
 	}
 	vid := visitorID(httpc)
 	if vid != "" {

@@ -12,10 +12,11 @@ import (
 )
 
 // kkdaiPipe is the kkdai passthrough path: kkdai resolves a WebM/Opus stream
-// (its signature-decipher path bypasses the bot-checks that block ytnative),
-// which we demux straight to Opus packets — no ffmpeg, no transcode. If the
-// video offers no WebM/Opus format, or the framing isn't forwardable, it errors
-// and recovery falls through to kkdai-link (ffmpeg).
+// and downloads it in chunks, which we demux straight to Opus packets — no
+// ffmpeg, no transcode. If the video offers no WebM/Opus format, or the framing
+// isn't forwardable, it errors and recovery falls through to kkdai-link.
+// The InnerTube client this rides on is set in streamer.go, and the choice
+// decides whether the CDN answers at all — see VisionOSClient.
 func kkdaiPipe(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
 	videoID, err := extractYouTubeID(track.URL)
 	if err != nil {
