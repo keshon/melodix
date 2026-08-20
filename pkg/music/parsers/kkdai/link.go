@@ -71,5 +71,10 @@ func kkdaiLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 		return nil, nil, fmt.Errorf("kkdai: get stream url: %w", err)
 	}
 
-	return ffmpegparser.OpusReader(ffmpegparser.NewPCMCommand(link, seekSec, true, "kkdai-link"), "kkdai")
+	// googlevideo binds a stream URL to the client that obtained it, so ffmpeg has
+	// to fetch it as that client rather than as Lavf/… — otherwise the CDN answers
+	// 403 and the failure only surfaces on the first read. DefaultClient is what
+	// the zero-value youtube.Client above resolves to (see kkdai assureClient).
+	cmd := ffmpegparser.NewPCMCommandUA(link, seekSec, true, "kkdai-link", youtube.DefaultClient.UserAgent)
+	return ffmpegparser.OpusReader(cmd, "kkdai")
 }
