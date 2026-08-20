@@ -54,9 +54,10 @@ func ytnativeLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), e
 	return ffmpegparser.OpusReader(cmd, "ytnative")
 }
 
-// openPassthrough streams the WebM/Opus URL and demuxes it to Opus packets
-// (no ffmpeg). Seek re-fetches from the start and discards to the position
-// (v2: HTTP Range). Framing is validated by opus.Passthrough.
+// openPassthrough streams the WebM/Opus URL and demuxes it to Opus packets (no
+// ffmpeg). A seek still re-fetches from the start and discards to the position,
+// but a connection dropped mid-track no longer costs that: resumingBody repairs
+// it in place with a ranged request. Framing is validated by opus.Passthrough.
 func openPassthrough(url string, seekSec float64) (opus.Reader, func(), error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -71,7 +72,10 @@ func openPassthrough(url string, seekSec float64) (opus.Reader, func(), error) {
 		_ = resp.Body.Close()
 		return nil, nil, fmt.Errorf("ytnative: cdn %s", resp.Status)
 	}
-	r, err := opus.Passthrough(resp.Body, opus.SeekPackets(seekSec))
+	// Repair dropped connections underneath the demuxer rather than letting them
+	// end the track; see resume.go for why that is worth doing here.
+	body := newResumingBody(streamClient, url, clientUserAgent, resp.Body)
+	r, err := opus.Passthrough(body, opus.SeekPackets(seekSec))
 	if err != nil {
 		return nil, nil, err // Passthrough closed resp.Body
 	}
