@@ -1,6 +1,7 @@
-// Package ytnative streams YouTube audio via a thin InnerTube client (ANDROID_VR
-// context, direct cipher-free URLs) through ffmpeg. No JS engine, no signature
-// deciphering — protected videos fail fast into the kkdai/yt-dlp fallbacks.
+// Package ytnative streams YouTube audio via a thin InnerTube client (VISIONOS
+// context, direct cipher-free URLs), preferring Opus passthrough and falling
+// back to ffmpeg. No JS engine, no signature deciphering, no PO token —
+// protected videos fail fast into the kkdai/yt-dlp fallbacks.
 package ytnative
 
 import (

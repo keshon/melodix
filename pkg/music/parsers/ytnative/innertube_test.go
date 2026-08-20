@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestFetchPlayerSendsAndroidContext(t *testing.T) {
+func TestFetchPlayerSendsClientContext(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
@@ -37,11 +37,16 @@ func TestFetchPlayerSendsAndroidContext(t *testing.T) {
 		t.Fatalf("videoId in request = %v", gotBody["videoId"])
 	}
 	client := gotBody["context"].(map[string]any)["client"].(map[string]any)
-	if client["clientName"] != "ANDROID_VR" {
+	// VISIONOS specifically: ANDROID_VR URLs 403 on the open-ended requests both
+	// the passthrough and ffmpeg make. See the note on clientName.
+	if client["clientName"] != "VISIONOS" {
 		t.Fatalf("clientName = %v", client["clientName"])
 	}
 	if client["clientVersion"] != clientVersion {
 		t.Fatalf("clientVersion = %v", client["clientVersion"])
+	}
+	if _, ok := client["androidSdkVersion"]; ok {
+		t.Fatal("androidSdkVersion must not be sent for a non-Android client")
 	}
 }
 

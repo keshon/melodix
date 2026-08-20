@@ -25,14 +25,16 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 	}
 
 	type format struct {
-		URL       string     `json:"url"`
-		Fragments []fragment `json:"fragments,omitempty"`
+		URL         string            `json:"url"`
+		Fragments   []fragment        `json:"fragments,omitempty"`
+		HTTPHeaders map[string]string `json:"http_headers,omitempty"`
 	}
 
 	type ytdlpInfo struct {
-		Duration float64  `json:"duration"`
-		Formats  []format `json:"formats"`
-		URL      string   `json:"url"`
+		Duration    float64           `json:"duration"`
+		Formats     []format          `json:"formats"`
+		URL         string            `json:"url"`
+		HTTPHeaders map[string]string `json:"http_headers,omitempty"`
 	}
 
 	var info ytdlpInfo
@@ -48,8 +50,10 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 	}
 
 	link := strings.TrimSpace(info.URL)
+	headers := info.HTTPHeaders
 	if link == "" && len(info.Formats) > 0 {
 		link = strings.TrimSpace(info.Formats[0].URL)
+		headers = info.Formats[0].HTTPHeaders
 	}
 	if link == "" {
 		return nil, nil, errors.New("ytdlp: empty url returned")
@@ -57,5 +61,22 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
-	return ffmpegparser.OpusReader(ffmpegparser.NewPCMCommand(link, seekSec, true, "ytdlp-link"), "ytdlp")
+	// yt-dlp reports the headers it used in http_headers so the fetch can be handed
+	// off; passing the UA on keeps ffmpeg's request faithful to the one that
+	// resolved the URL. Measured against googlevideo, the UA does not decide a 403
+	// — the issuing InnerTube client does — so this is hygiene, not a fix.
+	cmd := ffmpegparser.NewPCMCommandUA(link, seekSec, true, "ytdlp-link", headerValue(headers, "User-Agent"))
+	return ffmpegparser.OpusReader(cmd, "ytdlp")
+}
+
+// headerValue looks up an HTTP header case-insensitively, returning "" when the
+// map is nil or the header is absent. yt-dlp's http_headers casing is not
+// contractual, so don't index it directly.
+func headerValue(h map[string]string, name string) string {
+	for k, v := range h {
+		if strings.EqualFold(k, name) {
+			return v
+		}
+	}
+	return ""
 }

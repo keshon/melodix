@@ -100,6 +100,16 @@ Performed inside `RecoveryStream.Open(seek)`:
     - set `track.CurrentParser = parser`
     - reset `firstRead = true`
     - store cleanup + current seek
+    - log `stream_opening`
+
+A successful open is **not** proof that audio will flow: an ffmpeg-backed parser
+has only spawned a process at this point, and a CDN 403 surfaces on the first
+read. The parser is *confirmed* when `ReadPacket` returns its first packet —
+that is where `stream_opened` is logged and the `SetOnParserConfirmed` callback
+fires, so a consumer learns which parser is really playing rather than which one
+merely opened. `player.Player` hangs both user-visible consequences off it: the
+playback-history row, and a re-render of "Now Playing" when the confirmed parser
+differs from the one already announced.
 
 ### 5) Media recovery (parser/ffmpeg level)
 
@@ -141,7 +151,7 @@ The sink drives the read loop via `AudioSink.Stream(reader, stopCh)`:
 
 When wired to Discord, the voice service passes `Options.OnPlaybackFailed` at player construction so a failure after “Now Playing” can **edit the guild status message** (same message id as “Now Playing”) instead of relying on an interaction follow-up that already finished.
 
-The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use package-level loggers: call their `SetLogger(appLogger)` once at process startup (the Discord bot does this in `NewBot`). All parsers build their ffmpeg invocation via `ffmpeg.NewPCMCommand`, which captures ffmpeg **stderr** for every parser: lines that look like HTTP 403 / forbidden / conversion failures are logged at **Warn**, other lines at **Debug** to limit noise. The binary paths default to `ffmpeg` / `yt-dlp` on `PATH` and can be overridden via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`.
+The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use package-level loggers: call their `SetLogger(appLogger)` once at process startup (the Discord bot does this in `NewBot`). All parsers build their ffmpeg invocation via `ffmpeg.NewPCMCommand` (or `NewPCMCommandUA`, which additionally sends the extracting client's User-Agent), which captures ffmpeg **stderr** for every parser: lines that look like HTTP 403 / forbidden / conversion failures are logged at **Warn**, other lines at **Debug** to limit noise. The binary paths default to `ffmpeg` / `yt-dlp` on `PATH` and can be overridden via `ffmpeg.FFmpegPath` / `ytdlp.YtdlpPath`.
 
 **Manual regression checklist**
 

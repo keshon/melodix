@@ -188,9 +188,26 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			if track == nil {
 				continue
 			}
+			// UpdatePlaybackStatus is a silent no-op when no status message is
+			// registered and no interaction is available to create one, so check
+			// first — otherwise this traces a render that never happened.
+			registered := s.hasStatusMessage(guildID)
 			if err := s.UpdatePlaybackStatus(sess, nil, guildID, reply.NowPlayingEmbed(track)); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
+				continue
 			}
+			if !registered {
+				// The slash handler posts the first embed and registers it; this
+				// status arrived before that happened.
+				s.log.Debug().Str("guild_id", guildID).Msg("now_playing_render_skipped")
+				continue
+			}
+			// Traces the embed itself, so a chip that stayed stale can be told apart
+			// from a correction that was computed but never rendered.
+			s.log.Info().
+				Str("guild_id", guildID).
+				Str("parser", track.CurrentParser).
+				Msg("now_playing_rendered")
 		case player.StatusStopped:
 			// A transient Stopped fires between tracks; only render the final one.
 			if p.IsPlaying() || len(p.Queue()) > 0 {
@@ -226,6 +243,15 @@ func (s *Service) SetGuildMusicNotifyChannel(guildID, channelID string) {
 	}
 	s.guildMusicNotifyChannel[guildID] = channelID
 	s.guildMusicStatusMu.Unlock()
+}
+
+// hasStatusMessage reports whether a status message is registered for the guild,
+// i.e. whether an interaction-less UpdatePlaybackStatus would actually render.
+func (s *Service) hasStatusMessage(guildID string) bool {
+	s.guildMusicStatusMu.RLock()
+	defer s.guildMusicStatusMu.RUnlock()
+	_, ok := s.guildMusicStatus[guildID]
+	return ok
 }
 
 // UpdatePlaybackStatus creates or edits the guild's music status message.

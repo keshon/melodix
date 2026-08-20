@@ -103,3 +103,80 @@ func TestRecoveryStream_NaturalEOF_DoesNotFallback(t *testing.T) {
 		t.Fatalf("parserIndex = %d, want 0", rs.parserIndex)
 	}
 }
+
+// The failing parser opens fine and only dies on its first read, so Open cannot
+// tell it apart from a working one. Confirmation must therefore fire once, for
+// the parser that actually produced the packet — that is what the player relies
+// on to correct a "Now Playing" embed already naming the dead parser.
+func TestRecoveryStream_ParserConfirmed_NamesThePlayingParser(t *testing.T) {
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
+			return errFirst{}, func() {}, nil
+		}},
+		"p2": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
+			return &pktReader{pkts: [][]byte{{0xAA}, {0xBB}}}, func() {}, nil
+		}},
+	})
+	defer func() { SetRegistry(orig) }()
+
+	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
+	rs := NewRecoveryStream(track)
+
+	var confirmed []string
+	rs.SetOnParserConfirmed(func(parser string) { confirmed = append(confirmed, parser) })
+
+	if err := rs.Open(0); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(confirmed) != 0 {
+		t.Fatalf("Open must not confirm anything, got %v", confirmed)
+	}
+
+	if _, err := rs.ReadPacket(); err != nil {
+		t.Fatalf("first ReadPacket: %v", err)
+	}
+	if len(confirmed) != 1 || confirmed[0] != "p2" {
+		t.Fatalf("confirmed = %v, want [p2]", confirmed)
+	}
+
+	// Further packets from the same stream must not re-confirm.
+	if _, err := rs.ReadPacket(); err != nil {
+		t.Fatalf("second ReadPacket: %v", err)
+	}
+	if len(confirmed) != 1 {
+		t.Fatalf("confirmed = %v, want a single confirmation per open", confirmed)
+	}
+}
+
+// A transport reopen re-confirms, so the parser reported to the player is always
+// the live one rather than a stale memory of the first open.
+func TestRecoveryStream_ReopenAfterTransportFailure_ReConfirms(t *testing.T) {
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
+			return &pktReader{pkts: [][]byte{{0xAA}}}, func() {}, nil
+		}},
+	})
+	defer func() { SetRegistry(orig) }()
+
+	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}}}
+	rs := NewRecoveryStream(track)
+
+	var confirmed []string
+	rs.SetOnParserConfirmed(func(parser string) { confirmed = append(confirmed, parser) })
+
+	if err := rs.Open(0); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, err := rs.ReadPacket(); err != nil {
+		t.Fatalf("first ReadPacket: %v", err)
+	}
+	if err := rs.ReopenAfterTransportFailure(); err != nil {
+		t.Fatalf("ReopenAfterTransportFailure: %v", err)
+	}
+	if _, err := rs.ReadPacket(); err != nil {
+		t.Fatalf("ReadPacket after reopen: %v", err)
+	}
+	if len(confirmed) != 2 || confirmed[1] != "p1" {
+		t.Fatalf("confirmed = %v, want two p1 confirmations", confirmed)
+	}
+}

@@ -71,5 +71,11 @@ func kkdaiLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 		return nil, nil, fmt.Errorf("kkdai: get stream url: %w", err)
 	}
 
-	return ffmpegparser.OpusReader(ffmpegparser.NewPCMCommand(link, seekSec, true, "kkdai-link"), "kkdai")
+	// Hand ffmpeg the same User-Agent kkdai used to obtain the URL, matching what
+	// yt-dlp does. Measured against googlevideo, the UA is not what decides a 403
+	// — the issuing client is (see VisionOSClient) — so this is a faithful handoff
+	// rather than a fix; don't reach for it when a 403 turns up. DefaultClient is
+	// what the zero-value youtube.Client above resolves to (kkdai assureClient).
+	cmd := ffmpegparser.NewPCMCommandUA(link, seekSec, true, "kkdai-link", youtube.DefaultClient.UserAgent)
+	return ffmpegparser.OpusReader(cmd, "kkdai")
 }

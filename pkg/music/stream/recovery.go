@@ -29,6 +29,11 @@ type RecoveryStream struct {
 	pcm         io.ReadCloser  // lazily-built decode view (Read)
 	log         zerolog.Logger
 
+	// onParserConfirmed is called when a freshly opened stream yields its first
+	// packet, i.e. when the active parser is proven to actually produce audio.
+	// Fired from the ReadPacket goroutine; nil disables the notification.
+	onParserConfirmed func(parser string)
+
 	fromCache     bool          // the active stream is served from the track cache
 	cacheDisabled bool          // cache failed for this stream; don't try it again
 	cacheWriter   *cache.Writer // active write-through blob (nil = not caching)
@@ -49,8 +54,18 @@ func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *Reco
 	}
 }
 
-// Open opens the packet stream for the current parser, advancing through the
+// SetOnParserConfirmed registers a callback fired when a stream first yields a
+// packet (see confirmOpen). Call before the first ReadPacket; not safe to change
+// once packets are flowing.
+func (rs *RecoveryStream) SetOnParserConfirmed(fn func(parser string)) {
+	rs.onParserConfirmed = fn
+}
+
+// Open acquires the packet stream for the current parser, advancing through the
 // track's parser list past any that fail or exhausted their recovery budget.
+// A successful Open is NOT proof that audio will flow: the ffmpeg-backed parsers
+// only spawn a process here, so a CDN 403 surfaces later, on the first read.
+// confirmOpen is where a parser is known to be playing.
 func (rs *RecoveryStream) Open(seek float64) error {
 	// Cache-first: serve a completed blob for this track if one exists (shared
 	// across guilds). A miss or open failure falls through to the parser list.
@@ -71,7 +86,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 				rs.track.Cached = true
 				rs.fromCache = true
 				rs.firstRead = true
-				rs.log.Info().Str("cache_key", key).Float64("seek", seek).Msg("stream_opened_from_cache")
+				rs.log.Info().Str("cache_key", key).Float64("seek", seek).Msg("stream_opening_from_cache")
 				return nil
 			}
 		}
@@ -101,7 +116,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		rs.track.CurrentParser = parser
 		rs.fromCache = false
 		rs.firstRead = true
-		rs.log.Info().Str("parser", parser).Float64("seek", seek).Msg("stream_opened")
+		rs.log.Info().Str("parser", parser).Float64("seek", seek).Msg("stream_opening")
 		return nil
 	}
 	return errors.New("all parsers failed or exceeded recovery attempts")
@@ -160,7 +175,10 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 		}
 		pkt, err := rs.reader.ReadPacket()
 		if err == nil {
-			rs.firstRead = false
+			if rs.firstRead {
+				rs.firstRead = false
+				rs.confirmOpen()
+			}
 			rs.seekSec += float64(opus.FrameMs) / 1000
 			if rs.cacheWriter != nil {
 				if werr := rs.cacheWriter.Write(pkt); werr != nil {
@@ -218,6 +236,21 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 			rs.abortCache()
 		}
 		return nil, err
+	}
+}
+
+// confirmOpen reports that the active stream just produced its first packet --
+// the point at which the parser is known to be playing rather than merely
+// opened. It fires again after every reopen (parser switch, early-EOF recovery,
+// transport reopen), so the parser it names is always the live one.
+func (rs *RecoveryStream) confirmOpen() {
+	if rs.fromCache {
+		rs.log.Info().Float64("seek", rs.seekSec).Msg("stream_opened_from_cache")
+	} else {
+		rs.log.Info().Str("parser", rs.curParser).Float64("seek", rs.seekSec).Msg("stream_opened")
+	}
+	if rs.onParserConfirmed != nil {
+		rs.onParserConfirmed(rs.curParser)
 	}
 }
 
