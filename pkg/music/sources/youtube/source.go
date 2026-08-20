@@ -13,13 +13,15 @@ const Name string = "youtube"
 
 // Source resolves YouTube URLs and search queries.
 type Source struct {
-	searcher *Searcher
+	searcher  *Searcher
+	playlists *PlaylistFetcher
 }
 
 // New creates the YouTube source.
 func New() *Source {
 	return &Source{
-		searcher: NewSearcher(),
+		searcher:  NewSearcher(),
+		playlists: NewPlaylistFetcher(),
 	}
 }
 
@@ -42,6 +44,25 @@ func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 	}
 
 	input = strings.TrimSpace(input)
+	preferred := source.PreferParser(parsers, selectedParser)
+
+	// playlist or mix: one link expands to many tracks
+	if listID := ExtractListID(input); shouldExpandList(input, listID) {
+		result, err := y.playlists.Fetch(listID, ExtractVideoID(input))
+		if err != nil {
+			return nil, err
+		}
+		tracks := make([]source.TrackInfo, 0, len(result.Entries))
+		for _, e := range result.Entries {
+			tracks = append(tracks, source.TrackInfo{
+				URL:              "https://www.youtube.com/watch?v=" + e.VideoID,
+				Title:            e.Title,
+				SourceName:       Name,
+				AvailableParsers: preferred,
+			})
+		}
+		return tracks, nil
+	}
 
 	// direct video URL
 	if isYouTubeVideoURL(input) {

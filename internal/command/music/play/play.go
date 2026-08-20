@@ -154,6 +154,8 @@ func (c *Play) Run(ctx interface{}) error {
 			})
 			return nil
 		}
+		// Collected first, enqueued once: a batch emits a single queue update.
+		batch := make([]sources.TrackInfo, 0, len(parsed.HistoryIDs))
 		for _, hid := range parsed.HistoryIDs {
 			mp, gerr := store.MusicPlayback(guildID, hid)
 			if gerr != nil {
@@ -170,17 +172,18 @@ func (c *Play) Run(ctx interface{}) error {
 				}
 				return nil
 			}
-			ti := storage.TrackInfoFromMusicPlayback(mp)
-			if err := p.EnqueueTrackInfo(ti); err != nil {
-				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-					Title:       "🎵 Queue Error",
-					Description: fmt.Sprintf("%v", err),
-				})
-				return nil
-			}
+			batch = append(batch, storage.TrackInfoFromMusicPlayback(mp))
+		}
+		if err := p.EnqueueTrackInfos(batch); err != nil {
+			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Queue Error",
+				Description: fmt.Sprintf("%v", err),
+			})
+			return nil
 		}
 
 	case common.PlayInputKindURLs:
+		batch := make([]sources.TrackInfo, 0, len(parsed.URLs))
 		for _, u := range parsed.URLs {
 			tracks, resErr := c.Bot.ResolveTracks(guildID, u, source, parser)
 			if resErr != nil || len(tracks) == 0 {
@@ -190,13 +193,14 @@ func (c *Play) Run(ctx interface{}) error {
 				})
 				return nil
 			}
-			if err := p.EnqueueTrackInfo(tracks[0]); err != nil {
-				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-					Title:       "🎵 Queue Error",
-					Description: fmt.Sprintf("%v", err),
-				})
-				return nil
-			}
+			batch = append(batch, tracks...)
+		}
+		if err := p.EnqueueTrackInfos(batch); err != nil {
+			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				Title:       "🎵 Queue Error",
+				Description: fmt.Sprintf("%v", err),
+			})
+			return nil
 		}
 
 	case common.PlayInputKindQuery:
@@ -208,7 +212,7 @@ func (c *Play) Run(ctx interface{}) error {
 			})
 			return nil
 		}
-		if err := p.EnqueueTrackInfo(tracks[0]); err != nil {
+		if err := p.EnqueueTrackInfos(tracks); err != nil {
 			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
 				Title:       "🎵 Queue Error",
 				Description: fmt.Sprintf("%v", err),

@@ -215,6 +215,20 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 		return err
 	}
 
+	return p.EnqueueTrackInfos(tracksInfo)
+}
+
+// EnqueueTrackInfo enqueues a single pre-resolved track (avoids double resolve when caller already has TrackInfo).
+func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
+	return p.EnqueueTrackInfos([]sources.TrackInfo{trackInfo})
+}
+
+// EnqueueTrackInfos enqueues pre-resolved tracks as one batch. Batching is not
+// just an optimization: PlayerStatus has a single consumer and drops when full,
+// so a playlist enqueued one call at a time would emit a StatusAdded per track
+// and flood it. Tracks without parsers are skipped; the call fails only when
+// nothing at all could be queued.
+func (p *Player) EnqueueTrackInfos(tracksInfo []sources.TrackInfo) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -238,27 +252,6 @@ func (p *Player) Enqueue(input string, source string, parser string) error {
 
 	p.queue = append(p.queue, tracks...)
 	p.log.Info().Int("added", len(tracks)).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
-	if p.currTrack != nil {
-		p.emitStatus(StatusAdded)
-	}
-	return nil
-}
-
-// EnqueueTrackInfo enqueues a single pre-resolved track (avoids double resolve when caller already has TrackInfo).
-func (p *Player) EnqueueTrackInfo(trackInfo sources.TrackInfo) error {
-	if len(trackInfo.AvailableParsers) == 0 {
-		p.emitPlaybackError(ErrNoParsersForTrack)
-		return ErrNoParsersForTrack
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.queue = append(p.queue, parsers.Track{
-		URL:           trackInfo.URL,
-		Title:         trackInfo.Title,
-		CurrentParser: trackInfo.AvailableParsers[0],
-		SourceInfo:    trackInfo,
-	})
-	p.log.Info().Int("added", 1).Int("queue_len", len(p.queue)).Msg("queue_tracks_added")
 	if p.currTrack != nil {
 		p.emitStatus(StatusAdded)
 	}

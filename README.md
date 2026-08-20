@@ -97,9 +97,16 @@ knob, Docker — is in [docs/running.md](docs/running.md).
 ```text
 /play never gonna give you up                       search query (YouTube)
 /play https://www.youtube.com/watch?v=dQw4w9WgXcQ   direct link (YouTube / SoundCloud)
+/play https://www.youtube.com/playlist?list=PL...   whole YouTube playlist
+/play https://www.youtube.com/watch?v=...&list=RD   YouTube mix / radio
 /play http://stream-uk1.radioparadise.com/aac-320   internet radio stream
 /play 42                                            replay entry 42 from /history
 ```
+
+A playlist link queues the whole list, up to 100 tracks; `/queue` shows what
+is waiting. A link that names both a video and a playlist
+(`watch?v=...&list=PL...`) plays just that video — the one exception is a mix,
+which has no other link shape.
 
 ## Under the hood
 
