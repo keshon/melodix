@@ -34,6 +34,12 @@ type RecoveryStream struct {
 	// Fired from the ReadPacket goroutine; nil disables the notification.
 	onParserConfirmed func(parser string)
 
+	// closed is set by Close so a read that fails because the stream was torn
+	// down is not mistaken for a recoverable one. Written and read from the
+	// playback goroutine that owns this stream (Close is deferred in
+	// runPlayback, after the read loop has exited), so no lock is needed.
+	closed bool
+
 	fromCache     bool          // the active stream is served from the track cache
 	cacheDisabled bool          // cache failed for this stream; don't try it again
 	cacheWriter   *cache.Writer // active write-through blob (nil = not caching)
@@ -217,13 +223,26 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 			continue
 		}
 
-		// Early EOF before the track's end → reopen the same parser at seek.
+		// The media stopped arriving before the track's end → reopen the same
+		// parser at the current position. Two error shapes mean exactly that,
+		// and both have to be caught:
+		//
+		//   - io.EOF, the body ending short. This is what parsers fronted by
+		//     ffmpeg surface, because ffmpeg turns a dropped connection into a
+		//     closed pipe on its side.
+		//   - a transport error, the CDN resetting the connection mid-track.
+		//     The passthrough path surfaces these raw, with nothing between it
+		//     and the socket, so a reset arrives as "connection forcibly
+		//     closed" rather than as EOF. Treating those as terminal was a gap
+		//     that opened when passthrough removed the ffmpeg layer: the track
+		//     died at the reset instead of resuming a second later.
+		//
 		// A cache blob is only committed on a clean EOF, so it is always
 		// complete: a cache EOF is a natural end, never an early one.
-		if errors.Is(err, io.EOF) && !rs.fromCache && rs.shouldRecover() {
-			if reopenErr := rs.reopen(); reopenErr != nil {
+		if !rs.closed && !rs.fromCache && rs.shouldRecover(err) {
+			if reopenErr := rs.reopen(err); reopenErr != nil {
 				rs.abortCache()
-				return nil, io.EOF
+				return nil, err
 			}
 			continue
 		}
@@ -269,7 +288,9 @@ type packetView struct{ rs *RecoveryStream }
 func (v packetView) ReadPacket() ([]byte, error) { return v.rs.ReadPacket() }
 func (v packetView) Close() error                { return nil }
 
-func (rs *RecoveryStream) shouldRecover() bool {
+// shouldRecover reports whether a failed read looks like an early end worth
+// reopening. cause is carried only so the log names the real reason.
+func (rs *RecoveryStream) shouldRecover(cause error) bool {
 	if rs.retries[rs.curParser] >= maxRecoveryAttempts {
 		rs.log.Warn().Str("parser", rs.curParser).Msg("max_recovery_attempts_reached")
 		return false
@@ -280,22 +301,25 @@ func (rs *RecoveryStream) shouldRecover() bool {
 	}
 	if durSec > 0 {
 		if rs.seekSec < 0.95*durSec {
-			rs.log.Warn().Float64("seek", rs.seekSec).Float64("duration", durSec).Msg("early_eof_detected")
+			rs.log.Warn().Float64("seek", rs.seekSec).Float64("duration", durSec).Err(cause).Msg("early_stream_end_detected")
 			return true
 		}
 		return false
 	}
-	// No duration: only recover on immediate EOF.
+	// No duration to compare against (live radio, mostly): only an immediate
+	// failure is clearly early. A reset an hour into a stream is indistinguishable
+	// from the station going off air, and retrying it forever would be worse.
 	if rs.firstRead || rs.seekSec < 1.0 {
-		rs.log.Warn().Float64("seek", rs.seekSec).Msg("early_eof_no_duration")
+		rs.log.Warn().Float64("seek", rs.seekSec).Err(cause).Msg("early_stream_end_no_duration")
 		return true
 	}
 	return false
 }
 
-func (rs *RecoveryStream) reopen() error {
+func (rs *RecoveryStream) reopen(cause error) error {
 	rs.retries[rs.curParser]++
-	rs.log.Warn().Str("parser", rs.curParser).Int("attempt", rs.retries[rs.curParser]).Msg("recovering_stream")
+	rs.log.Warn().Str("parser", rs.curParser).Int("attempt", rs.retries[rs.curParser]).
+		Float64("seek", rs.seekSec).Err(cause).Msg("recovering_stream")
 	rs.closeCurrent()
 	return rs.Open(rs.seekSec)
 }
@@ -317,6 +341,7 @@ func (rs *RecoveryStream) closeCurrent() {
 
 // Close releases the active stream. Safe to call multiple times.
 func (rs *RecoveryStream) Close() error {
+	rs.closed = true
 	rs.abortCache() // stopped before the end → discard the partial (no-op if committed)
 	rs.closeCurrent()
 	return nil
