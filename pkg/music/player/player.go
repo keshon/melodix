@@ -108,12 +108,10 @@ type Player struct {
 	guildID string
 	// recorder persists successful starts (nil for CLI).
 	recorder PlaybackRecorder
-	// confirmedParser is the parser that last produced audio for the current track
-	// ("" before the first packet, and while serving from the cache).
-	confirmedParser string
-	// announcedParser is the parser the last emitted status told the UI about.
-	// It can differ from confirmedParser when a parser opens, is announced, then
-	// dies on its first read — the case this whole handshake exists to correct.
+	// announcedParser is the parser the last emitted status told the UI about, and
+	// is updated to whatever actually plays as each confirmation arrives. The two
+	// diverge when a parser opens, is announced, then dies on its first read —
+	// the case this whole handshake exists to correct.
 	announcedParser string
 	// recorded is true once a history row has been written for the current track.
 	recorded bool
@@ -418,7 +416,6 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	p.starting = true
 	p.playing = false
 	p.currTrack = track
-	p.confirmedParser = ""
 	p.announcedParser = ""
 	p.recorded = false
 	p.mu.Unlock()
@@ -593,7 +590,6 @@ func (p *Player) onParserConfirmed(track *parsers.Track, parser string) {
 	// is already a different parser and still needs a redraw.
 	stale := p.announcedParser != parser
 	announced := p.announcedParser
-	p.confirmedParser = parser
 	p.announcedParser = parser
 	gid := p.guildID
 	rec := p.recorder
