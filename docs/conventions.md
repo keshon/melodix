@@ -155,5 +155,13 @@ and stay as technical as they need to be.
 
 The release body comes from the **annotated tag's message body** —
 `.github/workflows/release.yml` reads `%(contents:body)` — so that is where
-the notes get written: `git tag -a vYYYY.MM.DD -F notes.md`. The tag's subject
-line is not part of the release body, so nothing load-bearing goes there.
+the notes get written, and it has one sharp edge:
+
+```bash
+git tag -a --cleanup=verbatim vYYYY.MM.DD -F notes.md
+```
+
+`--cleanup=verbatim` is not optional. Git's default cleanup strips every line
+beginning with `#` as a comment, which silently eats Markdown headings and
+leaves a published release with its structure missing. The tag's subject line
+is not part of the release body either, so nothing load-bearing goes there.
