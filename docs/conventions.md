@@ -136,3 +136,24 @@ push and PR, then cross-compiles all release targets.
 `README.md` is generated, not hand-edited: change `README.md.tmpl` and run
 `go run ./cmd/discord -readme` from the repo root. The bot itself never
 writes files at runtime.
+
+## Release notes
+
+Release notes are read by people deciding whether to run this bot, not by
+whoever fixed the bug. Lead with what changed *for them*, in plain language —
+"YouTube plays again, and now without ffmpeg" — and say whether upgrading
+costs them anything: config changes, a migration, a new dependency. One short
+paragraph of context is plenty.
+
+Root-cause detail is worth keeping, just not at the top. Put it in a collapsed
+`<details>` block at the end, or leave it in the commit messages, where the
+next maintainer looks anyway. Parser keys, InnerTube client names, HTTP header
+syntax and internal log-event names mean nothing to someone choosing a music
+bot, and a release page that opens with them reads as a changelog for the
+author rather than news for the reader. Commit messages are the opposite case
+and stay as technical as they need to be.
+
+The release body comes from the **annotated tag's message body** —
+`.github/workflows/release.yml` reads `%(contents:body)` — so that is where
+the notes get written: `git tag -a vYYYY.MM.DD -F notes.md`. The tag's subject
+line is not part of the release body, so nothing load-bearing goes there.
