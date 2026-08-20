@@ -74,6 +74,12 @@ func (b *BufferedReader) Stop() {
 	b.stop.Do(func() { close(b.done) })
 }
 
+// Wait blocks until the read-ahead goroutine has exited. It only returns once
+// the source has been unblocked (by Stop plus the caller tearing the source
+// down), and after it returns no further reads on the source can happen — which
+// is what makes it safe to take the source apart.
+func (b *BufferedReader) Wait() { b.wg.Wait() }
+
 // Close stops read-ahead, closes the source, and waits for the goroutine to
 // exit. For standalone use; when composed into a RecoveryStream the caller pairs
 // Stop with the parser's own cleanup instead.

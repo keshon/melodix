@@ -69,16 +69,15 @@ func SetBufferAhead(ms int) {
 	bufferAheadPackets = ms / opus.FrameMs
 }
 
-// bufferWrap adds the anti-skip read-ahead buffer around a reader, composing the
-// producer stop into the returned cleanup.
-func bufferWrap(reader opus.Reader, cleanup func()) (opus.Reader, func()) {
+// bufferWrapReader adds the anti-skip read-ahead buffer around a reader; ok is
+// false when buffering is disabled. The caller owns stopping the result and
+// tearing the source down (see RecoveryStream.Packets and Close).
+func bufferWrapReader(reader opus.Reader) (*opus.BufferedReader, bool) {
 	if bufferAheadPackets <= 0 {
-		return reader, cleanup
+		return nil, false
 	}
-	if buf, ok := opus.NewBufferedReader(reader, bufferAheadPackets).(*opus.BufferedReader); ok {
-		return buf, func() { buf.Stop(); cleanup() }
-	}
-	return reader, cleanup
+	buf, ok := opus.NewBufferedReader(reader, bufferAheadPackets).(*opus.BufferedReader)
+	return buf, ok
 }
 
 // openWithParser opens the Opus packet stream for the given parser key.

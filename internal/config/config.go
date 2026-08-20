@@ -50,9 +50,13 @@ type Config struct {
 	CacheMaxBytes int64 `env:"CACHE_MAX_BYTES" envDefault:"2147483648"` // 2 GiB
 	// CachePersistent keeps the cache across restarts (false = transient, wiped on boot).
 	CachePersistent bool `env:"CACHE_PERSISTENT" envDefault:"true"`
-	// BufferAheadMs is the anti-skip read-ahead depth in ms (0 disables); masks short
-	// source stalls. Independent of the cache.
-	BufferAheadMs int `env:"BUFFER_AHEAD_MS" envDefault:"10000"`
+	// BufferAheadMs is the anti-skip read-ahead depth in ms (0 disables). The
+	// buffer sits above stream recovery, so the lead plays through a reconnect as
+	// well as through short source stalls — on a lossy link this is the knob that
+	// decides whether a dropped connection is audible. It costs roughly 2 KB per
+	// buffered second per guild and does not pre-fill, so raising it delays
+	// nothing. Independent of the cache.
+	BufferAheadMs int `env:"BUFFER_AHEAD_MS" envDefault:"30000"`
 
 	// Logging (applog / zerolog). LOG_FILE empty = stderr only (pretty console).
 	LogLevel      string `env:"LOG_LEVEL" envDefault:"info"`

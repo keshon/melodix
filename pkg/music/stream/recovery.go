@@ -3,6 +3,8 @@ package stream
 import (
 	"errors"
 	"io"
+	"sync"
+	"sync/atomic"
 
 	"github.com/keshon/melodix/pkg/music/cache"
 	"github.com/keshon/melodix/pkg/music/opus"
@@ -35,10 +37,20 @@ type RecoveryStream struct {
 	onParserConfirmed func(parser string)
 
 	// closed is set by Close so a read that fails because the stream was torn
-	// down is not mistaken for a recoverable one. Written and read from the
-	// playback goroutine that owns this stream (Close is deferred in
-	// runPlayback, after the read loop has exited), so no lock is needed.
-	closed bool
+	// down is not mistaken for a recoverable one. It is atomic because the
+	// read-ahead buffer drives ReadPacket from its own goroutine while Close
+	// runs on the playback goroutine.
+	closed atomic.Bool
+
+	// buffered is the anti-skip view handed to the sink; see Packets.
+	buffered *opus.BufferedReader
+
+	// mu guards reader and cleanup — the only fields Close touches while the
+	// read-ahead producer may still be running. Every other field belongs to the
+	// producer goroutine alone, and Close reaches them only after Wait proves it
+	// has exited. The lock is never held across a blocking read or a parser
+	// Open, so a stalled source cannot block teardown.
+	mu sync.Mutex
 
 	fromCache     bool          // the active stream is served from the track cache
 	cacheDisabled bool          // cache failed for this stream; don't try it again
@@ -82,9 +94,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 				rs.log.Warn().Str("cache_key", key).Err(err).Msg("cache_open_failed")
 				rs.cacheDisabled = true
 			} else {
-				r, cleanup := bufferWrap(reader, func() { _ = reader.Close() })
-				rs.reader = r
-				rs.cleanup = cleanup
+				rs.setActive(reader, func() { _ = reader.Close() })
 				rs.seekSec = seek
 				rs.curParser = ""
 				rs.track.CurrentParser = ""
@@ -113,10 +123,8 @@ func (rs *RecoveryStream) Open(seek float64) error {
 			continue
 		}
 		rs.startCacheWrite(seek)
-		reader, cleanup = bufferWrap(reader, cleanup)
 		rs.parserIndex = i
-		rs.reader = reader
-		rs.cleanup = cleanup
+		rs.setActive(reader, cleanup)
 		rs.seekSec = seek
 		rs.curParser = parser
 		rs.track.CurrentParser = parser
@@ -176,10 +184,13 @@ func (rs *RecoveryStream) abortCache() {
 // the current position.
 func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 	for {
-		if rs.reader == nil {
+		rs.mu.Lock()
+		reader := rs.reader
+		rs.mu.Unlock()
+		if reader == nil {
 			return nil, errors.New("stream not opened")
 		}
-		pkt, err := rs.reader.ReadPacket()
+		pkt, err := reader.ReadPacket()
 		if err == nil {
 			if rs.firstRead {
 				rs.firstRead = false
@@ -239,7 +250,7 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 		//
 		// A cache blob is only committed on a clean EOF, so it is always
 		// complete: a cache EOF is a natural end, never an early one.
-		if !rs.closed && !rs.fromCache && rs.shouldRecover(err) {
+		if !rs.closed.Load() && !rs.fromCache && rs.shouldRecover(err) {
 			if reopenErr := rs.reopen(err); reopenErr != nil {
 				rs.abortCache()
 				return nil, err
@@ -331,19 +342,69 @@ func (rs *RecoveryStream) ReopenAfterTransportFailure() error {
 	return rs.Open(rs.seekSec)
 }
 
+// setActive installs the freshly opened stream under the lock Close also takes.
+func (rs *RecoveryStream) setActive(reader opus.Reader, cleanup func()) {
+	rs.mu.Lock()
+	rs.reader = reader
+	rs.cleanup = cleanup
+	rs.mu.Unlock()
+}
+
 func (rs *RecoveryStream) closeCurrent() {
-	if rs.cleanup != nil {
-		rs.cleanup()
-		rs.cleanup = nil
-	}
+	rs.mu.Lock()
+	cleanup := rs.cleanup
+	rs.cleanup = nil
 	rs.reader = nil
+	rs.mu.Unlock()
+
+	// Outside the lock: tearing a socket down can block, and a producer parked
+	// in ReadPacket is unblocked by exactly this call.
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+// Packets returns the packet stream the sink should consume: this stream
+// wrapped in the anti-skip read-ahead buffer, when one is configured.
+//
+// The buffer belongs above recovery, not below it. Wrapped around the parser's
+// reader instead, a reopen tears the buffer down together with the stream it
+// wraps, and the consumer sits blocked inside ReadPacket for the whole
+// reconnect — so the gap is fully audible, which is precisely what an anti-skip
+// buffer exists to prevent. Above, the queued lead keeps playing while the
+// reopen happens underneath, and it survives transport reopens too.
+//
+// Call once, after Open; the result is cached and owned by this stream.
+func (rs *RecoveryStream) Packets() opus.Reader {
+	if rs.buffered != nil {
+		return rs.buffered
+	}
+	wrapped, ok := bufferWrapReader(packetView{rs})
+	if !ok {
+		return packetView{rs}
+	}
+	rs.buffered = wrapped
+	return wrapped
 }
 
 // Close releases the active stream. Safe to call multiple times.
 func (rs *RecoveryStream) Close() error {
-	rs.closed = true
-	rs.abortCache() // stopped before the end → discard the partial (no-op if committed)
+	// Order matters. closed first, so a read failing because of this teardown is
+	// not mistaken for an early end worth reopening. Then Stop, which only
+	// signals — the producer parked in ReadPacket is unblocked by closing the
+	// source underneath it, which closeCurrent does last.
+	rs.closed.Store(true)
+	if rs.buffered != nil {
+		rs.buffered.Stop()
+	}
+	// Unblocks a producer parked in a read, so the goroutine can notice it is
+	// stopped and exit.
 	rs.closeCurrent()
+	if rs.buffered != nil {
+		rs.buffered.Wait()
+	}
+	// Past this point the producer is gone, so the rest needs no lock.
+	rs.abortCache() // stopped before the end → discard the partial (no-op if committed)
 	return nil
 }
 

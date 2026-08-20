@@ -286,3 +286,115 @@ func TestRecoveryStream_ClosedStream_DoesNotReopen(t *testing.T) {
 		t.Fatalf("opened %d times, want no reopen after Close", opens)
 	}
 }
+
+// gatedReader yields n packets, then fails; the reopen that follows is held
+// until release is closed, so the test can observe what the consumer hears
+// while a reconnect is in progress.
+type gatedReader struct {
+	n   int
+	i   int
+	err error
+}
+
+func (r *gatedReader) ReadPacket() ([]byte, error) {
+	if r.i >= r.n {
+		return nil, r.err
+	}
+	r.i++
+	return []byte{0xAA}, nil
+}
+func (r *gatedReader) Close() error { return nil }
+
+// TestRecoveryStream_BufferCoversTheReconnectGap is the point of putting the
+// anti-skip buffer above recovery: while the stream underneath is reconnecting,
+// the consumer keeps being fed from the queued lead instead of blocking.
+//
+// Below recovery — where the buffer used to live — a reopen tore it down along
+// with the stream it wrapped, and this test could not pass at all: the consumer
+// would sit inside ReadPacket until the reopen finished.
+func TestRecoveryStream_BufferCoversTheReconnectGap(t *testing.T) {
+	SetBufferAhead(4000) // 200 packets of lead
+	defer SetBufferAhead(0)
+
+	release := make(chan struct{})
+	opens := 0
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"p1": fakeStreamer{open: func(_ *parsers.Track, _ float64) (opus.Reader, func(), error) {
+			opens++
+			if opens == 1 {
+				return &gatedReader{n: 500, err: errors.New("connection reset by peer")}, func() {}, nil
+			}
+			<-release // the reconnect takes as long as the test wants
+			return &cutReader{n: 500, err: io.EOF}, func() {}, nil
+		}},
+	})
+	defer func() { SetRegistry(orig) }()
+
+	track := &parsers.Track{
+		Duration:   20 * time.Second, // 1000 packets
+		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
+	}
+	rs := NewRecoveryStream(track)
+	if err := rs.Open(0); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer rs.Close()
+
+	packets := rs.Packets()
+
+	// Drain enough that the producer has run into the cut and is parked in the
+	// gated reopen, then keep reading: these come from the buffered lead.
+	read := 0
+	for read < 400 {
+		if _, err := packets.ReadPacket(); err != nil {
+			t.Fatalf("packet %d during reconnect: %v", read, err)
+		}
+		read++
+	}
+
+	close(release)
+
+	for {
+		_, err := packets.ReadPacket()
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("ended with %v", err)
+			}
+			break
+		}
+		read++
+	}
+	if read != 1000 {
+		t.Fatalf("heard %d packets, want the whole track across the reconnect", read)
+	}
+	if opens != 2 {
+		t.Fatalf("opens = %d", opens)
+	}
+}
+
+// Packets is cached: a second call must not start a second read-ahead goroutine
+// competing for the same source.
+func TestRecoveryStream_PacketsIsStable(t *testing.T) {
+	SetBufferAhead(1000)
+	defer SetBufferAhead(0)
+
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
+			return &cutReader{n: 10, err: io.EOF}, func() {}, nil
+		}},
+	})
+	defer func() { SetRegistry(orig) }()
+
+	rs := NewRecoveryStream(&parsers.Track{
+		Duration:   time.Second,
+		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
+	})
+	if err := rs.Open(0); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer rs.Close()
+
+	if rs.Packets() != rs.Packets() {
+		t.Fatal("Packets returned two different readers")
+	}
+}

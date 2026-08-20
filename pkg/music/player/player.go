@@ -494,6 +494,10 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 	guildID := p.guildID
 	p.mu.Unlock()
 
+	// The buffered view is built once and reused across transport reopens, so the
+	// read-ahead lead is not thrown away every time voice reconnects.
+	packets := rs.Packets()
+
 	failedSnapshot := cloneTrack(*track)
 	p.log.Info().Str("title", track.Title).Str("parser", track.CurrentParser).Msg("playback_running")
 
@@ -513,7 +517,7 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 			continue
 		}
 
-		err = audioSink.Stream(rs, stopCh)
+		err = audioSink.Stream(packets, stopCh)
 		if err == nil {
 			break
 		}
