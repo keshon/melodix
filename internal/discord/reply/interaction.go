@@ -222,3 +222,32 @@ func MessageEmbed(s *discordgo.Session, channelID string, embed *discordgo.Messa
 	_, err := s.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }
+
+// FollowupEmbedEphemeralWithComponents sends an ephemeral embed followup that
+// carries message components. Ephemeral matters for a chooser: only the person
+// who asked should be able to press the buttons.
+func FollowupEmbedEphemeralWithComponents(
+	s *discordgo.Session,
+	i *discordgo.InteractionCreate,
+	embed *discordgo.MessageEmbed,
+	components []discordgo.MessageComponent,
+) error {
+	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: components,
+	})
+	return err
+}
+
+// ReplaceComponentMessage answers a component interaction by rewriting the
+// message it came from, which is how a chooser is consumed: the buttons go away
+// with the same click that acts on them, so nothing can be pressed twice.
+func ReplaceComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: []discordgo.MessageComponent{},
+		},
+	})
+}

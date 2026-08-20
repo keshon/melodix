@@ -85,3 +85,25 @@ func TestLivePlaylistUnavailable(t *testing.T) {
 	}
 	t.Logf("unavailable playlist reported as: %v", err)
 }
+
+// TestLiveSearch is the canary for the /search path. It shares the client
+// version with playback, so a failure here usually means the same bump.
+func TestLiveSearch(t *testing.T) {
+	if os.Getenv("MELODIX_LIVE_TESTS") == "" {
+		t.Skip("set MELODIX_LIVE_TESTS=1 to hit real YouTube")
+	}
+
+	got, err := NewSearcher().Search("daft punk around the world", 5)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("results = %d, want 5", len(got))
+	}
+	for i, r := range got {
+		if r.VideoID == "" || strings.TrimSpace(r.Title) == "" {
+			t.Fatalf("result %d is unusable for a chooser: %+v", i, r)
+		}
+		t.Logf("%d. %s | %s | %s | %v", i+1, r.VideoID, r.Title, r.Author, r.Duration)
+	}
+}

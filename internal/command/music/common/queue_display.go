@@ -96,3 +96,13 @@ func formatQueueDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%d:%02d", m, s)
 }
+
+// FormatSearchLine renders one chooser row: a queue row plus the uploader,
+// which is often the only thing telling two near-identical hits apart.
+func FormatSearchLine(pos int, title, url, author string, d time.Duration) string {
+	line := FormatQueueLine(pos, title, url, d)
+	if a := strings.TrimSpace(author); a != "" {
+		line += " `" + a + "`"
+	}
+	return line
+}

@@ -82,17 +82,19 @@ func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 	}
 
 	// by title
-	videoURL, err := y.searcher.SearchFirstVideoURL(input)
-	if err != nil {
+	hits, err := y.searcher.Search(input, 1)
+	if err != nil || len(hits) == 0 {
 		return nil, errors.New("could not find YouTube video for query")
 	}
 
+	// Title is the video's own, not the query the user typed: the queue and the
+	// history both persist whatever lands here.
 	return []source.TrackInfo{
 		{
-			URL:              videoURL,
-			Title:            input,
+			URL:              hits[0].URL(),
+			Title:            hits[0].Title,
 			SourceName:       Name,
-			AvailableParsers: source.PreferParser(parsers, selectedParser),
+			AvailableParsers: preferred,
 		},
 	}, nil
 }

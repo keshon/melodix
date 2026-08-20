@@ -6,12 +6,11 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command/music/common"
+	"github.com/keshon/melodix/internal/command/music/playback"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
@@ -113,37 +112,12 @@ func (c *Play) Run(ctx interface{}) error {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	member := e.Member
 	guildID := e.GuildID
-
-	voiceState, err := c.Bot.FindUserVoiceState(guildID, member.User.ID)
-	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Voice Error",
-			Description: fmt.Sprintf("%v", err),
-		})
+	target, ok := playback.Join(c.Bot, s, e)
+	if !ok {
 		return nil
 	}
-
-	permOK, err := perm.CheckBotVoicePermissions(s, voiceState.ChannelID)
-	if err != nil || !permOK {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Voice Error",
-			Description: "I don't have permission to join or speak in that voice channel.",
-		})
-		return nil
-	}
-
-	c.Bot.SetGuildMusicNotifyChannel(guildID, e.ChannelID)
-
-	p := c.Bot.GetOrCreatePlayer(guildID)
-	if p == nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-			Title:       "🎵 Error",
-			Description: "Music service is not available.",
-		})
-		return nil
-	}
+	p := target.Player
 
 	switch parsed.Kind {
 	case common.PlayInputKindHistoryIDs:
@@ -175,10 +149,7 @@ func (c *Play) Run(ctx interface{}) error {
 			batch = append(batch, storage.TrackInfoFromMusicPlayback(mp))
 		}
 		if err := p.EnqueueTrackInfos(batch); err != nil {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-				Title:       "🎵 Queue Error",
-				Description: fmt.Sprintf("%v", err),
-			})
+			playback.QueueError(s, e, err)
 			return nil
 		}
 
@@ -196,10 +167,7 @@ func (c *Play) Run(ctx interface{}) error {
 			batch = append(batch, tracks...)
 		}
 		if err := p.EnqueueTrackInfos(batch); err != nil {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-				Title:       "🎵 Queue Error",
-				Description: fmt.Sprintf("%v", err),
-			})
+			playback.QueueError(s, e, err)
 			return nil
 		}
 
@@ -213,53 +181,11 @@ func (c *Play) Run(ctx interface{}) error {
 			return nil
 		}
 		if err := p.EnqueueTrackInfos(tracks); err != nil {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-				Title:       "🎵 Queue Error",
-				Description: fmt.Sprintf("%v", err),
-			})
+			playback.QueueError(s, e, err)
 			return nil
 		}
 	}
 
-	started := false
-	if !p.IsPlaying() {
-		if err := p.PlayNext(voiceState.ChannelID); err != nil {
-			if errors.Is(err, player.ErrTrackStartFailed) {
-				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-					Title:       "🎵 Playback Error",
-					Description: common.PlaybackErrorDescription(err),
-					Color:       reply.EmbedColor,
-				})
-				return nil
-			}
-			if errors.Is(err, player.ErrNoTracksInQueue) {
-				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-					Title:       "🎵 Queue",
-					Description: "Nothing is in the queue to play.",
-					Color:       reply.EmbedColor,
-				})
-				return nil
-			}
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
-				Title:       "🎵 Playback Error",
-				Description: fmt.Sprintf("%v", err),
-				Color:       reply.EmbedColor,
-			})
-			return nil
-		}
-		started = true
-	}
-
-	// The outcome is known here, so render it synchronously (async transitions such as
-	// auto-advance are handled by the voice service's status watcher).
-	embed := reply.TracksAddedEmbed()
-	if started {
-		if track := p.CurrentTrack(); track != nil {
-			embed = reply.NowPlayingEmbed(track)
-		}
-	}
-	if err := c.Bot.UpdatePlaybackStatus(s, e, guildID, embed); err != nil {
-		slashCtx.AppLog.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
-	}
+	playback.StartAndRender(c.Bot, s, e, slashCtx.AppLog, target)
 	return nil
 }
