@@ -48,6 +48,9 @@ type format struct {
 }
 
 type playerResponse struct {
+	ResponseContext struct {
+		VisitorData string `json:"visitorData"`
+	} `json:"responseContext"`
 	PlayabilityStatus struct {
 		Status string `json:"status"`
 		Reason string `json:"reason"`
@@ -62,23 +65,28 @@ type playerResponse struct {
 }
 
 // fetchPlayer POSTs the ANDROID-client player request. InnerTube accepts keyless
-// requests; no poToken or visitorData is sent — if googlevideo URLs start
-// returning 403, an "X-Goog-Visitor-Id" header here is the first thing to try.
+// requests; no poToken is sent — android_vr is one of the clients that does not
+// require one. A visitorData session id is sent when one could be obtained (see
+// visitor.go), both in the client context and as X-Goog-Visitor-Id.
 func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse, error) {
+	client := map[string]any{
+		"clientName":        clientName,
+		"clientVersion":     clientVersion,
+		"deviceMake":        deviceMake,
+		"deviceModel":       deviceModel,
+		"osName":            osName,
+		"osVersion":         osVersion,
+		"androidSdkVersion": androidSDKVersion,
+		"userAgent":         clientUserAgent,
+		"hl":                "en",
+	}
+	vid := visitorID(httpc)
+	if vid != "" {
+		client["visitorData"] = vid
+	}
+
 	body, err := json.Marshal(map[string]any{
-		"context": map[string]any{
-			"client": map[string]any{
-				"clientName":        clientName,
-				"clientVersion":     clientVersion,
-				"deviceMake":        deviceMake,
-				"deviceModel":       deviceModel,
-				"osName":            osName,
-				"osVersion":         osVersion,
-				"androidSdkVersion": androidSDKVersion,
-				"userAgent":         clientUserAgent,
-				"hl":                "en",
-			},
-		},
+		"context":        map[string]any{"client": client},
 		"videoId":        videoID,
 		"contentCheckOk": true,
 		"racyCheckOk":    true,
@@ -93,6 +101,9 @@ func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse,
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", clientUserAgent)
+	if vid != "" {
+		req.Header.Set("X-Goog-Visitor-Id", vid)
+	}
 
 	resp, err := httpc.Do(req)
 	if err != nil {
@@ -110,6 +121,9 @@ func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse,
 	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
 		return nil, fmt.Errorf("ytnative: decode player response: %w", err)
 	}
+	// Adopt before the playability check: a refused response still carries a
+	// usable session id, and the next attempt should reuse it.
+	rememberVisitorID(pr.ResponseContext.VisitorData)
 	if pr.PlayabilityStatus.Status != "OK" {
 		return nil, fmt.Errorf("%w: %s (%s)", ErrNotPlayable, pr.PlayabilityStatus.Status, pr.PlayabilityStatus.Reason)
 	}
