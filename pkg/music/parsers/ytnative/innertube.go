@@ -9,37 +9,28 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/keshon/melodix/pkg/music/innertube"
 )
 
-// Thin InnerTube client using the VISIONOS client context (the YouTube app on
-// Apple Vision Pro), which returns direct (cipher-free) stream URLs anonymously
-// and needs no PO token. Deliberately NO signature/nsig deciphering: the URLs
-// this client returns carry no n parameter to solve, and if that ever changes
-// the answer is to fall through to the yt-dlp fallback, not to grow a JS engine
-// here. When this client can't produce a plain URL it fails fast and the
-// recovery chain moves on.
+// Thin InnerTube player client. The client identity it presents — VISIONOS, the
+// YouTube app on Apple Vision Pro — lives in pkg/music/innertube because the
+// youtube source needs the same one; see that package for why the choice is
+// load-bearing rather than cosmetic.
 //
-// The client choice is not cosmetic, and this is why it is VISIONOS and not
-// ANDROID_VR: googlevideo enforces different request rules per issuing client.
-// An ANDROID_VR stream URL rejects any open-ended request with 403 — a plain
-// GET, or Range: bytes=0- — and serves only bounded ranges up to about 1 MiB.
-// Both this package's passthrough (a plain GET) and ffmpeg (Range: bytes=0-)
-// ask open-ended, so every ANDROID_VR playback died on its first read. VISIONOS
-// URLs serve all three shapes, which is also how yt-dlp streams without a JS
-// runtime. Verified against the live CDN, not inferred.
+// Deliberately NO signature/nsig deciphering: the URLs this client returns carry
+// no n parameter to solve, and if that ever changes the answer is to fall
+// through to the yt-dlp fallback, not to grow a JS engine here. When this client
+// can't produce a plain URL it fails fast and the recovery chain moves on.
+
+// Local aliases keep this package's call sites unchanged while the values have a
+// single definition. clientVersion is quoted in logs and in the live canary.
 const (
-	clientName = "VISIONOS"
-	// clientVersion is THE maintenance knob of this package: when YouTube
-	// deprecates it, playback falls back to kkdai/yt-dlp and bumping this
-	// constant (see yt-dlp's INNERTUBE_CLIENTS for a known-good value) is the
-	// whole fix.
-	clientVersion   = "1.02"
-	deviceMake      = "Apple"
-	deviceModel     = "RealityDevice17,1"
-	osName          = "visionOS"
-	osVersion       = "26.5.23O471"
-	clientUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
-	playerEndpoint  = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
+	clientName      = innertube.ClientName
+	clientVersion   = innertube.ClientVersion
+	clientUserAgent = innertube.UserAgent
+
+	playerEndpoint = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
 )
 
 var (
@@ -72,21 +63,12 @@ type playerResponse struct {
 	} `json:"videoDetails"`
 }
 
-// fetchPlayer POSTs the ANDROID-client player request. InnerTube accepts keyless
+// fetchPlayer POSTs the player request. InnerTube accepts keyless
 // requests; no poToken is sent — visionos is one of the clients that does not
 // require one. A visitorData session id is sent when one could be obtained (see
 // visitor.go), both in the client context and as X-Goog-Visitor-Id.
 func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse, error) {
-	client := map[string]any{
-		"clientName":    clientName,
-		"clientVersion": clientVersion,
-		"deviceMake":    deviceMake,
-		"deviceModel":   deviceModel,
-		"osName":        osName,
-		"osVersion":     osVersion,
-		"userAgent":     clientUserAgent,
-		"hl":            "en",
-	}
+	client := innertube.Client()
 	vid := visitorID(httpc)
 	if vid != "" {
 		client["visitorData"] = vid
