@@ -14,3 +14,6 @@ dump.bat
 /.cursor
 melodix-discord
 /data/cache/
+
+# Served by GitHub Pages from the repo root; *.txt above would hide it.
+!robots.txt
