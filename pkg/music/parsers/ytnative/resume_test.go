@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // payload is the "track" these tests stream; every byte is distinct enough that
@@ -222,4 +224,55 @@ func TestResumingBodyStopsAfterClose(t *testing.T) {
 		}
 	}
 	t.Fatal("reads kept succeeding after Close")
+}
+
+// TestResumingBodyCloseDuringABlockedReadIsPrompt covers the case that actually
+// happens on /stop and /next: the reader is parked waiting for bytes when the
+// stream is closed underneath it.
+//
+// The failure it guards against is not a wrong answer but a slow one. Sampling
+// the closed flag before the read rather than after leaves the repair path
+// thinking the stream is still wanted, so it sleeps out its backoff and spends a
+// request before discovering otherwise — with teardown blocked behind it.
+func TestResumingBodyCloseDuringABlockedReadIsPrompt(t *testing.T) {
+	var requests int32
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-block // hold the body open, delivering nothing
+	}))
+	defer srv.Close()
+	defer close(block)
+
+	resp, err := srv.Client().Get(srv.URL)
+	if err != nil {
+		t.Fatalf("initial GET: %v", err)
+	}
+	body := newResumingBody(srv.Client(), srv.URL, "test-agent", resp.Body)
+
+	readDone := make(chan error, 1)
+	go func() {
+		_, rerr := body.Read(make([]byte, 512))
+		readDone <- rerr
+	}()
+
+	// Let the read park, then close underneath it.
+	time.Sleep(50 * time.Millisecond)
+	start := time.Now()
+	_ = body.Close()
+
+	select {
+	case <-readDone:
+	case <-time.After(resumeBackoff):
+		t.Fatalf("read did not return within %v of Close — it went down the repair path", resumeBackoff)
+	}
+
+	if elapsed := time.Since(start); elapsed >= resumeBackoff {
+		t.Fatalf("Close took %v; a backoff was slept through", elapsed)
+	}
+	if n := atomic.LoadInt32(&requests); n != 1 {
+		t.Fatalf("made %d requests; a closed stream must not be repaired", n)
+	}
 }

@@ -55,10 +55,16 @@ type resumingBody struct {
 	attempts int
 }
 
-func (b *resumingBody) current() (io.ReadCloser, bool) {
+func (b *resumingBody) current() io.ReadCloser {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.body, b.closed
+	return b.body
+}
+
+func (b *resumingBody) isClosed() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.closed
 }
 
 // newResumingBody adopts an already-open response body. The caller keeps
@@ -69,7 +75,7 @@ func newResumingBody(client *http.Client, url, userAgent string, body io.ReadClo
 
 func (b *resumingBody) Read(p []byte) (int, error) {
 	for {
-		body, closed := b.current()
+		body := b.current()
 		n, err := body.Read(p)
 		if n > 0 {
 			b.offset += int64(n)
@@ -81,7 +87,14 @@ func (b *resumingBody) Read(p []byte) (int, error) {
 		}
 		// A clean end is a clean end — the track is simply over. Only a broken
 		// connection is worth repairing.
-		if errors.Is(err, io.EOF) || closed {
+		//
+		// isClosed is read here rather than before the read above, and the
+		// difference is not academic: a stop or a skip arriving while the read is
+		// parked is the common case, not the rare one, and a value sampled before
+		// the read would still say "open". The repair would then sleep out its
+		// backoff and spend a request on a stream nobody is listening to, with
+		// teardown waiting on all of it.
+		if errors.Is(err, io.EOF) || b.isClosed() {
 			return 0, err
 		}
 		if b.attempts >= maxResumeAttempts {
