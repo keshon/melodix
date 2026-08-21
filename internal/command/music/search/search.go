@@ -27,10 +27,10 @@ const componentPrefix = "search"
 
 // A button id is "search:<source>:<payload>" and is a wire format, not an
 // internal detail: choosers already posted keep living in channels, and their
-// ids come back whenever someone presses a button. So the source travels in the
-// id from the very first version, even though only YouTube is offered today —
-// adding SoundCloud later is then a new case here rather than a format change
-// that silently mis-routes every chooser still on screen.
+// ids come back whenever someone presses a button. The source travels in the id
+// so that adding one is a new case here rather than a format change that
+// silently mis-routes every chooser still on screen — which is exactly what
+// carrying it from the first version, when only YouTube was searchable, bought.
 //
 // The payload is the source's own compact id, never a URL: SoundCloud
 // permalinks run past 130 characters and 8 in 100 already exceed the budget

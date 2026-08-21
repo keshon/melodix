@@ -1,4 +1,3 @@
-// FILE: melodix/internal/discord/middleware/command_logger.go
 package middleware
 
 import (

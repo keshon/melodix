@@ -31,7 +31,9 @@ func NewValidator() *Validator {
 	return &Validator{
 		Client: &http.Client{
 			Timeout: 5 * time.Second,
-			// Follow redirects manually so we can inspect each step if needed
+			// Redirects are still followed by net/http; this hook only counts
+			// them, tightening the default limit from 10 to 5. Station URLs
+			// routinely redirect once or twice to a regional edge, never five.
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 5 {
 					return fmt.Errorf("too many redirects")
@@ -46,7 +48,6 @@ func NewValidator() *Validator {
 func (r *Validator) IsValidURL(rawURL string) (bool, string, error) {
 	contentType, finalURL, err := r.fetchContentType(rawURL)
 	if err != nil {
-		// Network or request-level failure: big red flag
 		return false, "", fmt.Errorf("failed to fetch content type: %w", err)
 	}
 
@@ -54,7 +55,9 @@ func (r *Validator) IsValidURL(rawURL string) (bool, string, error) {
 		return true, contentType, nil
 	}
 
-	// Rejected by content-type + extension heuristics: let's not be coy about it
+	// The rejected content-type and the post-redirect URL both go in the error:
+	// this is the one place a user finds out why their station link was refused,
+	// and "invalid stream" alone leaves nothing to act on.
 	return false, contentType, fmt.Errorf("invalid stream content-type: %q, url: %s", contentType, finalURL)
 }
 
@@ -67,7 +70,10 @@ func (r *Validator) fetchContentType(rawURL string) (string, string, error) {
 
 	resp, err := r.Client.Do(req)
 	if err != nil || resp.StatusCode >= 400 {
-		// Try GET as fallback
+		// HEAD is tried first because it costs no audio, but streaming servers
+		// commonly answer it with an error or not at all — so a 4xx/5xx here is
+		// not evidence the station is down, and GET has to be asked before the
+		// URL can be called invalid. The body is drained and discarded below.
 		req.Method = http.MethodGet
 		resp, err = r.Client.Do(req)
 		if err != nil {

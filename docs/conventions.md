@@ -101,6 +101,64 @@ strings.
 External process stderr should go through `ffmpeg.NewPCMCommand`'s
 classifier rather than straight to the process's own stderr.
 
+## Comments
+
+A comment earns its place by saying something the code cannot. The code
+already says what it happens to do; a restatement is just a second thing to
+keep in sync, and it sits in the way of the comment that actually matters.
+`// Create embed` above a struct literal called `embed` is the shape to avoid,
+and so is a doc comment that only expands the identifier back into a sentence.
+
+The comments worth writing answer a question the code raises but cannot
+settle. Why VISIONOS rather than the library's default client. Why the
+read-ahead buffer sits above recovery instead of under it. Why a run compares
+its own `*parsers.Track` pointer instead of reading shared state. Whoever asks
+those next — a maintainer months from now, or an agent told to "clean this
+up" — cannot recover the answer from the code, and will helpfully undo it.
+
+Four things make such a comment hold up:
+
+**Say whether it was measured or assumed.** "Verified against the live CDN,
+not inferred", or "measured on one live broadcast, the renditions ran 269,
+507, 962, 1282, 2922 and 5552 kbit/s", is worth more than any amount of
+confident prose: it tells a reader which claims they may reason from and which
+they should re-check. A guess is fine to write down — label it as one.
+
+**Name the failure it prevents.** "which killed every playback on its first
+read" turns an arbitrary-looking constant into something nobody deletes by
+accident. A rule with no consequence attached reads as a preference.
+
+**Say what not to do.** `don't reach for it when a 403 turns up`, `do not
+switch to CBR`, `do NOT advance parserIndex`. A deliberate non-obvious choice
+needs a fence around it or it gets optimized away — this is the highest-value
+kind of comment here, and the one an agent is likeliest to violate in its
+absence.
+
+**Point at the next hop by name.** `see ytnative/visitor.go`, `see
+VisionOSClient`, `see the note in SetCommand`. A reader who needs more should
+be told where it is, in a form that greps.
+
+Long explanations belong in one prose block at the top of the file or above
+the declaration they explain — `parsers/ytnative/resume.go`,
+`parsers/ytdlp/runtime.go` and `sources/youtube/playlist.go` are the pattern —
+rather than sprinkled line by line through the body. Struct fields carrying a
+contract get their own comment, and concurrency-relevant ones say who owns the
+field and what lock covers it ("belongs to the reading goroutine alone",
+"never held across a read or an HTTP round trip").
+
+On mechanics: every exported identifier gets a doc comment starting with its
+own name, per Go convention — except methods implementing an interface, which
+inherit the interface's doc and should not repeat it. Comments wrap at 80
+columns and are written in English.
+
+Three things go stale silently, so they don't get written at all: file-path
+headers (`// FILE: internal/…`), which nothing checks and which outlive a `git
+mv`; a claim about what does not exist yet ("only YouTube is offered today"),
+which still reads as fact long after it stopped being one — describe what the
+design allows instead; and any restatement of a constant's value, which the
+constant already carries. A comment that has drifted from the code is worse
+than no comment, because it is believed.
+
 ## Adding things
 
 To add a source: implement `sources.Source` under

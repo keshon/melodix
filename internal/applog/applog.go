@@ -51,7 +51,10 @@ func Setup(service string, cfg *config.Config) zerolog.Logger {
 
 	multi := io.MultiWriter(writers...)
 
-	// КРИТИЧНО: синхронизация всего пайплайна
+	// Log events come from arbitrary goroutines — Discord handlers, playback
+	// runs, the read-ahead producer — and neither zerolog nor io.MultiWriter
+	// serializes writes; MultiWriter only fans out. SyncWriter's mutex is what
+	// keeps one event's bytes together and the console and file in step.
 	sync := zerolog.SyncWriter(multi)
 
 	return zerolog.New(sync).

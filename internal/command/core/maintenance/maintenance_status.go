@@ -20,12 +20,10 @@ func runStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 		}
 	}
 
-	// Gather statistics
 	memberCount := len(guild.Members)
 	roleCount := len(guild.Roles)
 	channelCount := len(guild.Channels)
 
-	// Build message
 	desc := fmt.Sprintf(
 		"**Guild name: %s**\n"+
 			"**Guild ID: %s**\n"+

@@ -1,5 +1,6 @@
-// Package parsers defines the Streamer interface and the playback Track type
-// for opening PCM streams from URLs.
+// Package parsers defines the Streamer interface and the playback Track type.
+// A Streamer opens a track as 20ms Opus packets (opus.Reader); PCM appears only
+// inside the ffmpeg-backed parsers, as an intermediate on the way to Opus.
 package parsers
 
 import (

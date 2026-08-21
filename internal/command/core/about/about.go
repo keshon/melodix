@@ -38,7 +38,6 @@ func (c *About) Run(ctx interface{}) error {
 
 	info := buildinfo.Get()
 
-	// Info fields for embed
 	fields := []*discordgo.MessageEmbedField{
 		{
 			Name:  "Developed by Señor Mega",
@@ -54,7 +53,6 @@ func (c *About) Run(ctx interface{}) error {
 		},
 	}
 
-	// Create embed
 	embed := &discordgo.MessageEmbed{
 		Title:       "ℹ️ About " + info.Project,
 		Description: info.Description,
@@ -62,7 +60,8 @@ func (c *About) Run(ctx interface{}) error {
 		Fields:      fields,
 	}
 
-	// Try attaching banner if exists
+	// The banner is an optional asset: a deployment that ships only the binary
+	// still gets the embed, just without the image.
 	imagePath := "./assets/about-banner.webp"
 	if f, err := os.Open(imagePath); err == nil {
 		defer f.Close()
@@ -71,7 +70,6 @@ func (c *About) Run(ctx interface{}) error {
 		return reply.RespondEmbedEphemeralWithFile(session, event, embed, f, imageName)
 	}
 
-	// Just embed if no banner
 	reply.RespondEmbedEphemeral(session, event, embed)
 
 	return nil
