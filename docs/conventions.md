@@ -202,6 +202,19 @@ fields specifically so this works).
 Live-endpoint behavior only gets opt-in `Live` tests, never unconditional
 ones.
 
+Test the entry point, not only the helpers underneath it. A parser's `Open` is
+the thing the engine actually calls, so it needs its own coverage even when
+every piece it composes is already tested — a check sitting between the
+helpers and the caller otherwise belongs to no test at all. That is not
+hypothetical: a live-stream gate in `ytnative`'s `Open` rejected every playable
+YouTube video for a whole release while both the unit tests and the opt-in live
+tests stayed green, because all of them called `fetchPlayer` and
+`pickOpusFormat` directly and nothing called `Open`. Endpoint constants get to
+be `var` for exactly this reason (`playerEndpoint`, `homeEndpoint`).
+
+A regression test has to be watched failing before it is trusted. Reintroduce
+the bug, confirm the new test goes red, then take it back out.
+
 Before cutting a release, run through the manual matrix in
 [architecture.md](architecture.md#testing--verification): multi-track
 auto-advance, `/stop` mid-track, a natural queue end, and one `/play` per

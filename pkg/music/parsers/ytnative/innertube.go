@@ -29,20 +29,16 @@ const (
 	clientName      = innertube.ClientName
 	clientVersion   = innertube.ClientVersion
 	clientUserAgent = innertube.UserAgent
-
-	playerEndpoint = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
 )
+
+// playerEndpoint is a var so tests can point Open at an httptest server, the
+// same seam homeEndpoint gives the visitor bootstrap.
+var playerEndpoint = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
 
 var (
 	ErrCipherOnly  = errors.New("ytnative: only cipher-protected formats available")
 	ErrNotPlayable = errors.New("ytnative: video not playable")
 	ErrNoAudio     = errors.New("ytnative: no audio formats in player response")
-	// ErrLiveStream means the video is a live broadcast, which YouTube serves as
-	// HLS with no audio-only rendition. Nothing in this parser can play that, and
-	// the adaptive formats a live response does carry are segment URLs that make
-	// ffmpeg fail with "invalid data" a second later — so this fails at once and
-	// lets the chain reach yt-dlp, which fetches HLS segments properly.
-	ErrLiveStream = errors.New("ytnative: live stream (HLS), not supported by this parser")
 )
 
 type format struct {
@@ -62,8 +58,13 @@ type playerResponse struct {
 	} `json:"playabilityStatus"`
 	StreamingData struct {
 		AdaptiveFormats []format `json:"adaptiveFormats"`
-		// HLSManifestURL is present only for live broadcasts, which makes it a
-		// more reliable "this is live" signal than any videoDetails flag.
+		// HLSManifestURL is NOT a live-broadcast signal under this client, whatever
+		// it may be under others. VISIONOS is an Apple-platform client, and those
+		// are served an HLS manifest for ordinary VOD too — measured: a 213-second
+		// music video carries one alongside 27 adaptive formats, while a 24/7 live
+		// broadcast carries none and comes back UNPLAYABLE with zero formats.
+		// Treating its presence as "this is live" rejected every playable video and
+		// caught no live one; it is parsed but deliberately not acted on.
 		HLSManifestURL string `json:"hlsManifestUrl"`
 	} `json:"streamingData"`
 	VideoDetails struct {
