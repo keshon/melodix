@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="532" viewBox="0 0 880 532">
+<defs>
+<symbol id="g-p" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10.6" fill="none" stroke="var(--accent)" stroke-width="1.7"/>
+    <circle cx="12" cy="12" r="8.1" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".5"/>
+    <circle cx="12" cy="12" r="5.4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <circle cx="12" cy="12" r="2.3" fill="currentColor"/>
+  </symbol>
+<symbol id="g-t" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10.6" fill="none" stroke="var(--accent)" stroke-width="1.7"/>
+    <circle cx="12" cy="12" r="8.1" fill="none" stroke="currentColor" stroke-width="1.35" opacity=".62"/>
+    <circle cx="12" cy="12" r="5.4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <circle cx="12" cy="12" r="2.3" fill="currentColor"/>
+  </symbol>
+</defs>
+<g transform="translate(0,0)">
+<rect width="880" height="266" fill="#fbf6f9"/>
+<text x="28" y="28" fill="#8a7480" font-family="ui-monospace,Consolas,monospace" font-size="11" letter-spacing="2">LIGHT</text>
+<text x="28" y="84" fill="#8a7480" font-family="ui-monospace,Consolas,monospace" font-size="10.5">as picked      (basket 1.20 / 50%)</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="300" y="72.0" width="16" height="16"/></g>
+<text x="308.0" y="118" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">16</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="338" y="70.0" width="20" height="20"/></g>
+<text x="348.0" y="118" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">20</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="380" y="69.5" width="21" height="21"/></g>
+<text x="390.5" y="118" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">21</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="423" y="68.0" width="24" height="24"/></g>
+<text x="435.0" y="118" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">24</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="469" y="64.0" width="32" height="32"/></g>
+<text x="485.0" y="118" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">32</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="523" y="56.0" width="48" height="48"/></g>
+<text x="547.0" y="118" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">48</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="593" y="48.0" width="64" height="64"/></g>
+<text x="625.0" y="118" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">64</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-p" x="697" y="70" width="21" height="21"/></g>
+<text x="726" y="85" fill="#241a21" font-family="ui-monospace,Consolas,monospace" font-size="14.5" font-weight="700">Melodix</text>
+<text x="28" y="188" fill="#8a7480" font-family="ui-monospace,Consolas,monospace" font-size="10.5">tuned for small (basket 1.35 / 62%)</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="300" y="176.0" width="16" height="16"/></g>
+<text x="308.0" y="222" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">16</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="338" y="174.0" width="20" height="20"/></g>
+<text x="348.0" y="222" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">20</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="380" y="173.5" width="21" height="21"/></g>
+<text x="390.5" y="222" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">21</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="423" y="172.0" width="24" height="24"/></g>
+<text x="435.0" y="222" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">24</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="469" y="168.0" width="32" height="32"/></g>
+<text x="485.0" y="222" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">32</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="523" y="160.0" width="48" height="48"/></g>
+<text x="547.0" y="222" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">48</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="593" y="152.0" width="64" height="64"/></g>
+<text x="625.0" y="222" fill="#8a7480" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">64</text>
+<g style="color:#241a21;--accent:#b01e66"><use href="#g-t" x="697" y="174" width="21" height="21"/></g>
+<text x="726" y="189" fill="#241a21" font-family="ui-monospace,Consolas,monospace" font-size="14.5" font-weight="700">Melodix</text>
+</g>
+<g transform="translate(0,266)">
+<rect width="880" height="266" fill="#171118"/>
+<text x="28" y="28" fill="#a58fa0" font-family="ui-monospace,Consolas,monospace" font-size="11" letter-spacing="2">DARK</text>
+<text x="28" y="84" fill="#a58fa0" font-family="ui-monospace,Consolas,monospace" font-size="10.5">as picked      (basket 1.20 / 50%)</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="300" y="72.0" width="16" height="16"/></g>
+<text x="308.0" y="118" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">16</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="338" y="70.0" width="20" height="20"/></g>
+<text x="348.0" y="118" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">20</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="380" y="69.5" width="21" height="21"/></g>
+<text x="390.5" y="118" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">21</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="423" y="68.0" width="24" height="24"/></g>
+<text x="435.0" y="118" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">24</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="469" y="64.0" width="32" height="32"/></g>
+<text x="485.0" y="118" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">32</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="523" y="56.0" width="48" height="48"/></g>
+<text x="547.0" y="118" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">48</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="593" y="48.0" width="64" height="64"/></g>
+<text x="625.0" y="118" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">64</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-p" x="697" y="70" width="21" height="21"/></g>
+<text x="726" y="85" fill="#f2e9ee" font-family="ui-monospace,Consolas,monospace" font-size="14.5" font-weight="700">Melodix</text>
+<text x="28" y="188" fill="#a58fa0" font-family="ui-monospace,Consolas,monospace" font-size="10.5">tuned for small (basket 1.35 / 62%)</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="300" y="176.0" width="16" height="16"/></g>
+<text x="308.0" y="222" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">16</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="338" y="174.0" width="20" height="20"/></g>
+<text x="348.0" y="222" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">20</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="380" y="173.5" width="21" height="21"/></g>
+<text x="390.5" y="222" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">21</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="423" y="172.0" width="24" height="24"/></g>
+<text x="435.0" y="222" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">24</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="469" y="168.0" width="32" height="32"/></g>
+<text x="485.0" y="222" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">32</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="523" y="160.0" width="48" height="48"/></g>
+<text x="547.0" y="222" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">48</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="593" y="152.0" width="64" height="64"/></g>
+<text x="625.0" y="222" fill="#a58fa0" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="9">64</text>
+<g style="color:#f2e9ee;--accent:#e13a86"><use href="#g-t" x="697" y="174" width="21" height="21"/></g>
+<text x="726" y="189" fill="#f2e9ee" font-family="ui-monospace,Consolas,monospace" font-size="14.5" font-weight="700">Melodix</text>
+</g>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     role="img" aria-label="Melodix">
+  <title>Melodix</title>
+  <!-- A speaker driver seen head on: lit rim, basket, cone, dome.
+       Two tones only. Inlined in a page it inherits `color` and `--accent`;
+       standalone it falls back to the Melodix palette below. -->
+  <style>
+    svg { color: #241a21 }
+    @media (prefers-color-scheme: dark) { svg { color: #f2e9ee } }
+  </style>
+  <circle cx="12" cy="12" r="10.6" fill="none" stroke="var(--accent, #b01e66)" stroke-width="1.7"/>
+  <circle cx="12" cy="12" r="8.1" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".5"/>
+  <circle cx="12" cy="12" r="5.4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <circle cx="12" cy="12" r="2.3" fill="currentColor"/>
+</svg>
