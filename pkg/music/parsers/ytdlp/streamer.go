@@ -2,14 +2,47 @@ package ytdlp
 
 import (
 	"errors"
+	"fmt"
+	"os/exec"
+	"strings"
 
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 )
 
-// ErrLiveStream means the URL is a live broadcast, which the link mode cannot
-// serve — see the note at the check in ytdlpLink. The pipe mode handles it.
-var ErrLiveStream = errors.New("ytdlp: live stream needs the pipe parser")
+// runJSON runs a yt-dlp command and returns its stdout, folding stderr into the
+// error when it fails.
+//
+// Without this, a failure reaches the log as "exit status 1" and yt-dlp's own
+// explanation is discarded — which is exactly how a misconfigured environment
+// stayed invisible: the real message was "No supported JavaScript runtime could
+// be found ... some formats may be missing", and nothing carried it up.
+func runJSON(cmd *exec.Cmd, what string) ([]byte, error) {
+	out, err := cmd.Output()
+	if err == nil {
+		return out, nil
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		return nil, fmt.Errorf("ytdlp: %s: %w: %s", what, err, lastLines(string(ee.Stderr), 2))
+	}
+	return nil, fmt.Errorf("ytdlp: %s: %w", what, err)
+}
+
+// lastLines keeps the tail of yt-dlp's stderr: the actionable message is the
+// final one, while everything before it is progress noise.
+func lastLines(s string, n int) string {
+	lines := make([]string, 0, n)
+	for _, l := range strings.Split(strings.TrimSpace(s), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, " | ")
+}
 
 // YtdlpPath is the yt-dlp binary invoked by this parser; override for non-PATH installs.
 var YtdlpPath = "yt-dlp"

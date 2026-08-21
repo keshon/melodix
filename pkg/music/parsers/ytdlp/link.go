@@ -14,10 +14,9 @@ import (
 )
 
 func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
-	ytdlp := exec.Command(YtdlpPath, "-j", "-f", audioFormatSelector, track.URL)
-	output, err := ytdlp.Output()
+	output, err := runJSON(exec.Command(YtdlpPath, "-j", "-f", audioFormatSelector, track.URL), "get url")
 	if err != nil {
-		return nil, nil, fmt.Errorf("ytdlp: get url: %w", err)
+		return nil, nil, err
 	}
 
 	type fragment struct {
@@ -35,22 +34,11 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 		Formats     []format          `json:"formats"`
 		URL         string            `json:"url"`
 		HTTPHeaders map[string]string `json:"http_headers,omitempty"`
-		IsLive      bool              `json:"is_live"`
 	}
 
 	var info ytdlpInfo
 	if err := json.Unmarshal(output, &info); err != nil {
 		return nil, nil, fmt.Errorf("ytdlp: decode json: %w", err)
-	}
-
-	// A live broadcast is HLS, and handing its playlist URL to ffmpeg does not
-	// work: googlevideo answers ffmpeg's segment requests with 403 after roughly
-	// twenty seconds, because the segment URLs are issued for the client that
-	// asked for them and ffmpeg is not that client. Decline, so the chain reaches
-	// the pipe parser, where yt-dlp fetches the segments itself and keeps the
-	// identity that goes with them.
-	if info.IsLive {
-		return nil, nil, ErrLiveStream
 	}
 
 	// If the root duration is empty, we try to take it from the first fragment of the first format

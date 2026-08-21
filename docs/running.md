@@ -10,6 +10,31 @@ guide covers both.
 - FFmpeg in `PATH` (optional if YouTube only)
 - yt-dlp (recommended, not required)
 
+### Configuring yt-dlp
+
+Where yt-dlp is used, how it is configured matters more than it looks. Left at
+its defaults it falls back to YouTube's `android_vr` client, and googlevideo
+serves that client under restrictions — most visibly on live broadcasts, where
+segment requests start answering 403 after twenty-odd seconds and playback
+stops for good.
+
+The Docker image writes this configuration for you:
+
+```
+--js-runtimes node
+--extractor-args youtube:player_client=web_embedded
+```
+
+Running outside Docker, the same two lines belong in your own yt-dlp config
+(`~/.config/yt-dlp/config`, or `%APPDATA%\yt-dlp\config` on Windows), together
+with a JavaScript runtime — Node or Deno — on `PATH`. Both are needed: the
+embedded web client cannot solve YouTube's challenges without a runtime, and a
+runtime alone leaves yt-dlp on `android_vr`.
+
+Without them, ordinary videos still play and only live streams break, which is
+why this is easy to miss. If a live stream stops after about half a minute, or
+the log shows `No supported JavaScript runtime could be found`, this is why.
+
 ---
 
 ## Discord bot
