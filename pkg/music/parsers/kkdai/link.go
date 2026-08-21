@@ -58,6 +58,9 @@ func kkdaiLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 		return nil, nil, fmt.Errorf("kkdai: youtube client: %w", lastErr)
 	}
 
+	if video.HLSManifestURL != "" {
+		return nil, nil, ErrLiveStream
+	}
 	track.Duration = video.Duration
 	track.Title = video.Title
 

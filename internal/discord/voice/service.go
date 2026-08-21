@@ -180,12 +180,18 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 	for status := range p.PlayerStatus {
 		sess := s.getSession()
 		if sess == nil {
+			// Silence here used to make a stale embed undiagnosable: the
+			// correction is computed and logged upstream, then nothing renders
+			// and the log says nothing about why.
+			s.log.Warn().Str("guild_id", guildID).Str("status", string(status)).
+				Msg("status_render_skipped_no_session")
 			continue
 		}
 		switch status {
 		case player.StatusPlaying:
 			track := p.CurrentTrack()
 			if track == nil {
+				s.log.Warn().Str("guild_id", guildID).Msg("now_playing_render_skipped_no_track")
 				continue
 			}
 			// UpdatePlaybackStatus is a silent no-op when no status message is
@@ -198,8 +204,12 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			}
 			if !registered {
 				// The slash handler posts the first embed and registers it; this
-				// status arrived before that happened.
-				s.log.Debug().Str("guild_id", guildID).Msg("now_playing_render_skipped")
+				// status arrived before that happened. Info rather than Debug:
+				// this is the reason a Now Playing embed can name a parser that
+				// has since been replaced, and it is the line a stale-chip report
+				// needs to be answerable.
+				s.log.Info().Str("guild_id", guildID).Str("parser", track.CurrentParser).
+					Msg("now_playing_render_skipped")
 				continue
 			}
 			// Traces the embed itself, so a chip that stayed stale can be told apart

@@ -1,6 +1,7 @@
 package kkdai
 
 import (
+	"errors"
 	"sync/atomic"
 
 	"github.com/keshon/melodix/pkg/music/opus"
@@ -37,6 +38,18 @@ var VisionOSClient = youtube.ClientInfo{
 }
 
 func init() { youtube.DefaultClient = VisionOSClient }
+
+// ErrLiveStream means the video is a live broadcast. YouTube serves those as
+// HLS, and neither kkdai path can follow a playlist: the pipe path finds no
+// WebM/Opus format, and the link path fetches a single segment, plays about five
+// seconds and hits EOF — three times over, since recovery reasonably reads that
+// as an interrupted live stream.
+//
+// The cost of not declining is not just the wasted attempts. Opening at all is
+// what makes the player announce kkdai as the parser in Now Playing, so the
+// embed ends up naming a parser that produced five seconds and quit while the
+// audio the user hears comes from yt-dlp.
+var ErrLiveStream = errors.New("kkdai: live stream (HLS), not supported by this parser")
 
 // Streamer extracts YouTube audio via the kkdai/youtube library (InnerTube +
 // signature deciphering); the fallback when ytnative can't produce a plain URL.
