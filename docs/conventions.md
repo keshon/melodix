@@ -14,7 +14,10 @@ behind it. Everything else stays concrete.
 There are exactly three extension points, and new capability should show up
 as an implementation of one of them rather than as a new layer:
 `sources.Source` (input → metadata), `parsers.Streamer` (track → Opus
-packets), and `sink.AudioSink`/`Provider` (Opus packets → audio). The whole
+packets), and `sink.AudioSink`/`Provider` (Opus packets → audio).
+`sources.Searcher` is an optional extra a source may also implement, and is
+deliberately not folded into `Source`: radio has nothing to rank, and
+resolving a query to one track is a different job from listing candidates. The whole
 engine speaks 20ms Opus packets (`opus.Reader`) end to end. See
 [architecture.md](architecture.md) for how these fit together.
 
@@ -55,6 +58,14 @@ instead of touching existing ones. The constants live in
 `pkg/music/sources/parsers.go` and `sources.go`; the registry mapping lives in
 `pkg/music/stream/stream.go`, where `stream.Entry` decides link vs. pipe
 dispatch.
+
+`/search`'s button ids are frozen for a different reason but just as hard.
+The format is `search:<source>:<payload>`, and a chooser that has already been
+posted keeps sitting in a channel: its ids come back whenever someone presses
+a button, possibly long after a restart or a deploy. So the source tags (`yt`,
+`sc` in `internal/command/music/search`) can gain new values but must never be
+renamed or re-pointed, and an unrecognised tag has to fail closed — telling
+the user to run `/search` again — rather than resolve as some default source.
 
 ## Concurrency contracts
 
@@ -97,6 +108,20 @@ To add a source: implement `sources.Source` under
 register it in `resolve.New()` and add it to the auto-detect precedence list
 in `Resolver.Resolve`. If it's searchable by bare query, extend that branch
 too, and add it to `/play`'s source choices.
+
+To make a source searchable in `/search`: implement `sources.Searcher`
+(`Search(query, limit) ([]SearchResult, error)`) on the source's searcher
+type, and add a case to `/search`'s `pick` and `trackURL`. The `SearchResult`
+`ID` must be the source's own compact identifier, never a URL — it has to
+survive a round trip through a Discord component id, which caps at 100
+characters, and SoundCloud permalinks routinely exceed the budget that
+leaves. `trackURL` is what turns that id back into a page URL, with a lookup
+if the source needs one.
+
+The source tags in those button ids (`yt`, `sc`) are frozen the same way
+parser keys are, and for the same reason: choosers already posted keep
+sitting in channels and their ids come back when someone presses a button.
+Add tags, never rename them.
 
 To add a parser: implement `parsers.Streamer.Open` returning an
 `opus.Reader`, under `pkg/music/parsers/<name>/` — use `opus.Demux` if the
