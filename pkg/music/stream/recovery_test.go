@@ -398,3 +398,122 @@ func TestRecoveryStream_PacketsIsStable(t *testing.T) {
 		t.Fatal("Packets returned two different readers")
 	}
 }
+
+// TestRecoveryStream_LiveStreamReconnects covers internet radio and YouTube
+// live, which reach the engine identically: as a track nobody could give a
+// duration. Before this, such a stream stopped for good the moment its
+// connection dropped, because "early" was defined against a duration it does
+// not have.
+func TestRecoveryStream_LiveStreamReconnects(t *testing.T) {
+	opens := 0
+	var seeks []float64
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"radio": fakeStreamer{open: func(_ *parsers.Track, seek float64) (opus.Reader, func(), error) {
+			opens++
+			seeks = append(seeks, seek)
+			if opens == 1 {
+				return &cutReader{n: 300, err: errors.New("connection reset by peer")}, func() {}, nil
+			}
+			return &cutReader{n: 5, err: io.EOF}, func() {}, nil
+		}},
+	})
+	defer func() { SetRegistry(orig) }()
+
+	// No duration: that is what "live" looks like from here.
+	track := &parsers.Track{
+		SourceInfo: sources.TrackInfo{
+			SourceName:       sources.Radio,
+			AvailableParsers: []string{"radio"},
+		},
+	}
+	rs := NewRecoveryStream(track)
+	if err := rs.Open(0); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer rs.Close()
+
+	read := 0
+	for {
+		if _, err := rs.ReadPacket(); err != nil {
+			break
+		}
+		read++
+	}
+
+	if opens < 2 {
+		t.Fatalf("opened %d times: a live stream must reconnect, not stop", opens)
+	}
+	// Rejoining live means the current edge, never the old position — asking a
+	// live source to seek into the past is meaningless.
+	if seeks[1] != 0 {
+		t.Fatalf("reconnect asked for seek %v, want the live edge (0)", seeks[1])
+	}
+	if read < 300 {
+		t.Fatalf("read %d packets, want at least what played before the drop", read)
+	}
+}
+
+// The reconnect budget still applies: a station that has actually gone off air
+// must not be retried forever.
+func TestRecoveryStream_LiveStreamGivesUpEventually(t *testing.T) {
+	opens := 0
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"radio": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
+			opens++
+			return &cutReader{n: 2, err: errors.New("connection refused")}, func() {}, nil
+		}},
+	})
+	defer func() { SetRegistry(orig) }()
+
+	rs := NewRecoveryStream(&parsers.Track{
+		SourceInfo: sources.TrackInfo{
+			SourceName:       sources.Radio,
+			AvailableParsers: []string{"radio"},
+		},
+	})
+	if err := rs.Open(0); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer rs.Close()
+
+	for {
+		if _, err := rs.ReadPacket(); err != nil {
+			break
+		}
+	}
+	if opens > maxRecoveryAttempts+1 {
+		t.Fatalf("opened %d times, want at most %d — the budget is not holding",
+			opens, maxRecoveryAttempts+1)
+	}
+}
+
+// A finite track that stops near its end has simply finished, and must not be
+// dragged back by the live rule.
+func TestRecoveryStream_FiniteTrackNearTheEndIsDone(t *testing.T) {
+	opens := 0
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
+			opens++
+			return &cutReader{n: 990, err: io.EOF}, func() {}, nil
+		}},
+	})
+	defer func() { SetRegistry(orig) }()
+
+	rs := NewRecoveryStream(&parsers.Track{
+		Duration:   20 * time.Second, // 1000 packets; 990 is inside the last 5%
+		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
+	})
+	if err := rs.Open(0); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer rs.Close()
+
+	for {
+		if _, err := rs.ReadPacket(); err != nil {
+			break
+		}
+	}
+	if opens != 1 {
+		t.Fatalf("opened %d times, want 1 — a finished track is not an interruption", opens)
+	}
+}

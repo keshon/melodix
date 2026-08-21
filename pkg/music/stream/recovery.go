@@ -5,6 +5,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/keshon/melodix/pkg/music/cache"
 	"github.com/keshon/melodix/pkg/music/opus"
@@ -12,7 +13,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const maxRecoveryAttempts = 3
+const (
+	maxRecoveryAttempts = 3
+	// liveReopenBackoff spaces out reconnects to a live source. Finite tracks
+	// reopen immediately: there the delay is audible silence, while a live
+	// stream has nothing to catch up on anyway.
+	liveReopenBackoff = 500 * time.Millisecond
+)
 
 // RecoveryStream wraps a parser's Opus packet stream and auto-recovers on early
 // termination (flaky media, not Discord transport — that's handled by the
@@ -299,6 +306,13 @@ type packetView struct{ rs *RecoveryStream }
 func (v packetView) ReadPacket() ([]byte, error) { return v.rs.ReadPacket() }
 func (v packetView) Close() error                { return nil }
 
+// isLive reports whether the track has no fixed end. Internet radio is the
+// obvious case; a YouTube live broadcast is the other, and both arrive here the
+// same way — as a track whose duration nobody could fill in.
+func (rs *RecoveryStream) isLive() bool {
+	return rs.track.Duration <= 0
+}
+
 // shouldRecover reports whether a failed read looks like an early end worth
 // reopening. cause is carried only so the log names the real reason.
 func (rs *RecoveryStream) shouldRecover(cause error) bool {
@@ -317,22 +331,36 @@ func (rs *RecoveryStream) shouldRecover(cause error) bool {
 		}
 		return false
 	}
-	// No duration to compare against (live radio, mostly): only an immediate
-	// failure is clearly early. A reset an hour into a stream is indistinguishable
-	// from the station going off air, and retrying it forever would be worse.
-	if rs.firstRead || rs.seekSec < 1.0 {
-		rs.log.Warn().Float64("seek", rs.seekSec).Err(cause).Msg("early_stream_end_no_duration")
-		return true
-	}
-	return false
+	// A live stream has no natural end to compare against, so every stop is an
+	// interruption rather than a finish — there is no such thing as "near the
+	// end" here. Recover, and let the attempt budget checked above be what stops
+	// this from becoming an endless reconnect against a station that has genuinely
+	// gone off air.
+	rs.log.Warn().Float64("played", rs.seekSec).Err(cause).Msg("live_stream_interrupted")
+	return true
 }
 
 func (rs *RecoveryStream) reopen(cause error) error {
 	rs.retries[rs.curParser]++
+
+	// A live stream has no position to go back to: rejoining means picking up at
+	// the current edge, not replaying to where the listener had got to.
+	seek := rs.seekSec
+	if rs.isLive() {
+		seek = 0
+	}
+
 	rs.log.Warn().Str("parser", rs.curParser).Int("attempt", rs.retries[rs.curParser]).
-		Float64("seek", rs.seekSec).Err(cause).Msg("recovering_stream")
+		Float64("seek", seek).Bool("live", rs.isLive()).Err(cause).Msg("recovering_stream")
 	rs.closeCurrent()
-	return rs.Open(rs.seekSec)
+
+	if rs.isLive() {
+		// Reconnecting to a source that just dropped the connection rarely works
+		// in the same millisecond, and for live there is no buffered position to
+		// lose by waiting.
+		time.Sleep(liveReopenBackoff)
+	}
+	return rs.Open(seek)
 }
 
 // ReopenAfterTransportFailure reopens the media stream at the current position
