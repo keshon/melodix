@@ -228,13 +228,14 @@ whoever fixed the bug. Lead with what changed *for them*, in plain language —
 costs them anything: config changes, a migration, a new dependency. One short
 paragraph of context is plenty.
 
-Root-cause detail is worth keeping, just not at the top. Put it in a collapsed
-`<details>` block at the end, or leave it in the commit messages, where the
-next maintainer looks anyway. Parser keys, InnerTube client names, HTTP header
-syntax and internal log-event names mean nothing to someone choosing a music
-bot, and a release page that opens with them reads as a changelog for the
-author rather than news for the reader. Commit messages are the opposite case
-and stay as technical as they need to be.
+Root-cause detail does not go on the release page at all — not at the top, and
+not folded into a `<details>` block at the end either. It lives in the commit
+messages, where the next maintainer actually looks. Parser keys, InnerTube
+client names, HTTP header syntax and internal log-event names mean nothing to
+someone choosing a music bot, and a release page carrying them reads as a
+changelog for the author rather than news for the reader. Commit messages are
+the opposite case and stay as technical as they need to be — which is what
+makes leaving the detail out here cost nothing.
 
 The release body comes from the **annotated tag's message body** —
 `.github/workflows/release.yml` reads `%(contents:body)` — so that is where
