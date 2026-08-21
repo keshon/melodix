@@ -68,3 +68,41 @@ func TestYtdlpInfo_DecodesHTTPHeaders(t *testing.T) {
 		t.Fatalf("url = %q", info.URL)
 	}
 }
+
+// The is_live tag decides whether link mode declines, so a yt-dlp output change
+// here would silently put live streams back on the path that 403s after twenty
+// seconds. Mirrors the anonymous struct decoded in ytdlpLink.
+func TestYtdlpInfo_DecodesIsLive(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		payload string
+		want    bool
+	}{
+		{"live", `{"is_live": true, "url": "https://x/y"}`, true},
+		{"vod", `{"is_live": false, "duration": 244.0, "url": "https://x/y"}`, false},
+		{"absent", `{"duration": 244.0, "url": "https://x/y"}`, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var info struct {
+				IsLive bool `json:"is_live"`
+			}
+			if err := json.Unmarshal([]byte(tt.payload), &info); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if info.IsLive != tt.want {
+				t.Fatalf("IsLive = %v, want %v", info.IsLive, tt.want)
+			}
+		})
+	}
+}
+
+// The muxed fallback only ever applies where no audio-only format exists, and
+// it is capped so a live stream is not fetched at 5.5 Mbit/s to be thrown away.
+func TestAudioFormatSelectorShape(t *testing.T) {
+	if !strings.HasPrefix(audioFormatSelector, "bestaudio/") {
+		t.Fatalf("selector must prefer audio-only first: %q", audioFormatSelector)
+	}
+	if !strings.Contains(audioFormatSelector, "height<=") {
+		t.Fatalf("the muxed fallback must be capped, or live costs megabits: %q", audioFormatSelector)
+	}
+}
