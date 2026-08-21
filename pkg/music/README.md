@@ -125,15 +125,24 @@ If the very first `Read()` on the opened stream returns any error (including an 
 
 This is designed for cases like “ffmpeg opened, then immediately 403/forbidden and closed stdout”.
 
-**B) Early EOF (mid-track)**
+**B) Early end (mid-track)**
 
-If `Read()` returns `io.EOF` with `n==0` and the track is far from its expected duration, recovery attempts to reopen:
+If a read fails partway through a track, recovery reopens the same parser:
 
 - close/cleanup current stream
 - reopen at the current approximate `seekSec`
 - retries are bounded by `maxRecoveryAttempts` per parser
 
-If duration is unknown, early-EOF recovery is only attempted at the beginning (`firstRead` or `seekSec < 1.0`).
+Any read failure counts, not only `io.EOF`. A CDN resetting the connection
+arrives as a net error, and the passthrough path surfaces that raw — nothing
+sits between it and the socket — so restricting recovery to EOF let those
+tracks die where an ffmpeg-fronted one would have recovered.
+
+"Partway through" needs a duration to mean anything: with one, it means
+stopping before ~95% of it. Without one — internet radio, and YouTube live —
+there is no natural end, so every stop is an interruption and the stream
+reconnects at the live edge (`seek 0`) after a short backoff, still bounded by
+`maxRecoveryAttempts`.
 
 ### 6) Sink streaming + voice transport recovery
 
@@ -161,7 +170,8 @@ The **ffmpeg**, **kkdai**, **ytnative** and **soundcloudapi** packages use packa
 
 ## Track cache & anti-skip buffer (optional)
 
-Two opt-in playback layers wrap the parser stream inside `RecoveryStream`, both off by default:
+Two opt-in playback layers, both off by default. The cache sits inside `RecoveryStream`, around the
+parser stream; the buffer sits outside it, around `RecoveryStream` itself:
 
 - **Track cache** (`stream.SetCache`) — while a track plays, `RecoveryStream` copies each
   delivered Opus packet into a content-keyed disk blob (`cache.Key`: `youtube:<id>` /
@@ -169,20 +179,25 @@ Two opt-in playback layers wrap the parser stream inside `RecoveryStream`, both 
   committing only on a clean end. `Open` then tries the cache **before** the parser list, so later
   plays (any consumer) serve from disk — instant, no extraction, no ffmpeg. Misses fall through to
   the parser chain, so the cache never blocks playback. Global LRU size cap; persistent by default.
-- **Anti-skip buffer** (`stream.SetBufferAhead`) — `opus.BufferedReader` reads ahead so short
-  source stalls drain the buffered lead instead of stuttering, without disturbing the recovery
-  position.
+- **Anti-skip buffer** (`stream.SetBufferAhead`) — `opus.BufferedReader` reads ahead so a source
+  stall drains the queued lead instead of stuttering. Consume it through `RecoveryStream.Packets()`,
+  which wraps the recovery stream rather than the parser stream underneath it: below recovery, a
+  reopen tears the buffer down along with the stream it wraps and the consumer blocks for the whole
+  reconnect, which is the opposite of what the buffer is for. Above it, the lead plays on while the
+  reopen happens, and `seekSec` advancing at the read-ahead position is exactly right — the buffer
+  holds everything in between.
 
 ## Key extension points
 
 - **Custom resolver**: implement `player.Resolver` to support new sources or search.
+- **Ranked search**: implement `sources.Searcher` (`Search(query, limit) ([]SearchResult, error)`) on a source that has results worth choosing between. Deliberately not part of `Source`: radio has nothing to rank.
 - **Custom sink**: implement `sink.AudioSink` / `sink.Provider` to support new outputs.
 - **New parser**: implement `parsers.Streamer.Open` (returning an `opus.Reader`) and add it to `stream.registryEntries`.
 
 ## Requirements
 
 - **ffmpeg** — Optional. Used by the transcode parsers (SoundCloud, radio, and the `kkdai-link`/`ytdlp-*` fallbacks) to decode audio; YouTube passthrough (`ytnative-link`, `kkdai-pipe`) needs no ffmpeg. Install it on `PATH` for full source coverage.
-- **yt-dlp** — Optional. If installed, the ytdlp-link and ytdlp-pipe parsers are available; otherwise the library falls back to kkdai/ffmpeg parsers.
+- **yt-dlp** — Optional for ordinary videos; required for YouTube live broadcasts, which are HLS and which no other parser here can follow. If installed, the ytdlp-link and ytdlp-pipe parsers are available. It also wants a **JavaScript runtime** on `PATH` (deno, node or bun): without one it falls back to a YouTube client googlevideo serves under restrictions, and live streams stop after twenty-odd seconds.
 - **ebitengine/oto** — The speaker sink (`sink.NewSpeakerProvider()`) uses [oto](https://github.com/ebitengine/oto/v3) for audio output. Omit the speaker sink if you only need a custom sink (e.g. Discord).
 
 ## Documentation

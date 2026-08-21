@@ -21,7 +21,7 @@ Copy `.env.example` to `.env` in this directory and set at least:
 - `ALIAS` — container name and image tag (e.g. `melodix`)
 - `GIT` / `GIT_URL` — set `GIT=true` to clone the repo into `./src`; set `GIT=false` to use an existing `./src` directory
 
-Other variables (e.g. `STORAGE_PATH`, `INIT_SLASH_COMMANDS`, `DEVELOPER_ID`, `DISCORD_GUILD_BLACKLIST`, `VOICE_READY_DELAY_MS`, `WS_SILENCE_TIMEOUT`, `DISCORD_UNHEALTHY_MODE`, `DISCORD_UNHEALTHY_GRACE`, `DISCORD_UNHEALTHY_WINDOW`, `PLAYER_TRANSPORT_RECOVERY_MODE`, `PLAYER_TRANSPORT_SOFT_ATTEMPTS`, `CACHE_ENABLED`, `CACHE_DIR`, `CACHE_MAX_BYTES`, `CACHE_PERSISTENT`, `BUFFER_AHEAD_MS`, `COMMAND_TIMEOUT`, `COMMAND_PARALLELISM`) are optional and match the main app config.
+Other variables (e.g. `STORAGE_PATH`, `INIT_SLASH_COMMANDS`, `DEVELOPER_ID`, `DISCORD_GUILD_BLACKLIST`, `VOICE_READY_DELAY_MS`, `WS_SILENCE_TIMEOUT`, `DISCORD_UNHEALTHY_MODE`, `DISCORD_UNHEALTHY_GRACE`, `DISCORD_UNHEALTHY_WINDOW`, `PLAYER_TRANSPORT_RECOVERY_MODE`, `PLAYER_TRANSPORT_SOFT_ATTEMPTS`, `CACHE_ENABLED`, `CACHE_DIR`, `CACHE_MAX_BYTES`, `CACHE_PERSISTENT`, `BUFFER_AHEAD_MS`, `MAX_AUDIO_BITRATE`, `COMMAND_TIMEOUT`, `COMMAND_PARALLELISM`) are optional and match the main app config.
 
 **Every variable the app reads must be listed in `docker-compose.yml`** — the service passes them through one by one, so a setting present in `.env` but missing from the compose file silently falls back to its built-in default. Keep the two in step when adding config.
 

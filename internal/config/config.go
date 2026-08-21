@@ -53,9 +53,10 @@ type Config struct {
 	// BufferAheadMs is the anti-skip read-ahead depth in ms (0 disables). The
 	// buffer sits above stream recovery, so the lead plays through a reconnect as
 	// well as through short source stalls — on a lossy link this is the knob that
-	// decides whether a dropped connection is audible. It costs roughly 2 KB per
-	// buffered second per guild and does not pre-fill, so raising it delays
-	// nothing. Independent of the cache.
+	// decides whether a dropped connection is audible. One buffered second is one
+	// second of Opus — roughly 17 KB at YouTube's usual bitrate, so about 500 KB
+	// per guild at the default depth — and it does not pre-fill, so raising it
+	// delays nothing. Independent of the cache.
 	BufferAheadMs int `env:"BUFFER_AHEAD_MS" envDefault:"30000"`
 	// MaxAudioBitrate caps which YouTube audio format the native parser picks, in
 	// bits per second (0 = take the best on offer). The same track is usually

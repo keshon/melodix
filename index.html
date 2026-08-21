@@ -1217,8 +1217,8 @@
         <p id="detailBody">Melodix's own extractor, written specifically for
           this project. It speaks YouTube's private <em>InnerTube</em> API —
           the same protocol the official phone and TV apps use — pretending
-          to be the Android VR client, which hands back direct audio links
-          with nothing to decrypt. No external programs and no embedded
+          to be the YouTube app on an Apple Vision Pro, which hands back
+          direct audio links with nothing to decrypt. No external programs and no embedded
           JavaScript engine, just plain HTTP calls from Go. It's the
           fastest route and the default one. When YouTube changes
           something, which it will, ytnative tends to <strong>fail
@@ -1273,8 +1273,10 @@
           </pre>
         </div>
       </div>
-      <p class="dl-note">You need FFmpeg in <span class="mono">PATH</span>;
-        yt-dlp is optional (fallback only).
+      <p class="dl-note">FFmpeg is only needed for SoundCloud and internet
+        radio — a YouTube-only bot needs neither binary. yt-dlp is the
+        last-resort fallback, and the one thing that plays YouTube live
+        broadcasts.
         Full setup — bot creation, invite link, every config knob, Docker —
         lives in
         <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.
@@ -1283,10 +1285,14 @@
 
     <section id="commands">
       <p class="kicker">commands</p>
-      <h2>Eight commands. Simple to maintain.</h2>
+      <h2>Few commands. Simple to maintain.</h2>
       <div class="cmd-grid">
         <div class="cmd"><code>/play</code><span>link, search query, radio
             URL, or history id</span></div>
+        <div class="cmd"><code>/search</code><span>pick from five results
+            instead of the top hit</span></div>
+        <div class="cmd"><code>/queue</code><span>what is playing and what is
+            waiting</span></div>
         <div class="cmd"><code>/next</code><span>skip to the next
             track</span></div>
         <div class="cmd"><code>/stop</code><span>stop playback and clear the
@@ -1533,7 +1539,7 @@
         {
           title: "ytnative",
           badge: "built in-house · zero deps",
-          body: 'Melodix’s own extractor, written specifically for this project. It speaks YouTube’s private <em>InnerTube</em> API — the same protocol the official phone and TV apps use — pretending to be the Android VR client, which hands back direct audio links with nothing to decrypt. No external programs and no embedded JavaScript engine, just plain HTTP calls from Go. It’s the fastest route and the default one. When YouTube changes something, which it will, ytnative tends to <strong>fail instantly</strong> rather than hang, and fixing it is usually a one-line version bump.'
+          body: 'Melodix’s own extractor, written specifically for this project. It speaks YouTube’s private <em>InnerTube</em> API — the same protocol the official phone and TV apps use — pretending to be the YouTube app on an Apple Vision Pro, which hands back direct audio links with nothing to decrypt. No external programs and no embedded JavaScript engine, just plain HTTP calls from Go. It’s the fastest route and the default one. When YouTube changes something, which it will, ytnative tends to <strong>fail instantly</strong> rather than hang, and fixing it is usually a one-line version bump.'
         },
         {
           title: "kkdai",

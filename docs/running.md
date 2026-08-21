@@ -81,7 +81,8 @@ default and can be left alone until you actually need it:
 | `CACHE_DIR`               | Where cache blobs live (wiped on boot unless persistent).   | `./data/cache`           |
 | `CACHE_MAX_BYTES`         | Global cache size cap; oldest-used tracks get evicted once it's hit. | `2147483648` (2 GiB) |
 | `CACHE_PERSISTENT`        | Keep the cache across restarts, or wipe it on every boot (`false`). | `true`             |
-| `BUFFER_AHEAD_MS`         | Read-ahead depth in ms, used to mask short source stalls without skipping. Set to `0` to disable. | `10000` |
+| `BUFFER_AHEAD_MS`         | Read-ahead depth in ms. The queued lead plays through a source stall or a reconnect, so on a lossy link this decides whether a dropped connection is audible. Costs roughly 17 KB per buffered second per guild at YouTube's usual bitrate — about 500 KB at the default depth — and does not pre-fill, so raising it delays nothing. Set to `0` to disable. | `30000` |
+| `MAX_AUDIO_BITRATE`       | Cap on the YouTube audio format the native parser picks, in bits per second. The same track is usually offered near 49k, 66k and 137k, and a Discord voice channel carries 64 kbps unless the guild is boosted — so the top format mostly buys bandwidth the channel will not use. Worth setting on a slow link. `0` takes the best on offer. | `0` |
 | `COMMAND_TIMEOUT`         | Hard timeout for a single command execution.                | `30s`                   |
 | `COMMAND_PARALLELISM`     | Max number of command handlers running at once.             | `16`                    |
 

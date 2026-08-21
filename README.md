@@ -25,6 +25,10 @@ off for you.
   session restarts.
 - It keeps a memory: `/history` shows what was played, and `/play 42`
   replays entry 42. No digging through chat for the original link.
+- Paste a playlist or a mix and the whole thing queues up; `/queue` shows
+  what's waiting. When you'd rather not trust the top hit, `/search` lists
+  five results with title, uploader and length, and you pick one by pressing
+  a number.
 - It stays small. Just one binary, and for YouTube alone that's genuinely
   all you need — no ffmpeg required. Add ffmpeg for SoundCloud and internet
   radio, and yt-dlp as a last-resort fallback if you want the extra
@@ -53,9 +57,10 @@ go build -o melodix-cli ./cmd/cli
 ```
 
 FFmpeg is only needed for SoundCloud and internet radio — a YouTube-only bot
-doesn't need it at all. yt-dlp is optional too, used as a last-resort
-fallback. The full setup guide — creating the bot, invite link, every config
-knob, Docker — is in [docs/running.md](docs/running.md).
+doesn't need it at all. yt-dlp is a last-resort fallback, optional except for
+YouTube live broadcasts, and it wants a JavaScript runtime (node, deno or bun)
+on `PATH` to be useful. The full setup guide — creating the bot, invite link,
+every config knob, Docker — is in [docs/running.md](docs/running.md).
 
 ## Commands
 
