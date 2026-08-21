@@ -91,31 +91,7 @@
         "name": "Is Melodix free?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Melodix is open source under the MIT licence, with no paid tier, no premium commands and no usage limits. You run it on your own machine with your own Discord token, so the only cost is whatever you already pay for that machine."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Why self-host a Discord music bot instead of inviting a public one?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Public music bots are a single point of failure you do not control. The largest ones have been shut down at short notice, and the ones still running tend to add queues, listener caps or paid tiers over time. A self-hosted bot answers only to you: nobody can revoke it, rate-limit it or put your queue behind a subscription."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Do I need FFmpeg to run Melodix?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Not for YouTube. YouTube audio is forwarded in its original Opus format with no transcoding, so a YouTube-only bot needs no FFmpeg at all. FFmpeg is required for SoundCloud and internet radio, which do need decoding."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Do I need yt-dlp?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "It is recommended but not required. yt-dlp is the last parser in the fallback chain and the only one that plays YouTube live broadcasts. If you install it, also leave a JavaScript runtime such as Node, Deno or Bun on PATH — without one yt-dlp cannot solve YouTube's challenges and live streams will fail."
+          "text": "Yes. Melodix is open source under the MIT license, with no paid tier, no premium commands and no usage limits. You run it on your own machine with your own Discord token, so the only cost is whatever you already pay for that machine."
         }
       },
       {
@@ -123,31 +99,31 @@
         "name": "Can Melodix play YouTube playlists and mixes?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Pasting a playlist or mix link expands the whole list into the queue rather than playing only the first video. If the link names a video inside a playlist, that video plays first and the rest of the list follows it."
+          "text": "Yes. Pasting a playlist or mix link expands the whole list into the queue instead of playing only the first video. If the link names a video inside a playlist, that video plays first and the rest of the list follows it."
         }
       },
       {
         "@type": "Question",
-        "name": "What happens when a stream breaks mid-song?",
+        "name": "Does Melodix support Spotify?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "A read-ahead buffer keeps playing while the connection underneath is repaired with a ranged request, so a dropped connection is usually inaudible. If the source is gone rather than merely interrupted, Melodix moves to the next parser in the chain and reopens at the same position."
+          "text": "No. Melodix plays YouTube, SoundCloud and internet radio. Spotify does not offer a way for a third-party bot to stream its catalogue, so bots that appear to support it are really searching for the same track on YouTube. If that is what you want, paste the track name into /play and you get the same result without the indirection."
         }
       },
       {
         "@type": "Question",
-        "name": "What does Melodix need to run?",
+        "name": "Can one instance serve several Discord servers?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "A single static binary, a Discord bot token, and a machine that stays online. There is no database server, no Redis and no runtime to install: storage is an embedded file-backed store in a directory you choose. Prebuilt binaries cover Linux, Windows and macOS on both amd64 and arm64, and a Docker image is available."
+          "text": "Yes. Each server gets its own queue and its own player, so playback in one is unaffected by playback in another. One process handles them all; the limit is the bandwidth and CPU of the machine you run it on."
         }
       },
       {
         "@type": "Question",
-        "name": "Does Melodix work on a Raspberry Pi or a small VPS?",
+        "name": "Where does Melodix store data, and how do I back it up?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. arm64 builds are published for every release, and YouTube playback needs no transcoding, which is the part that would otherwise cost CPU. On a slow or metered connection the MAX_AUDIO_BITRATE setting caps the audio format Melodix picks, roughly halving bandwidth with no audible difference over Discord voice."
+          "text": "In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and is safe to delete at any time."
         }
       }
     ]
@@ -305,15 +281,22 @@
     }
 
     section {
-      scroll-margin-top: 24px;
+      scroll-margin-top: 88px;
     }
 
     /* ============ nav ============ */
     nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--ink);
+      border-bottom: 1px solid transparent;
+      transition: border-color .18s ease;
       display: flex;
       align-items: center;
       gap: 28px;
-      padding: 22px 0;
+      margin: 0 -28px;
+      padding: 22px 28px;
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
       font-size: 13px;
     }
@@ -323,6 +306,21 @@
       letter-spacing: .04em;
       color: var(--text);
       font-size: 15px;
+    }
+
+    nav.scrolled {
+      border-bottom-color: var(--line);
+    }
+
+    /* the brand is a link now; it must not pick up the global underline */
+    nav .brand {
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    nav .brand:hover {
+      color: var(--accent);
+      text-decoration: none;
     }
 
     nav .brand em {
@@ -1147,13 +1145,33 @@
       nav {
         flex-direction: column;
         align-items: flex-start;
-        gap: 12px;
-        padding: 18px 0;
+        gap: 8px;
+        margin: 0 -18px;
+        padding: 12px 18px;
       }
 
+      /* one scrollable line, not two wrapped ones: the bar is pinned now, so
+         every row it grows by is a row of content permanently off screen */
       nav .links {
         margin-left: 0;
-        gap: 16px;
+        gap: 18px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        max-width: 100%;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      nav .links::-webkit-scrollbar {
+        display: none;
+      }
+
+      nav .links a {
+        white-space: nowrap;
+      }
+
+      section {
+        scroll-margin-top: 92px;
       }
 
       .rail .arrow {
@@ -1244,9 +1262,10 @@
     </symbol>
   </svg>
 
-  <div class="wrap">
+  <div class="wrap" id="top">
     <nav>
-      <span class="brand mono">Melodix Discord Player</span>
+      <a class="brand mono" href="#top" id="brandLink"
+        aria-label="Melodix — back to top">Melodix Discord Player</a>
       <div class="links">
         <a href="#survives">Why</a>
         <a href="#quickstart">Quick start</a>
@@ -1268,11 +1287,10 @@
             source</p>
           <h1>Playback should <mark>survive</mark>.</h1>
           <p class="lede">Melodix streams YouTube, SoundCloud and internet
-            radio into your Discord server. It treats every failure as
-            something to recover from, not something to crash on — a flaky
-            stream, a dead voice connection, a gateway reconnect. The music
-            just keeps playing. <strong>Run it yourself, keep your server
-            independent.</strong>
+            radio into your Discord server. A flaky stream, a dead voice
+            connection, a gateway reconnect — these are expected, and it
+            recovers from them instead of dropping the queue.
+            <strong>Run it yourself; your server stays independent.</strong>
           </p>
           <div class="cta-row">
             <a class="btn btn-primary" href="#downloads">Download
@@ -1283,8 +1301,7 @@
           </div>
           <div class="install-line">
             <span class="dollar">$</span>
-            <span id="installCmd">go build ./cmd/discord && DISCORD_TOKEN=···
-              ./melodix-discord</span>
+            <span id="installCmd">go build -o melodix-discord ./cmd/discord</span>
             <button class="copy-btn" id="copyBtn" type="button">copy</button>
           </div>
         </div>
@@ -1330,11 +1347,8 @@
     <section id="survives">
       <p class="kicker">why it survives</p>
       <h2>Every track carries its own fallback chain.</h2>
-      <p class="prose">Public music bots tend to disappear eventually, usually
-        with a cease-and-desist attached. Melodix skips that risk: it's a
-        small binary you run yourself, with your own token, on your own
-        machine. Sources break sometimes. That's just assumed going in,
-        not treated as a special case.</p>
+      <p class="prose"> Sources break. That is assumed from the start, not handled as a
+        special case.</p>
       <p class="prose">When someone pastes a link, Melodix has to turn that
         web page into an actual audio stream it can pipe into a voice
         channel. The component that does this is called a <em>parser</em>,
@@ -1343,10 +1357,9 @@
         keeps a <strong>chain</strong> of them, ordered fastest-first, and
         works down the list until one returns a playable stream. The panel
         above shows that chain running live: the embed your users would
-        see, and the log underneath it. Click a backend below for what it
-        actually does.</p>
+        see, and the log underneath it. Click a parser below to see what it does.</p>
 
-      <div class="rail" role="tablist" aria-label="Extraction backends">
+      <div class="rail" role="tablist" aria-label="Parsers">
         <button class="stage" type="button" role="tab" id="tab-0" aria-selected="true" aria-controls="detail">ytnative<small>built
             in-house · zero deps</small></button>
         <span class="arrow">→</span>
@@ -1360,30 +1373,29 @@
       <div class="tab-detail" id="detail" role="tabpanel">
         <h3 id="detailTitle">ytnative <span class="chip">built in-house · zero
             deps</span></h3>
-        <p id="detailBody">Melodix's own extractor, written specifically for
+        <p id="detailBody">Melodix's own parser, written specifically for
           this project. It speaks YouTube's private <em>InnerTube</em> API —
           the same protocol the official phone and TV apps use — pretending
           to be the YouTube app on an Apple Vision Pro, which hands back
           direct audio links with nothing to decrypt. No external programs and no embedded
-          JavaScript engine, just plain HTTP calls from Go. It's the
-          fastest route and the default one. When YouTube changes
+          JavaScript engine, just plain HTTP calls from Go. With nothing to
+          decrypt it is the cheapest route, so it is the default. When YouTube changes
           something, which it will, ytnative tends to <strong>fail
-            instantly</strong> rather than hang, and fixing it is usually a
-          one-line version bump.</p>
+            instantly</strong> instead of hanging, and past breakages have
+          been fixed by bumping one client version string.</p>
       </div>
-      <p class="rail-note">SoundCloud gets similar treatment through its own
-        in-house extractor, <span class="mono">scnative</span>, built on
-        SoundCloud's api-v2. Internet-radio URLs skip straight to ffmpeg,
-        since there's nothing to extract there in the first place. The
-        pattern repeats: try the fast native path, keep sturdier fallbacks
-        in reserve.</p>
+      <p class="rail-note">SoundCloud has its own parser,
+        <span class="mono">scnative</span>, built on SoundCloud's api-v2.
+        Internet-radio URLs skip straight to ffmpeg, since there is nothing
+        to extract. The pattern repeats: try the fast native path, keep
+        sturdier fallbacks in reserve.</p>
 
       <div class="feat-grid">
         <div class="feat">
           <h3>survives discord too</h3>
           <p>A silent gateway or a dead voice connection is detected and
             recovered automatically.
-            Queues live through session restarts.</p>
+            Queues survive restarts.</p>
         </div>
         <div class="feat">
           <h3>keeps a memory</h3>
@@ -1393,8 +1405,8 @@
         </div>
         <div class="feat">
           <h3>stays small</h3>
-          <p>One binary plus ffmpeg. Storage is a single JSON file — no
-            database to babysit.
+          <p>One binary. State is an embedded store in a directory you
+            pick — no database server to run.
             Also runs as a terminal player, straight to your speakers.</p>
         </div>
       </div>
@@ -1403,54 +1415,53 @@
     <section id="recovery">
       <p class="kicker">when things break</p>
       <h2>A dropped connection should not end the song.</h2>
-      <p class="prose">A fallback chain decides <strong>which</strong> backend
+      <p class="prose">A fallback chain decides <strong>which</strong> parser
         plays a track. It does nothing for the far more common problem: the
         track was already playing fine, and then the network moved. Melodix
-        treats that as a separate job, handled at three different depths.</p>
+        treats that as a separate job, handled at three levels.</p>
       <div class="feat-grid">
         <div class="feat">
           <h3>read ahead</h3>
-          <p class="prose">Playback runs from a buffered lead rather than
-            straight off the socket, so a stall underneath is absorbed instead
-            of heard. It does not pre-fill, so nothing starts slower — the lead
-            simply grows as the track plays.</p>
+          <p class="prose">Playback runs from a buffer, not straight off the socket, so a
+            stall underneath is absorbed instead of heard. The buffer does
+            not pre-fill: playback still starts immediately, and it fills as
+            the track plays.</p>
         </div>
         <div class="feat">
           <h3>repair in place</h3>
           <p class="prose">When a connection is cut mid-track, Melodix asks the
             server for the next byte it had not yet received and carries on.
-            Nothing above notices, and nothing already downloaded is fetched
-            twice.</p>
+            The player above it never notices, and nothing already downloaded
+            is fetched twice.</p>
         </div>
         <div class="feat">
           <h3>reopen, then switch</h3>
-          <p class="prose">If the source is genuinely gone rather than briefly
-            interrupted, the same backend reopens at the position you had
-            reached. Only when that fails too does the chain move on to the
-            next one.</p>
+          <p class="prose">If the source is genuinely gone, not briefly interrupted, the same
+            parser reopens at the position it had reached. Only when that
+            fails too does the chain move on.</p>
         </div>
       </div>
       <p class="dl-note">Discord itself is covered separately: a voice
         reconnect or a gateway drop rejoins and resumes without losing the
-        queue, and the buffered lead keeps playing while it happens.</p>
+        queue, and the buffer keeps playing while it happens.</p>
     </section>
 
     <section id="selfhost">
       <p class="kicker">self-hosted</p>
       <h2>The bot you invited can be taken away.</h2>
       <p class="prose">Public music bots are a single point of failure you do
-        not control. The biggest ones have been shut down at a few days'
-        notice, taking every server's setup with them. The ones still running
-        have mostly drifted the same direction since: listener caps, queue
-        limits, a premium tier for the features that used to be free, and
-        occasionally an outage across every server at once because there is
-        only one bot and it is having a bad day.</p>
-      <p class="prose">Self-hosting removes the middleman rather than betting
-        on a kinder one. Melodix runs under <strong>your</strong> Discord
+        not control. The two largest, Groovy and Rythm, were shut
+        down in 2021 after a request from YouTube, taking every server's setup
+        with them. Others have drifted in the same direction since: listener
+        caps, queue limits, a premium tier for what used to be free, and an
+        outage that takes out every server at once, because there is only one
+        instance.</p>
+      <p class="prose">Self-hosting removes the middleman instead of betting on a kinder
+        one. Melodix runs under <strong>your</strong> Discord
         application, on a machine you already have, with no account to sign up
         for and nothing phoning home. Nobody can revoke it, meter it, or decide
         that skipping tracks is now a paid feature. If a source breaks, you can
-        read the log, see which backend failed and why, and update on your own
+        read the log, see which parser failed and why, and update on your own
         schedule — not wait for someone else's.</p>
       <p class="prose">The trade is real and worth stating plainly: you are the
         one keeping it online. That means a machine that stays on, a token you
@@ -1460,7 +1471,7 @@
 
     <section id="quickstart">
       <p class="kicker">quick start</p>
-      <h2>Running in two minutes.</h2>
+      <h2>Two commands, once you have a token.</h2>
       <div class="qs-grid">
         <div class="qs">
           <h3>Discord bot</h3>
@@ -1475,8 +1486,8 @@
 <span class="a">$</span> ./melodix-cli</pre>
         </div>
       </div>
-      <p class="dl-note">FFmpeg is only needed for SoundCloud and internet
-        radio — a YouTube-only bot needs neither binary. yt-dlp is the
+      <p class="dl-note">FFmpeg is only needed for SoundCloud and internet radio; the common
+        YouTube path does not touch it. yt-dlp is the
         last-resort fallback, and the one thing that plays YouTube live
         broadcasts.
         Full setup — bot creation, invite link, every config knob, Docker —
@@ -1488,10 +1499,9 @@
     <section id="requirements">
       <p class="kicker">requirements</p>
       <h2>One binary, one token, one machine.</h2>
-      <p class="prose">There is no database server to provision, no Redis, and
-        no runtime to install alongside it. State lives in an embedded
+      <p class="prose">There is no database server to provision and no Redis. State lives in an embedded
         file-backed store inside a directory you pick, so a backup is a copy of
-        that folder. Everything below is optional except the first two lines.</p>
+        that folder. Everything in the cards below is optional except the first.</p>
       <div class="feat-grid">
         <div class="feat">
           <h3>required</h3>
@@ -1502,24 +1512,24 @@
         </div>
         <div class="feat">
           <h3>ffmpeg</h3>
-          <p class="prose">Needed for SoundCloud and internet radio, which have
-            to be decoded. A YouTube-only bot does not need it at all: that
-            audio is forwarded in the format YouTube already serves.</p>
+          <p class="prose">Needed for SoundCloud and internet radio, which have to be
+            decoded. Melodix prefers YouTube's Opus formats, which Discord
+            takes unchanged, so the common YouTube path never reaches it.</p>
         </div>
         <div class="feat">
           <h3>yt-dlp + a js runtime</h3>
-          <p class="prose">The last backend in the chain, and the one that
+          <p class="prose">The last parser in the chain, and the one that
             plays live broadcasts. Keep Node, Deno or Bun on
             <span class="mono">PATH</span> beside it — without one, yt-dlp
             cannot answer YouTube's challenges and live streams fail.</p>
         </div>
       </div>
       <p class="dl-note">Two settings are worth knowing about on a constrained
-        connection: <span class="mono">BUFFER_AHEAD_MS</span> decides how much
-        of a drop is absorbed before anyone hears it, and
+        connection: <span class="mono">BUFFER_AHEAD_MS</span> sets how long an interruption can last before
+        anyone hears it, and
         <span class="mono">MAX_AUDIO_BITRATE</span> caps the audio format —
-        roughly halving bandwidth with no audible difference, since a Discord
-        voice channel carries 64 kbps unless the server is boosted. Both are
+        roughly halving bandwidth with little audible difference, because
+        Discord re-encodes to 64 kbps anyway unless the server is boosted. Both are
         documented in
         <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.
       </p>
@@ -1527,7 +1537,7 @@
 
     <section id="commands">
       <p class="kicker">commands</p>
-      <h2>Few commands. Simple to maintain.</h2>
+      <h2>Few commands. Easy to remember.</h2>
       <div class="cmd-grid">
         <div class="cmd"><code>/play</code><span>link, search query, radio
             URL, or history id</span></div>
@@ -1545,8 +1555,7 @@
             or flat</span></div>
         <div class="cmd"><code>/settings</code><span>enable or disable command
             groups per server</span></div>
-        <div class="cmd"><code>/maintenance</code><span>ping, stats, database
-            download</span></div>
+        <div class="cmd"><code>/maintenance</code><span>ping, stats, state export</span></div>
         <div class="cmd"><code>/about</code><span>where this bot came
             from</span></div>
       </div>
@@ -1561,22 +1570,22 @@
       <p class="kicker">downloads</p>
       <h2>Prebuilt binaries.</h2>
       <div class="dl-grid">
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-amd64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-linux" />
             </svg>linux</span><span class="arch">amd64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-arm64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-linux" />
             </svg>linux</span><span class="arch">arm64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-amd64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-windows" />
             </svg>windows</span><span class="arch">amd64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-arm64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-windows" />
             </svg>windows</span><span class="arch">arm64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-amd64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-apple" />
             </svg>macos</span><span class="arch">amd64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-arm64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-apple" />
             </svg>macos</span><span class="arch">arm64 →</span></a>
       </div>
@@ -1592,67 +1601,23 @@
       <div class="faq">
         <details>
           <summary>Is Melodix free?</summary>
-          <p class="prose">Yes. Melodix is open source under the MIT licence,
-            with no paid tier, no premium commands and no usage limits. You run
-            it on your own machine with your own Discord token, so the only
-            cost is whatever you already pay for that machine.</p>
-        </details>
-        <details>
-          <summary>Why self-host a Discord music bot instead of inviting a public one?</summary>
-          <p class="prose">Public music bots are a single point of failure you
-            do not control. The largest ones have been shut down at short
-            notice, and the ones still running tend to add queues, listener
-            caps or paid tiers over time. A self-hosted bot answers only to
-            you: nobody can revoke it, rate-limit it or put your queue behind a
-            subscription.</p>
-        </details>
-        <details>
-          <summary>Do I need FFmpeg to run Melodix?</summary>
-          <p class="prose">Not for YouTube. YouTube audio is forwarded in its
-            original Opus format with no transcoding, so a YouTube-only bot
-            needs no FFmpeg at all. FFmpeg is required for SoundCloud and
-            internet radio, which do need decoding.</p>
-        </details>
-        <details>
-          <summary>Do I need yt-dlp?</summary>
-          <p class="prose">It is recommended but not required. yt-dlp is the
-            last parser in the fallback chain and the only one that plays
-            YouTube live broadcasts. If you install it, also leave a JavaScript
-            runtime such as Node, Deno or Bun on
-            <span class="mono">PATH</span> — without one yt-dlp cannot solve
-            YouTube's challenges and live streams will fail.</p>
+          <p class="prose">Yes. Melodix is open source under the MIT license, with no paid tier, no premium commands and no usage limits. You run it on your own machine with your own Discord token, so the only cost is whatever you already pay for that machine.</p>
         </details>
         <details>
           <summary>Can Melodix play YouTube playlists and mixes?</summary>
-          <p class="prose">Yes. Pasting a playlist or mix link expands the
-            whole list into the queue rather than playing only the first video.
-            If the link names a video inside a playlist, that video plays first
-            and the rest of the list follows it.</p>
+          <p class="prose">Yes. Pasting a playlist or mix link expands the whole list into the queue instead of playing only the first video. If the link names a video inside a playlist, that video plays first and the rest of the list follows it.</p>
         </details>
         <details>
-          <summary>What happens when a stream breaks mid-song?</summary>
-          <p class="prose">A read-ahead buffer keeps playing while the
-            connection underneath is repaired with a ranged request, so a
-            dropped connection is usually inaudible. If the source is gone
-            rather than merely interrupted, Melodix moves to the next parser in
-            the chain and reopens at the same position.</p>
+          <summary>Does Melodix support Spotify?</summary>
+          <p class="prose">No. Melodix plays YouTube, SoundCloud and internet radio. Spotify does not offer a way for a third-party bot to stream its catalogue, so bots that appear to support it are really searching for the same track on YouTube. If that is what you want, paste the track name into /play and you get the same result without the indirection.</p>
         </details>
         <details>
-          <summary>What does Melodix need to run?</summary>
-          <p class="prose">A single binary, a Discord bot token, and a machine
-            that stays online. There is no database server, no Redis and no
-            runtime to install: storage is an embedded file-backed store in a
-            directory you choose. Prebuilt binaries cover Linux, Windows and
-            macOS on both amd64 and arm64, and a Docker image is available.</p>
+          <summary>Can one instance serve several Discord servers?</summary>
+          <p class="prose">Yes. Each server gets its own queue and its own player, so playback in one is unaffected by playback in another. One process handles them all; the limit is the bandwidth and CPU of the machine you run it on.</p>
         </details>
         <details>
-          <summary>Does Melodix work on a Raspberry Pi or a small VPS?</summary>
-          <p class="prose">Yes. arm64 builds are published for every release,
-            and YouTube playback needs no transcoding, which is the part that
-            would otherwise cost CPU. On a slow or metered connection the
-            <span class="mono">MAX_AUDIO_BITRATE</span> setting caps the audio
-            format Melodix picks, roughly halving bandwidth with no audible
-            difference over Discord voice.</p>
+          <summary>Where does Melodix store data, and how do I back it up?</summary>
+          <p class="prose">In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and is safe to delete at any time.</p>
         </details>
       </div>
       <p class="dl-note">Something not covered here? Ask in the
@@ -1664,8 +1629,7 @@
 
     <footer>
       <div class="cols">
-        <span>MIT ·
-          Built and maintained solo</span>
+        <span>MIT · one maintainer</span>
         <span>
           <a href="https://github.com/keshon/melodix/blob/main/docs/architecture.md">Architecture</a>
           ·
@@ -1680,8 +1644,9 @@
       </div>
       <div class="foot-legal">
         <span>© <span id="yr">2026</span> <span class="brand" style="color:var(--text)">
-            Melodix</span>. Self-hosted Discord music bot in Go. All rights reserved.</span>
-        <span>Developed by <strong>Señor Mega</strong></span>
+            Melodix</span>. Self-hosted Discord music bot in Go. MIT licensed.</span>
+        <span>Built by <strong>Señor Mega</strong> and best bud
+          <strong>Claude</strong></span>
       </div>
     </footer>
   </div>
@@ -1857,17 +1822,17 @@
         {
           title: "ytnative",
           badge: "built in-house · zero deps",
-          body: 'Melodix’s own extractor, written specifically for this project. It speaks YouTube’s private <em>InnerTube</em> API — the same protocol the official phone and TV apps use — pretending to be the YouTube app on an Apple Vision Pro, which hands back direct audio links with nothing to decrypt. No external programs and no embedded JavaScript engine, just plain HTTP calls from Go. It’s the fastest route and the default one. When YouTube changes something, which it will, ytnative tends to <strong>fail instantly</strong> rather than hang, and fixing it is usually a one-line version bump.'
+          body: 'Melodix’s own parser, written specifically for this project. It speaks YouTube’s private <em>InnerTube</em> API — the same protocol the official phone and TV apps use — pretending to be the YouTube app on an Apple Vision Pro, which hands back direct audio links with nothing to decrypt. No external programs and no embedded JavaScript engine, just plain HTTP calls from Go. With nothing to decrypt it is the cheapest route, so it is the default. When YouTube changes something, which it will, ytnative tends to <strong>fail instantly</strong> instead of hanging, and past breakages have been fixed by bumping one client version string.'
         },
         {
           title: "kkdai",
           badge: "open-source library",
-          body: '<a href="https://github.com/kkdai/youtube" target="_blank" rel="noopener">kkdai/youtube</a> is a popular open-source Go library for pulling audio from YouTube. It handles the part ytnative deliberately skips: unscrambling YouTube’s obfuscated <em>signature cipher</em> through an embedded JavaScript interpreter, which unlocks streams the native client gets refused. It’s heavier and slower, but it recovers protected and age-restricted tracks the fast path can’t touch, and it still runs <strong>inside the Melodix binary</strong> with nothing extra to install.'
+          body: '<a href="https://github.com/kkdai/youtube" target="_blank" rel="noopener">kkdai/youtube</a> is an open-source Go library for pulling audio from YouTube. It handles the part ytnative deliberately skips: unscrambling YouTube’s obfuscated <em>signature cipher</em> through an embedded JavaScript interpreter, which unlocks streams the native client is refused. It’s heavier and slower, but it recovers age-restricted and signature-protected tracks the fast path cannot open, and it still runs <strong>inside the Melodix binary</strong> with nothing extra to install.'
         },
         {
           title: "yt-dlp",
           badge: "external tool · optional",
-          body: '<a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a> is the industry-standard command-line downloader, a community-maintained successor to youtube-dl supporting well over a thousand sites. Melodix only reaches for it once both native parsers have already failed. If yt-dlp can’t play something, pretty much nothing can. It’s the one backend living outside the binary, so it’s genuinely optional — skip installing it and the fallback chain just ends one step sooner.'
+          body: '<a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a> is the most widely used command-line downloader, a community-maintained successor to youtube-dl supporting well over a thousand sites. Melodix only reaches for it once both native parsers have already failed. It’s the one parser living outside the binary, so it’s genuinely optional — skip installing it and the fallback chain just ends one step sooner.'
         }
       ];
 
@@ -1886,6 +1851,24 @@
       /* ============ footer year ============ */
       var yr = document.getElementById("yr");
       if (yr) yr.textContent = new Date().getFullYear();
+
+      /* ============ sticky nav ============ */
+      var navEl = document.querySelector("nav");
+      function syncNav() { navEl.classList.toggle("scrolled", window.scrollY > 8); }
+      window.addEventListener("scroll", syncNav, { passive: true });
+      syncNav();
+
+      /* The href="#top" works without JS. With JS we scroll to a true zero and
+         skip the hash, so the URL stays clean and Back is unaffected. */
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+      document.getElementById("brandLink").addEventListener("click", function (e) {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: reduce.matches ? "auto" : "smooth" });
+        // drop any leftover #section so the address bar matches where we are
+        if (location.hash && window.history.replaceState) {
+          window.history.replaceState(null, "", location.pathname + location.search);
+        }
+      });
 
       /* ============ copy button ============ */
       var copyBtn = document.getElementById("copyBtn");
