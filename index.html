@@ -1214,7 +1214,7 @@
     }
 
     .faq details[open] summary::after {
-      content: "3";
+      content: "–";
     }
 
     .faq summary:hover {
@@ -1465,16 +1465,14 @@
         <div class="qs">
           <h3>Discord bot</h3>
           <pre><span class="c"># token from the Discord Developer Portal</span>
-            <span class="a">$</span> go build -o melodix-discord ./cmd/discord
-            <span class="a">$</span> DISCORD_TOKEN=your-token ./melodix-discord
-          </pre>
+<span class="a">$</span> go build -o melodix-discord ./cmd/discord
+<span class="a">$</span> DISCORD_TOKEN=your-token ./melodix-discord</pre>
         </div>
         <div class="qs">
           <h3>Terminal player</h3>
           <pre><span class="c"># no Discord account required</span>
-            <span class="a">$</span> go build -o melodix-cli ./cmd/cli
-            <span class="a">$</span> ./melodix-cli
-          </pre>
+<span class="a">$</span> go build -o melodix-cli ./cmd/cli
+<span class="a">$</span> ./melodix-cli</pre>
         </div>
       </div>
       <p class="dl-note">FFmpeg is only needed for SoundCloud and internet
