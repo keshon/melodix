@@ -27,6 +27,15 @@ func ytnativeLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), e
 	if pr.VideoDetails.Title != "" {
 		track.Title = pr.VideoDetails.Title
 	}
+
+	// Live broadcasts are HLS-only and every rendition is muxed with video, so
+	// there is nothing here to play. Give up now rather than a second later with
+	// ffmpeg's "invalid data": the chain has a parser that handles this.
+	if pr.StreamingData.HLSManifestURL != "" {
+		l := logger()
+		l.Info().Str("video_id", videoID).Msg("ytnative_live_stream_skipped")
+		return nil, nil, ErrLiveStream
+	}
 	if secs, err := strconv.Atoi(pr.VideoDetails.LengthSeconds); err == nil && secs > 0 {
 		track.Duration = time.Duration(secs) * time.Second
 	}

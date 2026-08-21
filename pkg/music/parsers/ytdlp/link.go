@@ -14,7 +14,7 @@ import (
 )
 
 func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
-	ytdlp := exec.Command(YtdlpPath, "-j", "-f", "bestaudio", track.URL)
+	ytdlp := exec.Command(YtdlpPath, "-j", "-f", audioFormatSelector, track.URL)
 	output, err := ytdlp.Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("ytdlp: get url: %w", err)

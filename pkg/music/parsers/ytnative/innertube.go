@@ -37,6 +37,12 @@ var (
 	ErrCipherOnly  = errors.New("ytnative: only cipher-protected formats available")
 	ErrNotPlayable = errors.New("ytnative: video not playable")
 	ErrNoAudio     = errors.New("ytnative: no audio formats in player response")
+	// ErrLiveStream means the video is a live broadcast, which YouTube serves as
+	// HLS with no audio-only rendition. Nothing in this parser can play that, and
+	// the adaptive formats a live response does carry are segment URLs that make
+	// ffmpeg fail with "invalid data" a second later — so this fails at once and
+	// lets the chain reach yt-dlp, which fetches HLS segments properly.
+	ErrLiveStream = errors.New("ytnative: live stream (HLS), not supported by this parser")
 )
 
 type format struct {
@@ -56,6 +62,9 @@ type playerResponse struct {
 	} `json:"playabilityStatus"`
 	StreamingData struct {
 		AdaptiveFormats []format `json:"adaptiveFormats"`
+		// HLSManifestURL is present only for live broadcasts, which makes it a
+		// more reliable "this is live" signal than any videoDetails flag.
+		HLSManifestURL string `json:"hlsManifestUrl"`
 	} `json:"streamingData"`
 	VideoDetails struct {
 		Title         string `json:"title"`
