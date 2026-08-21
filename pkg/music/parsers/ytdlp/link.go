@@ -14,7 +14,7 @@ import (
 )
 
 func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
-	output, err := runJSON(exec.Command(YtdlpPath, "-j", "-f", audioFormatSelector, track.URL), "get url")
+	output, err := runJSON(exec.Command(YtdlpPath, args("-j", "-f", audioFormatSelector, track.URL)...), "get url")
 	if err != nil {
 		return nil, nil, err
 	}

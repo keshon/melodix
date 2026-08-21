@@ -10,30 +10,26 @@ guide covers both.
 - FFmpeg in `PATH` (optional if YouTube only)
 - yt-dlp (recommended, not required)
 
-### Configuring yt-dlp
+### yt-dlp and JavaScript
 
-Where yt-dlp is used, how it is configured matters more than it looks. Left at
-its defaults it falls back to YouTube's `android_vr` client, and googlevideo
-serves that client under restrictions — most visibly on live broadcasts, where
-segment requests start answering 403 after twenty-odd seconds and playback
-stops for good.
+Install a JavaScript runtime — Node, Deno or Bun — and leave it on `PATH`.
+That is the whole requirement; nothing needs configuring.
 
-The Docker image writes this configuration for you:
+Without one, yt-dlp cannot solve YouTube's challenges and falls back to a
+client googlevideo serves under restrictions. Ordinary videos still play, so
+the gap is easy to miss, but live broadcasts stop after twenty to forty
+seconds as their segments start answering 403. With a runtime present the bot
+selects the embedded web client itself on every yt-dlp call, which is what
+avoids that.
+
+The log says which way it went, on the first yt-dlp call:
 
 ```
---js-runtimes node
---extractor-args youtube:player_client=web_embedded
+ytdlp_youtube_client_configured js_runtime=node player_client=web_embedded
+ytdlp_no_js_runtime_live_streams_will_fail looked_for=["deno","node","bun"]
 ```
 
-Running outside Docker, the same two lines belong in your own yt-dlp config
-(`~/.config/yt-dlp/config`, or `%APPDATA%\yt-dlp\config` on Windows), together
-with a JavaScript runtime — Node or Deno — on `PATH`. Both are needed: the
-embedded web client cannot solve YouTube's challenges without a runtime, and a
-runtime alone leaves yt-dlp on `android_vr`.
-
-Without them, ordinary videos still play and only live streams break, which is
-why this is easy to miss. If a live stream stops after about half a minute, or
-the log shows `No supported JavaScript runtime could be found`, this is why.
+The Docker image ships Node, so it needs nothing further.
 
 ---
 

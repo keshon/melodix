@@ -10,6 +10,7 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
+	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
 	"github.com/keshon/melodix/pkg/music/parsers/ytnative"
 	"github.com/keshon/melodix/pkg/music/soundcloudapi"
 	"github.com/rs/zerolog"
@@ -36,6 +37,7 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 	ffmpeg.SetLogger(log)
 	soundcloudapi.SetLogger(log)
 	ytnative.SetLogger(log)
+	ytdlp.SetLogger(log)
 	return b
 }
 

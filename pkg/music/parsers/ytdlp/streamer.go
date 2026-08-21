@@ -5,10 +5,27 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
+	"github.com/rs/zerolog"
 )
+
+var logPtr atomic.Pointer[zerolog.Logger]
+
+// SetLogger sets the package logger (which YouTube client and JS runtime this
+// parser settled on). Safe for concurrent use; call once at process startup.
+func SetLogger(l zerolog.Logger) {
+	logPtr.Store(&l)
+}
+
+func logger() zerolog.Logger {
+	if l := logPtr.Load(); l != nil {
+		return *l
+	}
+	return zerolog.Nop()
+}
 
 // runJSON runs a yt-dlp command and returns its stdout, folding stderr into the
 // error when it fails.

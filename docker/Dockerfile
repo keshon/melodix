@@ -33,8 +33,11 @@ RUN BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ") && \
 FROM alpine:latest
 
 # Runtime dependencies
-# yt-dlp needs an external JS runtime and its EJS component for full YouTube
-# support. The embedded web client avoids GVS formats that require a PO token.
+# nodejs is here for yt-dlp: without a JavaScript runtime it cannot solve
+# YouTube's challenges and falls back to a client googlevideo restricts, which
+# breaks live streams. The bot passes the matching yt-dlp flags itself once it
+# finds a runtime on PATH (see pkg/music/parsers/ytdlp/runtime.go), so there is
+# no config file to keep in step with the code.
 RUN apk add --no-cache \
         ffmpeg \
         nodejs \
@@ -43,10 +46,6 @@ RUN apk add --no-cache \
         libstdc++ \
         alsa-lib \
     && pip3 install --no-cache-dir --break-system-packages 'yt-dlp[default]' \
-    && printf '%s\n' \
-        '--js-runtimes node' \
-        '--extractor-args youtube:player_client=web_embedded' \
-        > /etc/yt-dlp.conf \
     && rm -rf /var/cache/apk/*
 
 WORKDIR /usr/project

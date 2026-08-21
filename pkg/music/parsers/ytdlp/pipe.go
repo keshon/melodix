@@ -12,7 +12,7 @@ import (
 )
 
 func ytdlpPipe(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
-	output, err := runJSON(exec.Command(YtdlpPath, "-j", "-f", audioFormatSelector, track.URL), "get json")
+	output, err := runJSON(exec.Command(YtdlpPath, args("-j", "-f", audioFormatSelector, track.URL)...), "get json")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -43,7 +43,7 @@ func ytdlpPipe(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
-	ytdlp := exec.Command(YtdlpPath, "-o", "-", "-f", audioFormatSelector, track.URL)
+	ytdlp := exec.Command(YtdlpPath, args("-o", "-", "-f", audioFormatSelector, track.URL)...)
 	ffmpeg := ffmpegparser.NewPCMCommand("pipe:0", seekSec, false, "ytdlp-pipe")
 
 	ffmpegIn, err := ytdlp.StdoutPipe()
