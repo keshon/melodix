@@ -87,7 +87,7 @@ every config knob, Docker — is in [docs/running.md](docs/running.md).
 
 - **/maintenance** — Bot maintenance commands
   - **/maintenance ping** — Check bot latency
-  - **/maintenance download-db** — Download the current server database as a JSON file
+  - **/maintenance export-data** — Export the current server database as JSON
   - **/maintenance status** — Retrieve statistics about the guild
 - **/settings** — Server settings
   - **/settings commands log** — Review recently used commands

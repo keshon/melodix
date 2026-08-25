@@ -10,7 +10,7 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 )
 
-func runDownloadDB(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
+func runExportData(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
 	guildID := e.GuildID
 	record, err := storage.ExportGuild(guildID)
 	if err != nil {

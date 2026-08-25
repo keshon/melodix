@@ -31,8 +31,8 @@ func (c *Maintenance) SlashDefinition() *discordgo.ApplicationCommand {
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
-				Name:        "download-db",
-				Description: "Download the current server database as a JSON file",
+				Name:        "export-data",
+				Description: "Export the current server database as JSON",
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
@@ -65,8 +65,8 @@ func (c *Maintenance) Run(ctx interface{}) error {
 	switch sub.Name {
 	case "ping":
 		return runPing(s, e)
-	case "download-db":
-		return runDownloadDB(s, e, *storage)
+	case "export-data":
+		return runExportData(s, e, *storage)
 	case "status":
 		return runStatus(s, e, *storage)
 	default:
