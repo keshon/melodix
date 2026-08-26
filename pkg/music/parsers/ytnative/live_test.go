@@ -98,11 +98,12 @@ func TestLiveInnerTube(t *testing.T) {
 // TestLiveOpenEndedRequestAccepted guards the reason this package uses VISIONOS.
 // googlevideo applies per-issuing-client rules to stream URLs: an ANDROID_VR URL
 // answers 403 to any open-ended request and serves only bounded ranges of about
-// 1 MiB, while a VISIONOS URL serves open-ended ones. Both openPassthrough (a
-// plain GET) and ffmpeg (Range: bytes=0-) ask open-ended, so if this test starts
-// failing, playback is broken and the client constants are where to look —
-// bounded-range reads or a different client would be the fix, not a UA or nsig
-// change. Opt-in via MELODIX_LIVE_TESTS=1.
+// 1 MiB, while a VISIONOS URL serves open-ended ones. The chunked passthrough
+// path no longer needs that — it asks for bounded ranges — but ffmpeg still
+// sends Range: bytes=0- and openCDNBody's fallback still opens an unbounded
+// response, so if this test starts failing, those paths are broken and the
+// client constants are where to look; a different client would be the fix, not
+// a UA or nsig change. Opt-in via MELODIX_LIVE_TESTS=1.
 func TestLiveOpenEndedRequestAccepted(t *testing.T) {
 	if os.Getenv("MELODIX_LIVE_TESTS") == "" {
 		t.Skip("set MELODIX_LIVE_TESTS=1 to hit real YouTube")
@@ -117,7 +118,7 @@ func TestLiveOpenEndedRequestAccepted(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ name, rangeHdr string }{
-		{"plain GET (what openPassthrough sends)", ""},
+		{"plain GET (what the streaming fallback sends)", ""},
 		{"Range bytes=0- (what ffmpeg sends)", "bytes=0-"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

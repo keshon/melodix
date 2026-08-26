@@ -58,7 +58,3 @@ Three treatments, and they are not interchangeable:
   manifest declares `purpose: "maskable"`, which lets Android crop to any
   shape it likes; anything outside the central 80% can be cut. At full size
   the rim would lose its edge.
-
-The whole set is about 28 KB. It replaced a 2.4 MB set in which `favicon.svg`
-was a 1.5 MB SVG wrapped around an embedded bitmap — if that number starts
-climbing again, something has been exported rather than drawn.

@@ -1,7 +1,8 @@
 # Architecture
 
-> House rules (naming, concurrency contracts, how to add sources/parsers) live
-> in [conventions.md](conventions.md); this document covers how the system works.
+> House rules — naming, concurrency contracts, how to add a source or parser —
+> live in [conventions.md](conventions.md). This document covers how the
+> system works.
 
 Melodix is a Discord music bot built on top of a playback engine that doesn't
 know Discord exists. The repo ships two binaries against that same engine:
@@ -33,6 +34,45 @@ flowchart TB
   SinkIface -->|forward Opus packets| DiscordVC["Discord voice"]
   SinkIface -->|decode → oto| Speaker["Local speaker"]
 ```
+
+---
+
+## What this optimizes for
+
+Stated once, because most of what follows is downstream of it:
+
+- **Playback that survives a bad link.** The bot is expected to run from a
+  throttled or lossy connection, so recovery, read-ahead and the cost of
+  re-fetching are first-class concerns rather than polish. Where a choice
+  trades startup latency for continuity, continuity wins.
+- **No hard dependency on external binaries for YouTube.** ffmpeg and yt-dlp
+  are optional; the passthrough paths need neither.
+- **An engine that does not know Discord exists.** `pkg/music` is reusable on
+  its own terms and `cmd/cli` is the standing proof.
+- **Expendable parsers.** Any single extraction path can break without notice
+  when a platform changes. The fallback chain is what makes playback
+  reliable — no individual parser is.
+
+Non-goals: audio effects, mixing across guilds, a web UI, and anything that
+would require signature deciphering.
+
+---
+
+## Glossary
+
+These words carry narrow meanings here, and guessing at them goes wrong.
+
+| Term | Means |
+|---|---|
+| **source** | Input → metadata. Resolves a URL or query to `TrackInfo`; never touches audio. |
+| **parser** | Track → 20ms Opus packets. Owns extraction and the stream URL. |
+| **sink** | Opus packets → audio out: Discord voice, or the local speaker. |
+| **passthrough** | Forwarding a source's Opus untouched — no decode, no re-encode, no ffmpeg. |
+| **transcode** | The other path: ffmpeg decodes to PCM, `opus.Encode` re-encodes to packets. |
+| **link vs pipe** | Two modes of one parser: hand ffmpeg a URL (link), or stream bytes through its stdin (pipe). |
+| **media recovery** | `RecoveryStream` reopening a failed source. Budgeted per parser. |
+| **transport recovery** | `runPlayback` reacting to a dead Discord voice connection. A separate budget. |
+| **instant fail** | A parser that opened but errored on its first read; the chain moves on rather than retrying. |
 
 ---
 
@@ -156,68 +196,38 @@ rest, which is what YouTube itself means by such a URL. If the named video is
 not among the fetched entries — past the cap, or not a member — it is
 prepended, so the video the user pointed at is never dropped.
 
-### YouTube: Opus passthrough (two paths) and the fallback chain
+### YouTube: Opus passthrough and the fallback chain
 
 YouTube audio (itag 251) is *already* 48kHz stereo Opus inside a WebM
-container — which happens to be Discord's exact wire format. So the goal
-becomes simple: forward it untouched. `pkg/music/opus`'s zero-dep WebM
-demuxer (`opus.Passthrough`) pulls the Opus packets out and hands them
-straight to the sink, with no ffmpeg, no decode, and no re-encode anywhere in
-between. It checks the first packet's framing (has to be a single 20ms
-frame, since that's what Discord's sender expects) and falls back if that
-check fails. The YouTube parser chain, in order:
+container — Discord's exact wire format — so the goal is to forward it
+untouched. `opus.Passthrough` demuxes the WebM and hands the packets to the
+sink with no ffmpeg, no decode and no re-encode. It validates that the first
+packet is a single 20ms frame, the only shape the Discord sender can forward,
+and falls back if it is not. The chain, in order:
 
-- **`ytnative-link`** (passthrough) — POSTs to YouTube's InnerTube `player`
-  endpoint using the VISIONOS client, gets back a direct cipher-free URL, and
-  passes the stream through. It carries a `visitorData` session id,
-  bootstrapped from the home page and refreshed from every player response;
-  without one, InnerTube answers `LOGIN_REQUIRED` whichever client you use.
-  The maintenance knobs are the client constants in
-  `pkg/music/innertube`, `ClientVersion` first among them — the package exists
-  so the parser and the youtube source cannot drift onto different clients.
-  Its body is fetched in ranged chunks, with the next request in flight while
-  the demuxer works through the current one. googlevideo paces an *open-ended*
-  response to roughly 1.9x the format's own bitrate — barely more than
-  playback consumes — but serves bounded ranges at full speed, measured around
-  144x real time. That difference is what lets the anti-skip buffer fill
-  within a second instead of trickling, and it is also what makes a seek cheap
-  now that one is still served by re-fetching from byte zero and discarding.
-  A source that will not state a length — the shape a still-growing stream
-  has — falls back to a single open-ended response wrapped in a
-  `resumingBody`, where a connection dropped mid-track is repaired underneath
-  the demuxer with a ranged request for the next byte. See
-  `parsers/ytnative/chunked.go` for the measurements and the fallback rule.
-  Live broadcasts are declined upstream by playability, not by any gate of
-  this parser's own: VISIONOS answers one with `UNPLAYABLE` and no formats at
-  all. `hlsManifestUrl` is emphatically *not* a live signal — Apple-platform
-  clients are served one for ordinary VOD as well, and gating on it rejected
-  every playable video for a whole release.
-- **`kkdai-pipe`** (passthrough) — `kkdai/youtube` resolves a WebM/Opus stream
-  and downloads it in chunks, which gets demuxed directly. It rides the same
-  InnerTube client: kkdai's `DefaultClient` is pointed at VISIONOS in
-  `pkg/music/parsers/kkdai/streamer.go`. Neither kkdai path gates live
-  broadcasts either, and for the same reason: VISIONOS returns no formats for
-  one, so the pipe path finds no WebM/Opus format and the link path finds no
-  audio format. A gate on `video.HLSManifestURL` was tried here too and was
-  exactly backwards.
-- **`kkdai-link`, `ytdlp-*`** (transcode) — the ffmpeg-encode fallbacks:
-  ffmpeg decodes the source and `opus.Encode` re-encodes it into packets.
-  These only get used once both passthrough paths are exhausted.
+- **`ytnative-link`** (passthrough) — the InnerTube `player` endpoint under
+  the VISIONOS client, giving a direct cipher-free URL, fetched in ranged
+  chunks. Client identity, session id, fetch shape and live-stream behaviour
+  are documented where they are implemented: `pkg/music/innertube`,
+  `parsers/ytnative/visitor.go`, `parsers/ytnative/chunked.go`.
+- **`kkdai-pipe`** (passthrough) — `kkdai/youtube` resolves a WebM/Opus
+  stream and downloads it in chunks, demuxed the same way. Rides the same
+  client; see `parsers/kkdai/streamer.go`.
+- **`kkdai-link`, `ytdlp-*`** (transcode) — the ffmpeg-encode fallbacks,
+  reached only once both passthrough paths are exhausted.
 
-**Why the client choice matters.** googlevideo applies per-issuing-client
-rules to the stream URLs it hands out. An `ANDROID_VR` URL answers 403 to
-*any* open-ended request — a plain GET, or `Range: bytes=0-` — and serves
-only bounded ranges of roughly 1 MiB. A `VISIONOS` URL serves all of those
-shapes. Both of our readers ask open-ended (passthrough sends a plain GET,
-ffmpeg sends `Range: bytes=0-`), so under `ANDROID_VR` every YouTube parser
-died on its first read and the chain walked all the way down to yt-dlp.
-Neither the User-Agent nor an `n` parameter is involved — both were measured
-against the live CDN and ruled out. `TestLiveOpenEndedRequestAccepted` pins
-the invariant, so a future regression points here instead of at those.
+**The client choice is a system-wide constraint, not a parser detail.**
+googlevideo applies per-issuing-client rules to the URLs it hands out: an
+`ANDROID_VR` URL answers 403 to any open-ended request and serves only
+bounded ranges of roughly 1 MiB, while a `VISIONOS` URL serves both shapes.
+ffmpeg sends `Range: bytes=0-` and ytnative's fallback opens an unbounded
+response, so the identity in `pkg/music/innertube` is load-bearing for the
+whole chain — which is why it lives in a package of its own rather than
+inside one parser. `TestLiveOpenEndedRequestAccepted` pins it.
 
 `ytnative` returns `ErrCipherOnly` on cipher-only responses; a passthrough
 that fails framing validation returns `opus.ErrNotPassthrough`. Either way,
-recovery just moves on to the next parser.
+recovery moves on to the next parser.
 
 ### SoundCloud (`scnative`)
 
@@ -236,50 +246,28 @@ endpoint drift.
 
 ### Track cache & anti-skip buffer (optional, opt-in)
 
-Two independent playback layers wrap the parser stream inside
-`RecoveryStream`. Both are off by default and configured through env vars
-(see `docs/running.md`):
+Two independent layers wrap the parser stream, and *where* each sits is the
+architectural point. Both are off by default; `docs/running.md` has the knobs.
 
-- **Track cache** (`CACHE_ENABLED`). While a cacheable track plays,
-  `RecoveryStream` copies every 20ms Opus packet into a disk blob keyed by
-  content (`cache.Key`: `youtube:<id>` or `soundcloud:<url>`; radio can't be
-  cached). This copy happens above the recovery logic, so a single blob
-  spans parser switches and voice-transport reopens, and it only gets
-  committed once the track plays through to a clean end — meaning a
-  mid-track reconnect, which happens fairly often on flaky links, no longer
-  throws the cache away. `RecoveryStream.Open` checks the cache before the
-  parser list, so any later play of that track — same link, `/play <id>`, or
-  even a different guild — serves straight from the blob: instant, no
-  extraction, no ffmpeg. A miss or a bad blob just falls through to the
-  normal parser chain, so the cache can never block playback. The index
-  itself is a global, content-keyed collection in the datastore (a reserved
-  key, LRU-evicted once `CACHE_MAX_BYTES` is hit), and the blobs are
-  `sha256(key)`-named custom packet logs rather than playable media files.
-  Persistent by default. One thing worth flagging: this stores copyrighted
-  audio to disk. It's opt-in, and kept transient
-  (`CACHE_PERSISTENT=false`) plus size-capped it behaves like a cache rather
-  than an archive — but that's a real tradeoff to be aware of, not just a
-  footnote.
-- **Anti-skip buffer** (`BUFFER_AHEAD_MS`). `opus.BufferedReader` reads ahead
-  into a bounded queue, so a stall on the source drains the queued lead
-  instead of stuttering audibly. It wraps `RecoveryStream` itself — obtained
-  through `RecoveryStream.Packets()` — rather than the parser stream inside
-  it, and the difference is the whole point: below recovery, a reopen tore
-  the buffer down along with the stream it wrapped and the consumer sat
-  blocked inside `ReadPacket` for the entire reconnect, so the gap was fully
-  audible. Above it, the lead keeps playing while the reopen happens
-  underneath, and it survives voice-transport reopens too.
-
-  A consequence worth stating, because it inverts what one would expect:
-  `seekSec` now advances as packets enter the buffer, so a reopen resumes at
-  the read-ahead position rather than at what the listener has heard. That is
-  correct here — the buffer still holds everything in between, so the two
-  join up seamlessly.
-
-  It also moves `ReadPacket` onto the read-ahead goroutine, which is why
+- **Track cache** (`CACHE_ENABLED`) sits **inside** `RecoveryStream`, above
+  the recovery logic, so one blob spans parser switches and transport reopens
+  and is committed only on a clean end. `Open` checks the cache before the
+  parser list, so a later play of the same track — from any guild — serves
+  from disk with no extraction and no ffmpeg. A miss or a bad blob falls
+  through to the parser chain, so the cache can never block playback.
+  Mechanics and the on-disk format live in `pkg/music/cache`.
+- **Anti-skip buffer** (`BUFFER_AHEAD_MS`) sits **outside** it, wrapped
+  around `RecoveryStream` through `Packets()`. Below recovery, a reopen tore
+  the buffer down along with the stream it wrapped and the consumer blocked
+  for the whole reconnect; above it, the queued lead keeps playing while the
+  reopen happens underneath, and it survives transport reopens too. It also
+  moves `ReadPacket` onto a read-ahead goroutine, which is why
   `RecoveryStream` guards `reader`/`cleanup` with a mutex and why `Close`
-  signals, tears the source down to unblock the producer, and waits for it to
-  exit before touching anything else.
+  signals, tears the source down to unblock the producer, then waits.
+
+Whether the buffer helps at all depends on the source outrunning playback,
+which is not a given — see `parsers/ytnative/chunked.go` for what that took
+on YouTube.
 
 ---
 
@@ -410,8 +398,8 @@ raw error text into something a person can actually read.
 process into the real underlying error, so an instant ffmpeg failure — a
 403, a bad URL — never gets mistaken for a clean track end. The transcode
 parsers build ffmpeg via `ffmpeg.NewPCMCommand` (or `NewPCMCommandUA`, which
-adds the extracting client's User-Agent) and wrap its
-PCM output in `ffmpeg.OpusReader` (which encodes to Opus packets via `opus.Encode`); ffmpeg
+adds the extracting client's User-Agent) and wrap its PCM output in
+`ffmpeg.OpusReader`, which encodes to Opus packets via `opus.Encode`. ffmpeg
 stderr is captured and classified (403/forbidden/conversion failures at Warn).
 
 ---
@@ -434,11 +422,6 @@ against existing per-guild commands by name, type, and fingerprint whenever
 `INIT_SLASH_COMMANDS=true`. And `go run ./cmd/discord -readme` regenerates
 the command listing in `README.md` straight from the registry — that's a dev
 step, run from the repo root; the bot itself never writes files at runtime.
-
-One thing to watch: the `source`/`parser` choice lists in `/play`'s slash
-definition (`internal/command/music/play/play.go`) are maintained by hand,
-and need to be kept in sync with the resolver and `stream.registryEntries`
-manually.
 
 ---
 
@@ -500,6 +483,61 @@ returning an `opus.Reader`:
 
 That's it — the player, queue, recovery, sinks, and persistence are all
 source- and parser-agnostic, so nothing else needs touching.
+
+---
+
+## Known limitations
+
+Real tradeoffs, written down so they are not rediscovered as bugs.
+
+- **YouTube live broadcasts need yt-dlp**, plus a JavaScript runtime — see
+  the dependency note under [Package map](#package-map). They are HLS, and no
+  other parser here can follow a playlist.
+- **The track cache stores copyrighted audio to disk.** It is opt-in,
+  size-capped, and transient when `CACHE_PERSISTENT=false`, which makes it
+  behave like a cache rather than an archive — but it remains a real
+  tradeoff, not a footnote.
+- **`/play`'s `source` and `parser` choice lists are maintained by hand**
+  (`internal/command/music/play/play.go`) and can drift from the resolver and
+  `stream.registryEntries`. Nothing checks this.
+- **Pause and resume are not supported** — the sink owns the read loop; see
+  Playback pipeline. Commands that try get `ErrPauseNotSupported`.
+- **One process per storage directory.** The CLI falls back to an in-memory
+  cache index when the bot already holds the lock, rather than refusing to
+  start.
+- **The convention checks ratchet per file, not per line** — see
+  [conventions.md](conventions.md#formatting--ci).
+
+---
+
+## Tried and rejected
+
+A codebase shows what is, never what was tried and undone. Each of these cost
+a debugging session at least once, and two of them were still described as
+current behaviour in this document long after they had been reverted — which
+is the failure this section exists to prevent.
+
+- **Gating live broadcasts on `hlsManifestUrl`.** Exactly backwards:
+  Apple-platform clients are served an HLS manifest for ordinary VOD as well,
+  so the gate rejected every playable video for a whole release and caught no
+  live one. Live is refused upstream instead, by playability status.
+- **The `ANDROID_VR` InnerTube client** — kkdai's default. Its URLs answer
+  403 to any open-ended request, so every YouTube parser died on its first
+  read and the chain walked down to yt-dlp. Neither the User-Agent nor an `n`
+  parameter was involved; both were measured against the live CDN and ruled
+  out.
+- **Putting the anti-skip buffer below recovery.** A reopen tore the buffer
+  down along with the stream it wrapped, so the consumer blocked for the
+  whole reconnect and the gap was fully audible — the opposite of what the
+  buffer exists for.
+- **Answering YouTube stutter with a deeper buffer.** googlevideo paces an
+  open-ended response at roughly 1.9x the format's own bitrate, so a lead
+  accrues only as fast as bytes arrive and no depth outlasts a link running
+  below real time. Fixed by changing the fetch shape instead.
+- **Treating a mid-track connection reset as a clean end.** With ffmpeg in
+  front, a dropped connection arrives as a closed pipe and reads as EOF;
+  passthrough removed that layer and the reset arrives raw, so the track died
+  instead of resuming.
 
 ---
 
