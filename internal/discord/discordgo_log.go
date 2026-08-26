@@ -31,11 +31,13 @@ func attachDiscordgoLogger(log zerolog.Logger) {
 		}
 
 		// Ensure "at" points to the discordgo callsite (not this bridge).
-		if pc, file, line, ok := runtime.Caller(caller); ok {
-			_ = pc
+		if _, file, line, ok := runtime.Caller(caller); ok {
 			ev.Str("at", file+":"+strconv.Itoa(line))
 		}
 
-		ev.Str("raw", raw).Msg(raw)
+		// The upstream text is a field, not the event name: it is arbitrary
+		// prose from the library and would make every line its own unsearchable
+		// event. One name, one field, greppable like every other event here.
+		ev.Str("raw", raw).Msg("discordgo_log")
 	}
 }

@@ -1,8 +1,6 @@
 package ytnative
 
 import (
-	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -60,29 +58,20 @@ func ytnativeLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), e
 }
 
 // openPassthrough streams the WebM/Opus URL and demuxes it to Opus packets (no
-// ffmpeg). A seek still re-fetches from the start and discards to the position,
-// but a connection dropped mid-track no longer costs that: resumingBody repairs
-// it in place with a ranged request. Framing is validated by opus.Passthrough.
+// ffmpeg). openCDNBody decides how the bytes are fetched — chunked ranges
+// where the CDN allows it, one repaired open-ended response where it does not
+// — and a dropped connection is handled underneath the demuxer either way. A
+// seek still re-fetches from the start and discards to the position, which
+// chunking makes roughly two orders of magnitude cheaper. Framing is validated
+// by opus.Passthrough.
 func openPassthrough(url string, seekSec float64) (opus.Reader, func(), error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	body, err := openCDNBody(url)
 	if err != nil {
 		return nil, nil, err
 	}
-	req.Header.Set("User-Agent", clientUserAgent)
-	resp, err := streamClient.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		return nil, nil, fmt.Errorf("ytnative: cdn %s", resp.Status)
-	}
-	// Repair dropped connections underneath the demuxer rather than letting them
-	// end the track; see resume.go for why that is worth doing here.
-	body := newResumingBody(streamClient, url, clientUserAgent, resp.Body)
 	r, err := opus.Passthrough(body, opus.SeekPackets(seekSec))
 	if err != nil {
-		return nil, nil, err // Passthrough closed resp.Body
+		return nil, nil, err // Passthrough closed body
 	}
 	return r, func() { _ = r.Close() }, nil
 }

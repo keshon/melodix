@@ -1,0 +1,13 @@
+# Go tooling assumes LF, and the repository stores LF. Without this file and
+# with core.autocrlf=true, a Windows checkout left part of the tree CRLF, which
+# made `gofmt -l` name a different set of files on each run as git touched them
+# — an [enforced] rule that could not be trusted. Pin the working tree to LF.
+* text=auto eol=lf
+
+# Windows-only entry points, which cmd.exe wants CRLF.
+*.bat text eol=crlf
+
+*.png binary
+*.ico binary
+*.jpg binary
+*.exe binary

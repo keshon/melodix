@@ -175,22 +175,31 @@ check fails. The YouTube parser chain, in order:
   The maintenance knobs are the client constants in
   `pkg/music/innertube`, `ClientVersion` first among them — the package exists
   so the parser and the youtube source cannot drift onto different clients.
-  Its body is wrapped in a `resumingBody`: a connection dropped mid-track is
-  repaired underneath the demuxer with a ranged request for the next byte, so
-  the stream stays contiguous instead of being reopened from the start. That
-  matters because a seek is served by re-fetching from byte zero and
-  discarding — two minutes into a track that is megabytes before a packet
-  plays again.
-  Live broadcasts are declined outright, keyed on `hlsManifestUrl`: YouTube
-  serves those as HLS with no audio-only rendition, and nothing in this
-  parser can follow a playlist.
+  Its body is fetched in ranged chunks, with the next request in flight while
+  the demuxer works through the current one. googlevideo paces an *open-ended*
+  response to roughly 1.9x the format's own bitrate — barely more than
+  playback consumes — but serves bounded ranges at full speed, measured around
+  144x real time. That difference is what lets the anti-skip buffer fill
+  within a second instead of trickling, and it is also what makes a seek cheap
+  now that one is still served by re-fetching from byte zero and discarding.
+  A source that will not state a length — the shape a still-growing stream
+  has — falls back to a single open-ended response wrapped in a
+  `resumingBody`, where a connection dropped mid-track is repaired underneath
+  the demuxer with a ranged request for the next byte. See
+  `parsers/ytnative/chunked.go` for the measurements and the fallback rule.
+  Live broadcasts are declined upstream by playability, not by any gate of
+  this parser's own: VISIONOS answers one with `UNPLAYABLE` and no formats at
+  all. `hlsManifestUrl` is emphatically *not* a live signal — Apple-platform
+  clients are served one for ordinary VOD as well, and gating on it rejected
+  every playable video for a whole release.
 - **`kkdai-pipe`** (passthrough) — `kkdai/youtube` resolves a WebM/Opus stream
   and downloads it in chunks, which gets demuxed directly. It rides the same
   InnerTube client: kkdai's `DefaultClient` is pointed at VISIONOS in
-  `pkg/music/parsers/kkdai/streamer.go`. Both kkdai paths decline live
-  broadcasts on the same `hlsManifestUrl` signal — the link path would
-  otherwise fetch a single HLS segment, play five seconds and hit EOF, which
-  is long enough to get itself announced as the playing parser.
+  `pkg/music/parsers/kkdai/streamer.go`. Neither kkdai path gates live
+  broadcasts either, and for the same reason: VISIONOS returns no formats for
+  one, so the pipe path finds no WebM/Opus format and the link path finds no
+  audio format. A gate on `video.HLSManifestURL` was tried here too and was
+  exactly backwards.
 - **`kkdai-link`, `ytdlp-*`** (transcode) — the ffmpeg-encode fallbacks:
   ffmpeg decodes the source and `opus.Encode` re-encodes it into packets.
   These only get used once both passthrough paths are exhausted.

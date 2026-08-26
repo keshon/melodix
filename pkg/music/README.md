@@ -180,7 +180,10 @@ parser stream; the buffer sits outside it, around `RecoveryStream` itself:
   plays (any consumer) serve from disk — instant, no extraction, no ffmpeg. Misses fall through to
   the parser chain, so the cache never blocks playback. Global LRU size cap; persistent by default.
 - **Anti-skip buffer** (`stream.SetBufferAhead`) — `opus.BufferedReader` reads ahead so a source
-  stall drains the queued lead instead of stuttering. Consume it through `RecoveryStream.Packets()`,
+  stall drains the queued lead instead of stuttering. A lead only builds while the source outruns
+  playback, which is what decides whether any of this helps — `parsers/ytnative/chunked.go` has the
+  measurements and why that parser fetches in ranged chunks.
+  Consume it through `RecoveryStream.Packets()`,
   which wraps the recovery stream rather than the parser stream underneath it: below recovery, a
   reopen tears the buffer down along with the stream it wraps and the consumer blocks for the whole
   reconnect, which is the opposite of what the buffer is for. Above it, the lead plays on while the
