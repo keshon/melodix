@@ -203,11 +203,15 @@ func TestHelpersSelfCheck(t *testing.T) {
 	if hasUnbreakableToken("// " + words(20)) {
 		t.Error("ordinary words should not exempt a line")
 	}
-	if !hasPackagePrefix("opus: bad", "opus") {
+	if !hasPackagePrefix("opus: bad", "opus", "opus") {
 		t.Error("the package's own prefix should be accepted")
 	}
-	if hasPackagePrefix("bad", "opus") {
+	if hasPackagePrefix("bad", "opus", "opus") {
 		t.Error("an unprefixed message should not be accepted")
+	}
+	// A command is package main, so the directory names it instead.
+	if !hasPackagePrefix("migrate-store: read", "main", "migrate-store") {
+		t.Error("a command should be able to prefix with its directory")
 	}
 }
 

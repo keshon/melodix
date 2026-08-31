@@ -237,9 +237,14 @@ favors self-explanatory names over comment ceremony.
 English. A tab counts as one column, and a line carrying an unbreakable
 token (a URL, a long identifier) is exempt.
 
-**[invariant]** Three things go stale silently, so they don't get written at
-all: file-path headers (`// FILE: internal/…`), which nothing checks and which
-outlive a `git mv`; a claim about what does not exist yet ("only YouTube is
+**[enforced: file-headers]** No file-path headers (`// FILE: internal/…`).
+Nothing checks them, so they survive every rename — server-domme carried one
+naming `melodix/internal/discord/middleware/command_logger.go`, a path that has
+never existed in either project, and it had been wrong since the commit that
+introduced it.
+
+**[invariant]** Two more things go stale silently, so they don't get written at
+all: a claim about what does not exist yet ("only YouTube is
 offered today"), which still reads as fact long after it stopped being one —
 describe what the design allows instead; and any restatement of a constant's
 value, which the constant already carries. A comment that has drifted from the

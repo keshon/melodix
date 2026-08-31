@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -105,6 +106,7 @@ func rules() []rule {
 		{name: "comment-width", claims: []string{strconv.Itoa(maxCommentCols)}, scan: scanCommentWidth},
 		{name: "log-event-naming", scan: scanLogEvents},
 		{name: "error-prefix", scan: scanErrorPrefix},
+		{name: "file-headers", scan: scanFileHeaders},
 	}
 }
 
@@ -318,6 +320,23 @@ func scanLogEvents(_ *testing.T, files []goFile) []violation {
 	return out
 }
 
+var fileHeader = regexp.MustCompile(`^//\s*(FILE|File|Path):`)
+
+// scanFileHeaders catches a comment naming the file it sits in. Nothing checks
+// such a header, so it survives every rename: the one this repo carried named a
+// path that had never existed in either project.
+func scanFileHeaders(_ *testing.T, files []goFile) []violation {
+	var out []violation
+	for _, f := range files {
+		for i, line := range f.lines {
+			if fileHeader.MatchString(strings.TrimSpace(line)) {
+				out = append(out, violation{f.path, i + 1, "file-path header"})
+			}
+		}
+	}
+	return out
+}
+
 // scanErrorPrefix covers pkg/music only: that is the library surface the rule
 // names. Exported sentinels are exempt because their text doubles as the string
 // a user is shown, which the same section of the document calls for — see the
@@ -333,7 +352,7 @@ func scanErrorPrefix(_ *testing.T, files []goFile) []violation {
 				continue
 			}
 			for _, m := range errLiteral.FindAllStringSubmatch(line, -1) {
-				if !hasPackagePrefix(m[1], f.pkg) {
+				if !hasPackagePrefix(m[1], f.pkg, path.Base(path.Dir(f.path))) {
 					out = append(out, violation{f.path, i + 1,
 						fmt.Sprintf("%q does not start with %q", truncate(m[1]), f.pkg+": ")})
 				}
@@ -343,10 +362,13 @@ func scanErrorPrefix(_ *testing.T, files []goFile) []violation {
 	return out
 }
 
-// hasPackagePrefix accepts the package's own name, or a verb whose prefix is
-// supplied at runtime (the ffmpeg parsers name the caller that way).
-func hasPackagePrefix(msg, pkg string) bool {
+// hasPackagePrefix accepts the package's own name, the directory it lives in,
+// or a prefix supplied at runtime. The directory is accepted because a command
+// is always package main: "main: read store" names nothing a reader can act on,
+// while "migrate-store: read store" names the binary that printed it.
+func hasPackagePrefix(msg, pkg, dir string) bool {
 	return strings.HasPrefix(msg, pkg+":") ||
+		(dir != "" && strings.HasPrefix(msg, dir+":")) ||
 		strings.HasPrefix(msg, "%s:") ||
 		strings.HasPrefix(msg, "%w")
 }
