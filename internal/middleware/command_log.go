@@ -9,11 +9,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// auditSkipper is satisfied by cmdadapter.Adapter, which forwards the opt-out
+// declared by the command it wraps (see cmdadapter.Unlogged).
+type auditSkipper interface {
+	SkipAuditLog() bool
+}
+
 // WithCommandLogger wraps a command to log its execution after Run completes.
 // Logging is best-effort: failures are warned but never affect the command
 // result.
+//
+// A command that opts out is returned unwrapped rather than wrapped and then
+// filtered: there is then no code path on which its caller could be written to
+// storage, and no wrong branch to edit later.
 func WithCommandLogger(log zerolog.Logger) command.Middleware {
 	return func(c command.Command) command.Command {
+		if s, ok := command.Root(c).(auditSkipper); ok && s.SkipAuditLog() {
+			return c
+		}
 		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
 			err := c.Run(ctx, inv)
 			logInvocation(log, c.Name(), inv)

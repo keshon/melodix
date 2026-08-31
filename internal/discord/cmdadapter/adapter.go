@@ -42,6 +42,16 @@ func (a *Adapter) ReactionDefinition() string {
 	return ""
 }
 
+// SkipAuditLog reports whether the wrapped command opted out of the audit log.
+//
+// Middleware sees the Adapter, not the command inside it — command.Root unwraps
+// to here and stops — so the opt-out has to be forwarded like every other
+// optional capability rather than asserted through to a.Cmd from outside.
+func (a *Adapter) SkipAuditLog() bool {
+	_, ok := a.Cmd.(Unlogged)
+	return ok
+}
+
 func (a *Adapter) Component(ctx *ComponentInteractionContext) error {
 	if ch, ok := a.Cmd.(ComponentInteractionHandler); ok {
 		return ch.Component(ctx)
