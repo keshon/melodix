@@ -64,8 +64,9 @@ func pcmToBytes(pcm []int16) []byte {
 	return b
 }
 
-// Prepend returns a Reader that yields first before delegating to r. Passthrough
-// sources use it to peek and validate the first packet, then put it back.
+// Prepend returns a Reader that yields first before delegating to r.
+// Passthrough sources use it to peek and validate the first packet, then put it
+// back.
 func Prepend(first []byte, r Reader) Reader {
 	return &prependReader{first: first, r: r}
 }

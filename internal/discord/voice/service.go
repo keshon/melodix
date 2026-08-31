@@ -18,10 +18,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// SessionGetter returns the current Discord session (used so providers stay valid across reconnects).
+// SessionGetter returns the current Discord session (used so providers stay
+// valid across reconnects).
 //
-// Kept in the parent package so call sites (e.g. bot wiring) keep using voice.New(...)
-// without importing the implementation subpackage.
+// Kept in the parent package so call sites (e.g. bot wiring) keep using
+// voice.New(...) without importing the implementation subpackage.
 type SessionGetter = sink.SessionGetter
 
 type guildMusicStatus struct {
@@ -29,8 +30,9 @@ type guildMusicStatus struct {
 	MessageID string
 }
 
-// Service provides voice/music for a Discord bot: players, sink providers, resolver, and guild music status.
-// It is pluggable: a bot without voice can omit it.
+// Service provides voice/music for a Discord bot: players, sink providers,
+// resolver, and guild music status. It is pluggable: a bot without voice can
+// omit it.
 type Service struct {
 	getSession    SessionGetter
 	cfg           *config.Config
@@ -42,8 +44,9 @@ type Service struct {
 	resolver      *resolve.Resolver
 
 	guildMusicStatus map[string]guildMusicStatus
-	// guildMusicNotifyChannel is the text channel of the last music slash (/play, /next, …) for fallback
-	// "Playback failed" when no status message id is stored yet or edit fails.
+	// guildMusicNotifyChannel is the text channel of the last music slash (/play,
+	// /next, …) for fallback "Playback failed" when no status message id is stored
+	// yet or edit fails.
 	guildMusicNotifyChannel map[string]string
 	guildMusicStatusMu      sync.RWMutex
 }
@@ -98,8 +101,9 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 	})
 }
 
-// deliverPlaybackFailureEmbed edits the stored "now playing" message when possible; otherwise sends
-// a public embed to the last known slash channel (see SetGuildMusicNotifyChannel / UpdatePlaybackStatus).
+// deliverPlaybackFailureEmbed edits the stored "now playing" message when
+// possible; otherwise sends a public embed to the last known slash channel (see
+// SetGuildMusicNotifyChannel / UpdatePlaybackStatus).
 func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
 	s.guildMusicStatusMu.RLock()
 	msg, hasMsg := s.guildMusicStatus[guildID]
@@ -132,7 +136,8 @@ func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildI
 	s.log.Warn().Str("guild_id", guildID).Msg("playback_failed_no_ui_target")
 }
 
-// GetOrCreatePlayer returns an existing player for the guild or creates a new one.
+// GetOrCreatePlayer returns an existing player for the guild or creates a new
+// one.
 func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -171,11 +176,12 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	return p
 }
 
-// watchPlayerStatus is the single long-lived consumer of the player's status channel
-// (one per guild, for the player's lifetime). Slash handlers render interaction-driven
-// updates synchronously; this watcher covers async transitions only: auto-advance to the
-// next track and natural queue end. On an interaction-driven start both paths render the
-// same "Now Playing" embed — the duplicate edit is invisible to users.
+// watchPlayerStatus is the single long-lived consumer of the player's status
+// channel (one per guild, for the player's lifetime). Slash handlers render
+// interaction-driven updates synchronously; this watcher covers async
+// transitions only: auto-advance to the next track and natural queue end. On an
+// interaction-driven start both paths render the same "Now Playing" embed — the
+// duplicate edit is invisible to users.
 func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 	for status := range p.PlayerStatus {
 		sess := s.getSession()
@@ -241,8 +247,9 @@ func (s *Service) ResolveTracks(guildID, input, source, parser string) ([]source
 	return r.Resolve(input, source, parser)
 }
 
-// SetGuildMusicNotifyChannel records the text channel id for guild (slash command channel) so async
-// playback failure can post a public embed when the status message is not registered yet.
+// SetGuildMusicNotifyChannel records the text channel id for guild (slash
+// command channel) so async playback failure can post a public embed when the
+// status message is not registered yet.
 func (s *Service) SetGuildMusicNotifyChannel(guildID, channelID string) {
 	if guildID == "" || channelID == "" {
 		return
@@ -255,8 +262,9 @@ func (s *Service) SetGuildMusicNotifyChannel(guildID, channelID string) {
 	s.guildMusicStatusMu.Unlock()
 }
 
-// hasStatusMessage reports whether a status message is registered for the guild,
-// i.e. whether an interaction-less UpdatePlaybackStatus would actually render.
+// hasStatusMessage reports whether a status message is registered for the
+// guild, i.e. whether an interaction-less UpdatePlaybackStatus would actually
+// render.
 func (s *Service) hasStatusMessage(guildID string) bool {
 	s.guildMusicStatusMu.RLock()
 	defer s.guildMusicStatusMu.RUnlock()
@@ -304,7 +312,8 @@ func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.
 	return nil
 }
 
-// StopAllPlayers stops playback and disconnects voice for all guilds. Call on shutdown.
+// StopAllPlayers stops playback and disconnects voice for all guilds. Call on
+// shutdown.
 func (s *Service) StopAllPlayers() {
 	s.mu.Lock()
 	players := make(map[string]*player.Player, len(s.players))
@@ -320,8 +329,9 @@ func (s *Service) StopAllPlayers() {
 	}
 }
 
-// InvalidateAllSinks disconnects and forgets current voice connections for all guilds,
-// without stopping players or clearing queues. Intended for session restarts.
+// InvalidateAllSinks disconnects and forgets current voice connections for all
+// guilds, without stopping players or clearing queues. Intended for session
+// restarts.
 func (s *Service) InvalidateAllSinks() {
 	s.mu.RLock()
 	providers := make([]*sink.DiscordSinkProvider, 0, len(s.sinkProviders))

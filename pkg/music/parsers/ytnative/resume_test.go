@@ -232,8 +232,8 @@ func TestResumingBodyStopsAfterClose(t *testing.T) {
 //
 // The failure it guards against is not a wrong answer but a slow one. Sampling
 // the closed flag before the read rather than after leaves the repair path
-// thinking the stream is still wanted, so it sleeps out its backoff and spends a
-// request before discovering otherwise — with teardown blocked behind it.
+// thinking the stream is still wanted, so it sleeps out its backoff and spends
+// a request before discovering otherwise — with teardown blocked behind it.
 func TestResumingBodyCloseDuringABlockedReadIsPrompt(t *testing.T) {
 	var requests int32
 	block := make(chan struct{})

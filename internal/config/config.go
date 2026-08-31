@@ -22,33 +22,40 @@ type Config struct {
 	CommandTimeout time.Duration `env:"COMMAND_TIMEOUT" envDefault:"30s"`
 	// CommandParallelism limits concurrently running command handlers.
 	CommandParallelism int `env:"COMMAND_PARALLELISM" envDefault:"16"`
-	// WSSilenceTimeout triggers a session restart if no gateway messages are received.
+	// WSSilenceTimeout triggers a session restart if no gateway messages are
+	// received.
 	WSSilenceTimeout time.Duration `env:"WS_SILENCE_TIMEOUT" envDefault:"2m"`
 
-	// DiscordUnhealthyMode controls what happens when watchdogs/API probe decide the session is unhealthy.
+	// DiscordUnhealthyMode controls what happens when the watchdogs or the API
+	// probe decide the session is unhealthy.
 	// Canonical: restart-session|restart-voice|ignore.
 	DiscordUnhealthyMode string `env:"DISCORD_UNHEALTHY_MODE" envDefault:"restart-session"`
-	// DiscordUnhealthyGrace allows ignoring the first N unhealthy signals within DiscordUnhealthyWindow
-	// (still invalidating sinks), before triggering a session restart. Applies to mode=restart only.
+	// DiscordUnhealthyGrace allows ignoring the first N unhealthy signals within
+	// DiscordUnhealthyWindow (still invalidating sinks), before triggering a
+	// session restart. Applies to mode=restart only.
 	DiscordUnhealthyGrace int `env:"DISCORD_UNHEALTHY_GRACE" envDefault:"0"`
 	// DiscordUnhealthyWindow is the counting window for DiscordUnhealthyGrace.
 	DiscordUnhealthyWindow time.Duration `env:"DISCORD_UNHEALTHY_WINDOW" envDefault:"1m"`
 
-	// PlayerTransportRecoveryMode controls how the player reacts to Discord voice transport errors.
-	// Supported: hard|soft.
+	// PlayerTransportRecoveryMode controls how the player reacts to Discord voice
+	// transport errors. Supported: hard|soft.
 	PlayerTransportRecoveryMode string `env:"PLAYER_TRANSPORT_RECOVERY_MODE" envDefault:"hard"`
-	// PlayerTransportSoftAttempts bounds how many "soft" retries we do before falling back to hard recovery.
-	// Applies to mode=soft only.
+	// PlayerTransportSoftAttempts bounds how many "soft" retries we do before
+	// falling back to hard recovery. Applies to mode=soft only.
 	PlayerTransportSoftAttempts int `env:"PLAYER_TRANSPORT_SOFT_ATTEMPTS" envDefault:"1"`
 
-	// Track cache (opt-in): tees played Opus packets to disk so a later play of the
-	// same track — any guild, or /play <history id> — is instant and extraction-free.
+	// Track cache (opt-in): tees played Opus packets to disk so a later play of
+	// the same track — any guild, or /play <history id> — is instant and
+	// extraction-free.
 	CacheEnabled bool `env:"CACHE_ENABLED" envDefault:"false"`
-	// CacheDir holds the cache blobs and is wiped on boot when CachePersistent is false.
+	// CacheDir holds the cache blobs and is wiped on boot when CachePersistent is
+	// false.
 	CacheDir string `env:"CACHE_DIR" envDefault:"./data/cache"`
-	// CacheMaxBytes is the global size cap; least-recently-used tracks are evicted past it.
+	// CacheMaxBytes is the global size cap; least-recently-used tracks are evicted
+	// past it.
 	CacheMaxBytes int64 `env:"CACHE_MAX_BYTES" envDefault:"2147483648"` // 2 GiB
-	// CachePersistent keeps the cache across restarts (false = transient, wiped on boot).
+	// CachePersistent keeps the cache across restarts (false = transient, wiped on
+	// boot).
 	CachePersistent bool `env:"CACHE_PERSISTENT" envDefault:"true"`
 	// BufferAheadMs is the anti-skip read-ahead depth in ms (0 disables). The
 	// buffer sits above stream recovery, so the lead plays through a reconnect as
@@ -75,7 +82,8 @@ type Config struct {
 	LogCompress   bool   `env:"LOG_COMPRESS" envDefault:"false"`
 }
 
-// IsDeveloper reports whether userID is the configured developer (avoids discord import in middleware).
+// IsDeveloper reports whether userID is the configured developer (avoids
+// discord import in middleware).
 func IsDeveloper(cfg *Config, userID string) bool {
 	return cfg != nil && cfg.DeveloperID == userID
 }

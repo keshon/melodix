@@ -41,7 +41,8 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 		return nil, nil, fmt.Errorf("ytdlp: decode json: %w", err)
 	}
 
-	// If the root duration is empty, we try to take it from the first fragment of the first format
+	// If the root duration is empty, we try to take it from the first fragment of
+	// the first format
 	if info.Duration == 0 && len(info.Formats) > 0 {
 		if len(info.Formats[0].Fragments) > 0 {
 			info.Duration = info.Formats[0].Fragments[0].Duration
@@ -60,10 +61,10 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 
 	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
-	// yt-dlp reports the headers it used in http_headers so the fetch can be handed
-	// off; passing the UA on keeps ffmpeg's request faithful to the one that
-	// resolved the URL. Measured against googlevideo, the UA does not decide a 403
-	// — the issuing InnerTube client does — so this is hygiene, not a fix.
+	// yt-dlp reports the headers it used in http_headers so the fetch can be
+	// handed off; passing the UA on keeps ffmpeg's request faithful to the one
+	// that resolved the URL. Measured against googlevideo, the UA does not decide
+	// a 403 — the issuing InnerTube client does — so this is hygiene, not a fix.
 	cmd := ffmpegparser.NewPCMCommandUA(link, seekSec, true, "ytdlp-link", headerValue(headers, "User-Agent"))
 	return ffmpegparser.OpusReader(cmd, "ytdlp")
 }

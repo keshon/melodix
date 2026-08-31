@@ -13,8 +13,8 @@ import (
 )
 
 // Apply sets the anti-skip read-ahead depth and, when CACHE_ENABLED, builds and
-// installs the global track cache. Call once at startup, before any playback.
-// A nil store still enables the cache, but its index is in-memory only — that is
+// installs the global track cache. Call once at startup, before any playback. A
+// nil store still enables the cache, but its index is in-memory only — that is
 // the CLI's fallback when the bot holds the data directory lock.
 func Apply(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error {
 	stream.SetBufferAhead(cfg.BufferAheadMs)

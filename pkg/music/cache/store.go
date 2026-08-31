@@ -98,8 +98,8 @@ func (s *Store) Has(key string) bool {
 	return ok
 }
 
-// OpenAt opens the cached blob for key at the given packet offset and records an
-// access (for LRU). Returns os.ErrNotExist if the key isn't cached.
+// OpenAt opens the cached blob for key at the given packet offset and records
+// an access (for LRU). Returns os.ErrNotExist if the key isn't cached.
 func (s *Store) OpenAt(key string, seekPackets int) (opus.Reader, error) {
 	s.mu.Lock()
 	e, ok := s.byKey[key]

@@ -9,7 +9,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// attachDiscordgoLogger routes discordgo internal logs through zerolog (global hook in discordgo).
+// attachDiscordgoLogger routes discordgo internal logs through zerolog (global
+// hook in discordgo).
 func attachDiscordgoLogger(log zerolog.Logger) {
 	discordgo.Logger = func(msgL, caller int, format string, a ...interface{}) {
 		raw := fmt.Sprintf(format, a...)

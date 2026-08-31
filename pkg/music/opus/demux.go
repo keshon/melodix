@@ -7,9 +7,10 @@ import (
 	"io"
 )
 
-// ErrLacing is returned when a WebM SimpleBlock uses lacing (multiple frames per
-// block). YouTube's Opus never laces; encountering it means the stream is not
-// cleanly passthrough-able, so the caller should fall back to the encode path.
+// ErrLacing is returned when a WebM SimpleBlock uses lacing (multiple frames
+// per block). YouTube's Opus never laces; encountering it means the stream is
+// not cleanly passthrough-able, so the caller should fall back to the encode
+// path.
 var ErrLacing = errors.New("opus: webm block uses lacing")
 
 // EBML element IDs (length-marker bits retained, matching readVint(keep=true)).
@@ -86,7 +87,8 @@ func (d *demuxer) ReadPacket() ([]byte, error) {
 }
 
 // audioPacket extracts the Opus packet from a (Simple)Block payload, or returns
-// (nil, nil) if the block belongs to another track. ErrLacing if the block laces.
+// (nil, nil) if the block belongs to another track. ErrLacing if the block
+// laces.
 func (d *demuxer) audioPacket(data []byte) ([]byte, error) {
 	if len(data) < 4 {
 		return nil, nil

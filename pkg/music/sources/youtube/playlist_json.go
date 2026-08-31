@@ -25,8 +25,8 @@ func (r runsText) String() string {
 	return b.String()
 }
 
-// playlistVideoList is the container /browse returns, both on the first page and
-// inside a continuation.
+// playlistVideoList is the container /browse returns, both on the first page
+// and inside a continuation.
 type playlistVideoList struct {
 	Contents []struct {
 		PlaylistVideoRenderer *struct {

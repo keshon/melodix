@@ -7,7 +7,8 @@ import (
 	"unicode/utf8"
 )
 
-// historyMaxLineBytes caps rendered line length (embed row); long track titles get middle ellipsis.
+// historyMaxLineBytes caps rendered line length (embed row); long track titles
+// get middle ellipsis.
 const historyMaxLineBytes = 120
 
 const historyMinTitleRunes = 8
@@ -19,7 +20,8 @@ func displayTrackTitle(raw string) string {
 	return strings.TrimSpace(raw)
 }
 
-// truncateTitleMiddle shortens s to at most maxRunes runes, inserting "..." in the middle when needed.
+// truncateTitleMiddle shortens s to at most maxRunes runes, inserting "..." in
+// the middle when needed.
 func truncateTitleMiddle(s string, maxRunes int) string {
 	if maxRunes < 1 {
 		return ""
@@ -51,7 +53,8 @@ func fitTitleToLineLimit(title string, build func(string) string) string {
 	return truncateTitleMiddle(title, historyMinTitleRunes)
 }
 
-// historyLine: `id` [title](url) `tail` (spaces only; tail is backtick-wrapped date or ×N play count).
+// historyLine: `id` [title](url) `tail` (spaces only; tail is backtick-wrapped
+// date or ×N play count).
 func historyLine(id uint64, title, url, tail string) string {
 	if url != "" {
 		return fmt.Sprintf("`%d` [%s](%s) `%s`", id, title, url, tail)
@@ -72,7 +75,8 @@ func FormatTimelineLine(id uint64, title, url string, playedAt time.Time) string
 	return build(name)
 }
 
-// FormatCountsLine renders one row of the "by URL" view, tailed with the play count.
+// FormatCountsLine renders one row of the "by URL" view, tailed with the play
+// count.
 func FormatCountsLine(id uint64, title, url string, count int) string {
 	tail := fmt.Sprintf("×%d", count)
 	name := displayTrackTitle(title)

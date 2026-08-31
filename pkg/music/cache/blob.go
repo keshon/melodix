@@ -94,7 +94,8 @@ func (w *Writer) Abort() error {
 }
 
 // openBlobAt opens a blob and discards the first seekPackets packets, returning
-// an opus.Reader positioned at the seek point. A truncated tail reads as io.EOF.
+// an opus.Reader positioned at the seek point. A truncated tail reads as
+// io.EOF.
 func openBlobAt(path string, seekPackets int) (opus.Reader, error) {
 	f, err := os.Open(path)
 	if err != nil {

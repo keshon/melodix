@@ -559,8 +559,8 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 			p.log.Warn().Int("attempt", attempt).Int("max", maxVoiceTransportAttempts).Err(err).Msg("sink_get_failed")
 			p.sinkProvider.InvalidateSink()
 			if attempt == maxVoiceTransportAttempts {
-				p.markPlaybackFailed(track, failedSnapshot, guildID, errors.Join(ErrSinkUnavailable, fmt.Errorf("get sink: %w", err)))
-				return errors.Join(ErrSinkUnavailable, fmt.Errorf("get sink: %w", err))
+				p.markPlaybackFailed(track, failedSnapshot, guildID, errors.Join(ErrSinkUnavailable, fmt.Errorf("player: get sink: %w", err)))
+				return errors.Join(ErrSinkUnavailable, fmt.Errorf("player: get sink: %w", err))
 			}
 			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
 			continue
@@ -589,8 +589,8 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 			}
 
 			if reopenErr := rs.ReopenAfterTransportFailure(); reopenErr != nil {
-				p.markPlaybackFailed(track, failedSnapshot, guildID, fmt.Errorf("voice transport failed, could not reopen stream: %w", reopenErr))
-				return fmt.Errorf("voice transport failed, could not reopen stream: %w", reopenErr)
+				p.markPlaybackFailed(track, failedSnapshot, guildID, fmt.Errorf("player: voice transport failed, could not reopen stream: %w", reopenErr))
+				return fmt.Errorf("player: voice transport failed, could not reopen stream: %w", reopenErr)
 			}
 			if attempt == maxVoiceTransportAttempts {
 				p.markPlaybackFailed(track, failedSnapshot, guildID, err)
@@ -605,7 +605,7 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 	if err != nil {
 		p.markPlaybackFailed(track, failedSnapshot, guildID, err)
 		p.log.Warn().Err(err).Msg("playback_finished_error")
-		return fmt.Errorf("playback error: %w", err)
+		return fmt.Errorf("player: playback error: %w", err)
 	}
 
 	p.clearIfCurrent(track)

@@ -4,8 +4,8 @@ package sink
 
 import "github.com/keshon/melodix/pkg/music/opus"
 
-// AudioSink consumes a stream of 20ms Opus packets. The sink owns the read loop;
-// Stream returns when the stream ends (io.EOF) or stop is closed.
+// AudioSink consumes a stream of 20ms Opus packets. The sink owns the read
+// loop; Stream returns when the stream ends (io.EOF) or stop is closed.
 type AudioSink interface {
 	Stream(r opus.Reader, stop <-chan struct{}) error
 }
@@ -17,7 +17,7 @@ type Provider interface {
 	// ReleaseSink is called when the player disconnects (e.g. Stop(true)).
 	// Discord uses it to leave the voice channel; CLI can no-op.
 	ReleaseSink(target string)
-	// InvalidateSink drops any cached voice/transport state so the next Sink re-acquires it
-	// (e.g. after gateway reconnect or Opus send failure).
+	// InvalidateSink drops any cached voice/transport state so the next Sink
+	// re-acquires it (e.g. after gateway reconnect or Opus send failure).
 	InvalidateSink()
 }

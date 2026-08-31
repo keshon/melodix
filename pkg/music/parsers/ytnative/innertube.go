@@ -18,13 +18,14 @@ import (
 // youtube source needs the same one; see that package for why the choice is
 // load-bearing rather than cosmetic.
 //
-// Deliberately NO signature/nsig deciphering: the URLs this client returns carry
-// no n parameter to solve, and if that ever changes the answer is to fall
-// through to the yt-dlp fallback, not to grow a JS engine here. When this client
-// can't produce a plain URL it fails fast and the recovery chain moves on.
+// Deliberately NO signature/nsig deciphering: the URLs this client returns
+// carry no n parameter to solve, and if that ever changes the answer is to fall
+// through to the yt-dlp fallback, not to grow a JS engine here. When this
+// client can't produce a plain URL it fails fast and the recovery chain moves
+// on.
 
-// Local aliases keep this package's call sites unchanged while the values have a
-// single definition. clientVersion is quoted in logs and in the live canary.
+// Local aliases keep this package's call sites unchanged while the values have
+// a single definition. clientVersion is quoted in logs and in the live canary.
 const (
 	clientName      = innertube.ClientName
 	clientVersion   = innertube.ClientVersion
@@ -129,9 +130,9 @@ func fetchPlayer(httpc *http.Client, endpoint, videoID string) (*playerResponse,
 	return &pr, nil
 }
 
-// pickOpusFormat returns the highest-bitrate WebM/Opus audio format with a direct
-// URL (itag 251/250/249) that fits under the configured bitrate cap — the
-// passthrough candidate. ok is false if none exist.
+// pickOpusFormat returns the highest-bitrate WebM/Opus audio format with a
+// direct URL (itag 251/250/249) that fits under the configured bitrate cap —
+// the passthrough candidate. ok is false if none exist.
 func pickOpusFormat(formats []format) (format, bool) {
 	var best format
 	for _, f := range withinBitrateCap(formats) {
@@ -182,7 +183,8 @@ var videoIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 
 // extractVideoID handles watch?v=, youtu.be/, shorts/ and live/ URL shapes.
 // Kept local (kkdai has an unexported equivalent) so this package stays
-// self-contained and the fallback parsers can be dropped someday without refactoring.
+// self-contained and the fallback parsers can be dropped someday without
+// refactoring.
 func extractVideoID(rawURL string) (string, error) {
 	s := rawURL
 	for _, marker := range []string{"youtu.be/", "/shorts/", "/live/", "v=", "/embed/"} {

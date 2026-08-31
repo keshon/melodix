@@ -1,9 +1,10 @@
 package sources
 
 // Registry keys for the built-in parsers (this package is the import base for
-// both sources and parsers, so the names live here). These strings are persisted
-// in guild playback history and shown as slash-command choices — treat them as
-// frozen identifiers: never rename an existing key, only add new ones.
+// both sources and parsers, so the names live here). These strings are
+// persisted in guild playback history and shown as slash-command choices —
+// treat them as frozen identifiers: never rename an existing key, only add new
+// ones.
 const (
 	ParserYtnativeLink = "ytnative-link"
 	ParserScnativeLink = "scnative-link"

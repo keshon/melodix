@@ -37,7 +37,8 @@ type Track struct {
 	} `json:"media"`
 }
 
-// ResolveTrack turns a soundcloud.com track URL into track metadata + transcodings.
+// ResolveTrack turns a soundcloud.com track URL into track metadata +
+// transcodings.
 func (c *Client) ResolveTrack(trackURL string) (*Track, error) {
 	var t Track
 	if err := c.getJSON(c.APIBase+"/resolve?url="+url.QueryEscape(trackURL), &t); err != nil {
@@ -59,7 +60,7 @@ func (c *Client) StreamURL(t Transcoding) (string, error) {
 		return "", err
 	}
 	if out.URL == "" {
-		return "", errors.New("soundcloud api: empty stream url")
+		return "", errors.New("soundcloudapi: empty stream url")
 	}
 	return out.URL, nil
 }

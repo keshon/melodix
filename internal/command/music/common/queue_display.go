@@ -8,17 +8,18 @@ import (
 	"github.com/keshon/melodix/pkg/music/parsers"
 )
 
-// queueLinesShown caps how many upcoming tracks a queue view lists. The queue is
-// transient — it drains as tracks play — so the overflow is a count rather than
-// pagination: there is no stable page to come back to.
+// queueLinesShown caps how many upcoming tracks a queue view lists. The queue
+// is transient — it drains as tracks play — so the overflow is a count rather
+// than pagination: there is no stable page to come back to.
 const queueLinesShown = 15
 
-// FormatQueueBody renders the /queue embed body: the now-playing line, the first
-// queueLinesShown upcoming rows, and a remainder count. current may be nil.
+// FormatQueueBody renders the /queue embed body: the now-playing line, the
+// first queueLinesShown upcoming rows, and a remainder count. current may be
+// nil.
 //
-// Queued tracks have not been opened yet, so Title and Duration are whatever the
-// resolver supplied — often an empty title and a zero duration, since parsers
-// fill both at open time. Every field is therefore treated as optional.
+// Queued tracks have not been opened yet, so Title and Duration are whatever
+// the resolver supplied — often an empty title and a zero duration, since
+// parsers fill both at open time. Every field is therefore treated as optional.
 func FormatQueueBody(current *parsers.Track, upcoming []parsers.Track) string {
 	var b strings.Builder
 

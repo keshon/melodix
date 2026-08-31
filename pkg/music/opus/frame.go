@@ -1,7 +1,8 @@
 // Package opus is the audio engine's currency: 20ms Opus packets. It provides a
-// packet Reader, a hand-rolled WebM/Opus demuxer (passthrough), and encode/decode
-// adapters over the pure-Go godeps/opus (libopus-on-WASM). Everything downstream of
-// a parser speaks Opus packets; ffmpeg/PCM is confined to the encode adapter.
+// packet Reader, a hand-rolled WebM/Opus demuxer (passthrough), and
+// encode/decode adapters over the pure-Go godeps/opus (libopus-on-WASM).
+// Everything downstream of a parser speaks Opus packets; ffmpeg/PCM is confined
+// to the encode adapter.
 package opus
 
 // Canonical audio format constants. Discord voice and this engine both use

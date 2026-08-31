@@ -6,8 +6,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// SlashCommandPath builds a space-separated command path from slash interaction options.
-// Example: "settings announce channel-set" or "purge now".
+// SlashCommandPath builds a space-separated command path from slash interaction
+// options. Example: "settings announce channel-set" or "purge now".
 func SlashCommandPath(commandName string, options []*discordgo.ApplicationCommandInteractionDataOption) string {
 	parts := appendSlashOptions([]string{commandName}, options)
 	return strings.Join(parts, " ")

@@ -46,7 +46,7 @@ func (r *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.New("invalid radio URL: " + input)
+		return nil, errors.New("radio: invalid URL: " + input)
 	}
 
 	return []source.TrackInfo{

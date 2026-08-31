@@ -50,7 +50,8 @@ func kkdaiPipe(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 	return r, func() { _ = r.Close() }, nil
 }
 
-// pickOpusFormat returns the highest-bitrate WebM/Opus format (itag 249/250/251).
+// pickOpusFormat returns the highest-bitrate WebM/Opus format (itag
+// 249/250/251).
 func pickOpusFormat(formats youtube.FormatList) (youtube.Format, bool) {
 	var best youtube.Format
 	found := false

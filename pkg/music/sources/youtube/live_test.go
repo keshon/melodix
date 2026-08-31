@@ -19,8 +19,8 @@ func liveFetcher(t *testing.T) *PlaylistFetcher {
 	return NewPlaylistFetcher()
 }
 
-// TestLivePlaylistBrowse is the canary for the /browse path: the renderer shape,
-// the legacy continuation token, and the shared client version.
+// TestLivePlaylistBrowse is the canary for the /browse path: the renderer
+// shape, the legacy continuation token, and the shared client version.
 func TestLivePlaylistBrowse(t *testing.T) {
 	f := liveFetcher(t)
 
@@ -68,10 +68,10 @@ func TestLivePlaylistMix(t *testing.T) {
 	t.Logf("mix %q: %d entries", got.Title, len(got.Entries))
 }
 
-// TestLivePlaylistUnavailable pins the failure shape. It is worth its own canary
-// because the shape is not obvious: an unknown list id comes back as an HTTP
-// 4xx, while the 200-with-ERROR-alert form is reserved for lists YouTube can see
-// but refuses to serve. Both must arrive as ErrPlaylistUnavailable.
+// TestLivePlaylistUnavailable pins the failure shape. It is worth its own
+// canary because the shape is not obvious: an unknown list id comes back as an
+// HTTP 4xx, while the 200-with-ERROR-alert form is reserved for lists YouTube
+// can see but refuses to serve. Both must arrive as ErrPlaylistUnavailable.
 func TestLivePlaylistUnavailable(t *testing.T) {
 	f := liveFetcher(t)
 

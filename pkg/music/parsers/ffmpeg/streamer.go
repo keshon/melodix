@@ -10,7 +10,8 @@ const (
 	sampleRate = 48000
 )
 
-// Streamer plays a URL by handing it directly to ffmpeg (used for radio streams).
+// Streamer plays a URL by handing it directly to ffmpeg (used for radio
+// streams).
 type Streamer struct{}
 
 // Open ignores seekSec — radio streams are live.

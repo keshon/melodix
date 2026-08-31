@@ -3,7 +3,8 @@ package cmdadapter
 import "github.com/bwmarrin/discordgo"
 
 // Responder abstracts interaction replies so commands never import the discord
-// package directly (avoids import cycles); reply.DefaultResponder implements it.
+// package directly (avoids import cycles); reply.DefaultResponder implements
+// it.
 type Responder interface {
 	RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
 	RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
@@ -21,7 +22,8 @@ type SlashProvider interface {
 	SlashDefinition() *discordgo.ApplicationCommand
 }
 
-// ContextMenuProvider is implemented by commands that expose a context-menu definition.
+// ContextMenuProvider is implemented by commands that expose a context-menu
+// definition.
 type ContextMenuProvider interface {
 	ContextDefinition() *discordgo.ApplicationCommand
 }

@@ -315,15 +315,23 @@ part of the same `go test ./...`.
 The convention checks ratchet: `internal/conventions/baseline.json` records
 what each file owed when a rule was introduced, and a rule fails only when a
 file gets **worse**. A new file carries no allowance, so it meets every rule
-in full; a file that already owes something is only required not to owe
-more.
+in full; a file that already owes something is only required not to owe more.
+That is what lets a rule be adopted on a live codebase without a repo-wide
+edit nobody can review.
 
-That last part is a per-file **count**, not a per-line record, and the
-difference is worth knowing: inside a file that already has an allowance you
-can remove one violation and add another without the build noticing. Roughly
-half the tree has an allowance today. Line-exact ratcheting is available off
-the shelf — `golangci-lint run --new-from-merge-base=origin/main` — if that
-trade stops being acceptable.
+**The baseline is currently empty.** All three ratcheted rules hold
+everywhere, so every violation is a real regression rather than a number
+creeping up — which is the state worth defending. It got there by burning the
+debt down (263 violations, in one pass) rather than by lowering the bar, and
+`git log` has the commit if the method is ever needed again.
+
+Two things to know if debt ever returns. It is a per-file **count**, not a
+per-line record: inside a file that has an allowance you could remove one
+violation and add another without the build noticing. And a `git mv` moves a
+file out from under its allowance, which reads as a regression until the
+baseline is re-accepted. Line-exact ratcheting is available off the shelf —
+`golangci-lint run --new-from-merge-base=origin/main` — if either trade stops
+being acceptable.
 
 After fixing violations, lock the gain in:
 

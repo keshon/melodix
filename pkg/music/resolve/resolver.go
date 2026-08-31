@@ -1,4 +1,5 @@
-// Package resolve resolves URLs and search queries to track metadata using configurable sources (YouTube, SoundCloud, radio).
+// Package resolve resolves URLs and search queries to track metadata using
+// configurable sources (YouTube, SoundCloud, radio).
 package resolve
 
 import (
@@ -15,7 +16,8 @@ type Resolver struct {
 	Sources map[string]sources.Source
 }
 
-// New creates a Resolver with the built-in sources (YouTube, SoundCloud, radio).
+// New creates a Resolver with the built-in sources (YouTube, SoundCloud,
+// radio).
 func New() *Resolver {
 	youtubeSource := youtube.New()
 	soundcloudSource := soundcloud.New()
@@ -37,7 +39,7 @@ func (r *Resolver) Resolve(input, selectedSource, selectedParser string) ([]sour
 	if selectedSource != "" {
 		src, ok := r.Sources[selectedSource]
 		if !ok {
-			return nil, errors.New("unknown source: " + selectedSource)
+			return nil, errors.New("resolve: unknown source: " + selectedSource)
 		}
 		selectedParser, err := ensureParser(src, selectedParser)
 		if err != nil {
@@ -46,12 +48,12 @@ func (r *Resolver) Resolve(input, selectedSource, selectedParser string) ([]sour
 
 		if !isURL(input) {
 			if selectedSource != sources.YouTube && selectedSource != sources.SoundCloud {
-				return nil, errors.New("title search is only supported on " + sources.YouTube + " and " + sources.SoundCloud)
+				return nil, errors.New("resolve: title search is only supported on " + sources.YouTube + " and " + sources.SoundCloud)
 			}
 			return src.Resolve(input, selectedParser)
 		}
 		if !src.Match(input) {
-			return nil, errors.New("input does not match selected source: " + selectedSource)
+			return nil, errors.New("resolve: input does not match selected source: " + selectedSource)
 		}
 		return src.Resolve(input, selectedParser)
 	}
@@ -69,9 +71,9 @@ func (r *Resolver) Resolve(input, selectedSource, selectedParser string) ([]sour
 		return yt.Resolve(input, selectedParser)
 	}
 
-	// Deterministic precedence for URL auto-detect (map iteration order is random);
-	// radio stays the final fallback below. A new source must be added here as well
-	// as in New().
+	// Deterministic precedence for URL auto-detect (map iteration order is
+	// random); radio stays the final fallback below. A new source must be added
+	// here as well as in New().
 	for _, typ := range []string{sources.YouTube, sources.SoundCloud} {
 		s, ok := r.Sources[typ]
 		if !ok {
@@ -94,7 +96,7 @@ func (r *Resolver) Resolve(input, selectedSource, selectedParser string) ([]sour
 		return radioSrc.Resolve(input, selectedParser)
 	}
 
-	return nil, errors.New("no matching source found")
+	return nil, errors.New("resolve: no matching source found")
 }
 
 func ensureParser(src sources.Source, selected string) (string, error) {
@@ -103,7 +105,7 @@ func ensureParser(src sources.Source, selected string) (string, error) {
 	}
 	parsers := src.AvailableParsers()
 	if len(parsers) == 0 {
-		return "", errors.New("no parsers available for " + src.SourceName())
+		return "", errors.New("resolve: no parsers available for " + src.SourceName())
 	}
 	return parsers[0], nil
 }

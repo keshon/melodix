@@ -1,7 +1,8 @@
-// Package soundcloudapi is a minimal client for SoundCloud's api-v2 — the API the
-// web player itself uses. It handles the rotating client_id (scraped from the web
-// player's JS bundles, refreshed automatically on 401/403), track resolving, signed
-// stream URLs, and search. Plain net/http + encoding/json, nothing else.
+// Package soundcloudapi is a minimal client for SoundCloud's api-v2 — the API
+// the web player itself uses. It handles the rotating client_id (scraped from
+// the web player's JS bundles, refreshed automatically on 401/403), track
+// resolving, signed stream URLs, and search. Plain net/http + encoding/json,
+// nothing else.
 package soundcloudapi
 
 import (
@@ -41,8 +42,8 @@ func New() *Client {
 
 var defaultClient = sync.OnceValue(New)
 
-// Default returns the process-wide shared client, so the scnative parser and the
-// soundcloud source's searcher reuse one client_id cache.
+// Default returns the process-wide shared client, so the scnative parser and
+// the soundcloud source's searcher reuse one client_id cache.
 func Default() *Client { return defaultClient() }
 
 var (
@@ -83,11 +84,11 @@ func (c *Client) invalidateClientID(failed string) {
 func (c *Client) scrapeClientID() (string, error) {
 	page, err := c.getBody(c.WebBase)
 	if err != nil {
-		return "", fmt.Errorf("soundcloud client_id: fetch web player: %w", err)
+		return "", fmt.Errorf("soundcloudapi: client_id: fetch web player: %w", err)
 	}
 	matches := scriptSrcRe.FindAllStringSubmatch(page, -1)
 	if len(matches) == 0 {
-		return "", fmt.Errorf("soundcloud client_id: no script bundles found")
+		return "", fmt.Errorf("soundcloudapi: client_id: no script bundles found")
 	}
 	for i := len(matches) - 1; i >= 0; i-- {
 		body, err := c.getBody(matches[i][1])
@@ -98,7 +99,7 @@ func (c *Client) scrapeClientID() (string, error) {
 			return m[1], nil
 		}
 	}
-	return "", fmt.Errorf("soundcloud client_id: not found in %d script bundles", len(matches))
+	return "", fmt.Errorf("soundcloudapi: client_id: not found in %d script bundles", len(matches))
 }
 
 func (c *Client) getBody(rawURL string) (string, error) {
@@ -108,7 +109,7 @@ func (c *Client) getBody(rawURL string) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET %s: %s", rawURL, resp.Status)
+		return "", fmt.Errorf("soundcloudapi: GET %s: %s", rawURL, resp.Status)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -146,16 +147,16 @@ func (c *Client) getJSON(rawURL string, v any) error {
 				c.invalidateClientID(id)
 				continue
 			}
-			return fmt.Errorf("soundcloud api: %s after client_id refresh", resp.Status)
+			return fmt.Errorf("soundcloudapi: %s after client_id refresh", resp.Status)
 		}
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
-			return fmt.Errorf("soundcloud api: %s", resp.Status)
+			return fmt.Errorf("soundcloudapi: %s", resp.Status)
 		}
 		err = json.NewDecoder(resp.Body).Decode(v)
 		resp.Body.Close()
 		if err != nil {
-			return fmt.Errorf("soundcloud api: decode response: %w", err)
+			return fmt.Errorf("soundcloudapi: decode response: %w", err)
 		}
 		return nil
 	}

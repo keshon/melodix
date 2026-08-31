@@ -10,7 +10,8 @@ import (
 )
 
 // WithCommandLogger wraps a command to log its execution after Run completes.
-// Logging is best-effort: failures are warned but never affect the command result.
+// Logging is best-effort: failures are warned but never affect the command
+// result.
 func WithCommandLogger(log zerolog.Logger) command.Middleware {
 	return func(c command.Command) command.Command {
 		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
@@ -21,7 +22,8 @@ func WithCommandLogger(log zerolog.Logger) command.Middleware {
 	}
 }
 
-// logInvocation resolves the invocation context and delegates to the injected logger.
+// logInvocation resolves the invocation context and delegates to the injected
+// logger.
 func logInvocation(log zerolog.Logger, cmdName string, inv *command.Invocation) {
 	switch v := inv.Data.(type) {
 	case *cmdadapter.SlashInteractionContext:
@@ -46,7 +48,8 @@ func logInvocation(log zerolog.Logger, cmdName string, inv *command.Invocation) 
 	}
 }
 
-// logInteraction extracts user info from an InteractionCreate event and logs it.
+// logInteraction extracts user info from an InteractionCreate event and logs
+// it.
 func logInteraction(log zerolog.Logger, cmdName string, logger cmdadapter.Logger, s *discordgo.Session, e *discordgo.InteractionCreate) {
 	if logger == nil {
 		return

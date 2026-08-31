@@ -33,8 +33,9 @@ const (
 	silenceBytes = 20
 )
 
-// streamToDiscord forwards 20ms Opus packets to a Discord voice connection until
-// the stream ends (io.EOF) or stop is closed. The caller owns r's lifecycle.
+// streamToDiscord forwards 20ms Opus packets to a Discord voice connection
+// until the stream ends (io.EOF) or stop is closed. The caller owns r's
+// lifecycle.
 func streamToDiscord(appLog zerolog.Logger, r opus.Reader, stop <-chan struct{}, vc *discordgo.VoiceConnection) error {
 	for i := 0; i < warmUpFrames; i++ {
 		if stopped(stop) {
@@ -45,7 +46,8 @@ func streamToDiscord(appLog zerolog.Logger, r opus.Reader, stop <-chan struct{},
 		}
 	}
 
-	// Skip leading near-silent packets (dead air), then send the first audible one.
+	// Skip leading near-silent packets (dead air), then send the first audible
+	// one.
 	var first []byte
 	for skip := 0; skip < maxSilenceFrames; skip++ {
 		if stopped(stop) {
@@ -98,13 +100,15 @@ func endOrErr(err error) error {
 	return err
 }
 
-// opusSendTimeout bounds a single Opus packet send. Frame cadence is 20ms, so a send
-// blocked this long means the voice connection is stalled, not merely slow.
+// opusSendTimeout bounds a single Opus packet send. Frame cadence is 20ms, so a
+// send blocked this long means the voice connection is stalled, not merely
+// slow.
 const opusSendTimeout = 3 * time.Second
 
-// sendOpus sends one packet without blocking forever: it aborts on stop (so Player.Stop
-// can always unblock the streaming goroutine) and surfaces a stalled or closed OpusSend
-// channel as stream.ErrVoiceTransport, feeding the player's transport recovery.
+// sendOpus sends one packet without blocking forever: it aborts on stop (so
+// Player.Stop can always unblock the streaming goroutine) and surfaces a
+// stalled or closed OpusSend channel as stream.ErrVoiceTransport, feeding the
+// player's transport recovery.
 func sendOpus(log zerolog.Logger, vc *discordgo.VoiceConnection, packet []byte, stop <-chan struct{}, timeout time.Duration) (err error) {
 	defer func() {
 		if r := recover(); r != nil { // send on OpusSend closed by disconnect

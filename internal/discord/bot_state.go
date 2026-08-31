@@ -16,7 +16,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired in run.
+// Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired
+// in run.
 type Bot struct {
 	dg        *discordgo.Session
 	storage   *storage.Storage

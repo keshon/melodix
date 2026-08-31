@@ -24,7 +24,8 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 		log:       log,
 		slashCmds: make(map[string][]*discordgo.ApplicationCommand),
 	}
-	// Voice service must outlive a single Discord session so playback/queues survive reconnects.
+	// Voice service must outlive a single Discord session so playback/queues
+	// survive reconnects.
 	b.voice = voice.NewVoiceService(func() *discordgo.Session {
 		b.mu.RLock()
 		s := b.dg
@@ -41,7 +42,8 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 	return b
 }
 
-// stopAllPlayers stops playback and disconnects voice for all guilds. Call on shutdown.
+// stopAllPlayers stops playback and disconnects voice for all guilds. Call on
+// shutdown.
 func (b *Bot) stopAllPlayers() {
 	if b.voice != nil {
 		b.voice.StopAllPlayers()
@@ -53,7 +55,8 @@ func (b *Bot) configureIntents() {
 	b.dg.Identify.Intents = discordgo.IntentsAll
 }
 
-// IsSessionUnhealthyError reports whether an error means we should fast-restart the session.
+// IsSessionUnhealthyError reports whether an error means we should fast-restart
+// the session.
 func IsSessionUnhealthyError(err error) bool {
 	return errors.Is(err, ErrSessionUnhealthy)
 }

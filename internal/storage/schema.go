@@ -19,7 +19,8 @@ func guildRowKey(guildID string, id uint64) string {
 	return fmt.Sprintf("%s:%020d", guildID, id)
 }
 
-// GuildSettings holds per-guild configuration (currently disabled command groups).
+// GuildSettings holds per-guild configuration (currently disabled command
+// groups).
 type GuildSettings struct {
 	GuildID          string   `json:"guild_id"`
 	CommandsDisabled []string `json:"commands_disabled"`

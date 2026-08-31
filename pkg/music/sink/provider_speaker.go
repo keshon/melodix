@@ -2,17 +2,20 @@ package sink
 
 import "github.com/rs/zerolog"
 
-// SpeakerProvider is a Provider that always returns the same SpeakerSink (target ignored).
+// SpeakerProvider is a Provider that always returns the same SpeakerSink
+// (target ignored).
 type SpeakerProvider struct {
 	sink *SpeakerSink
 }
 
-// NewSpeakerProvider creates a provider that returns a single shared speaker sink.
+// NewSpeakerProvider creates a provider that returns a single shared speaker
+// sink.
 func NewSpeakerProvider() *SpeakerProvider {
 	return &SpeakerProvider{sink: NewSpeakerSink()}
 }
 
-// NewSpeakerProviderWithLogger creates a provider that returns a single shared speaker sink with logging.
+// NewSpeakerProviderWithLogger creates a provider that returns a single shared
+// speaker sink with logging.
 func NewSpeakerProviderWithLogger(log zerolog.Logger) *SpeakerProvider {
 	return &SpeakerProvider{sink: NewSpeakerSinkWithLogger(log)}
 }

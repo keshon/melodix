@@ -75,7 +75,8 @@ func main() {
 		log.Fatal().Err(err).Str("dir", cfg.StoragePath).Msg("storage_init_failed")
 	}
 
-	// Optional playback layers (cache + anti-skip buffer), set once before sessions run.
+	// Optional playback layers (cache + anti-skip buffer), set once before
+	// sessions run.
 	if err := musicwire.Apply(cfg, store, log); err != nil {
 		log.Fatal().Err(err).Msg("playback_layers_init_failed")
 	}

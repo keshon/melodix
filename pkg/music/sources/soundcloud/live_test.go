@@ -7,8 +7,8 @@ import (
 )
 
 // Live canary for the search path. api-v2 is an undocumented API behind a
-// rotating client_id, so drift here is a question of when.
-// Opt-in: MELODIX_LIVE_TESTS=1 go test -run Live -v ./pkg/music/sources/soundcloud
+// rotating client_id, so drift here is a question of when. Opt-in:
+// MELODIX_LIVE_TESTS=1 go test -run Live -v ./pkg/music/sources/soundcloud
 
 func TestLiveSearchAndPermalinkRoundTrip(t *testing.T) {
 	if os.Getenv("MELODIX_LIVE_TESTS") == "" {

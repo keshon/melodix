@@ -61,17 +61,19 @@ func lastLines(s string, n int) string {
 	return strings.Join(lines, " | ")
 }
 
-// YtdlpPath is the yt-dlp binary invoked by this parser; override for non-PATH installs.
+// YtdlpPath is the yt-dlp binary invoked by this parser; override for non-PATH
+// installs.
 var YtdlpPath = "yt-dlp"
 
-// audioFormatSelector asks for an audio-only format and settles for a muxed one.
+// audioFormatSelector asks for an audio-only format and settles for a muxed
+// one.
 //
 // The fallback is what makes live streams work at all. A YouTube live broadcast
-// is served as HLS with no audio-only rendition — every format carries video and
-// audio together — so a bare "bestaudio" is answered with "Requested format is
-// not available" and the parser fails. Everything after the first "/" applies
-// only in that case: wherever an audio-only format exists it still wins, so
-// ordinary videos are unaffected.
+// is served as HLS with no audio-only rendition — every format carries video
+// and audio together — so a bare "bestaudio" is answered with "Requested format
+// is not available" and the parser fails. Everything after the first "/"
+// applies only in that case: wherever an audio-only format exists it still
+// wins, so ordinary videos are unaffected.
 //
 // The 360p ceiling on the muxed fallback is about bandwidth we would otherwise
 // throw away. Measured on one live broadcast, the renditions ran 269, 507, 962,
@@ -92,7 +94,8 @@ const (
 	ModePipe
 )
 
-// Streamer extracts audio by shelling out to yt-dlp; the fallback of last resort.
+// Streamer extracts audio by shelling out to yt-dlp; the fallback of last
+// resort.
 type Streamer struct{ Mode Mode }
 
 func (s *Streamer) Open(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {

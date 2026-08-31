@@ -8,7 +8,8 @@ import (
 	"testing"
 )
 
-// scServer serves a homepage+bundle (for client_id) plus the given API handlers.
+// scServer serves a homepage+bundle (for client_id) plus the given API
+// handlers.
 func scServer(t *testing.T, handlers map[string]http.HandlerFunc) (*httptest.Server, *Client) {
 	t.Helper()
 	var srv *httptest.Server

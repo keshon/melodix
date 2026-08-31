@@ -11,10 +11,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// SessionGetter returns the current Discord session (used so providers stay valid across reconnects).
+// SessionGetter returns the current Discord session (used so providers stay
+// valid across reconnects).
 type SessionGetter func() *discordgo.Session
 
-// DiscordSinkProvider implements sink.Provider for a single guild. target is the voice channel ID.
+// DiscordSinkProvider implements sink.Provider for a single guild. target is
+// the voice channel ID.
 type DiscordSinkProvider struct {
 	getSession       SessionGetter
 	guildID          string
@@ -25,7 +27,8 @@ type DiscordSinkProvider struct {
 	currentChannelID string
 }
 
-// NewDiscordSinkProvider creates a sink provider for the given session getter and guild.
+// NewDiscordSinkProvider creates a sink provider for the given session getter
+// and guild.
 func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReadyDelay time.Duration, log zerolog.Logger) *DiscordSinkProvider {
 	if voiceReadyDelay <= 0 {
 		voiceReadyDelay = 500 * time.Millisecond
@@ -38,10 +41,12 @@ func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReady
 	}
 }
 
-// voiceJoinTimeout limits how long we wait for voice connection to become ready (e.g. no permission = no event).
+// voiceJoinTimeout limits how long we wait for voice connection to become ready
+// (e.g. no permission = no event).
 const voiceJoinTimeout = 15 * time.Second
 
-// Sink joins the voice channel (or reuses existing) and returns an AudioSink. target must be non-empty.
+// Sink joins the voice channel (or reuses existing) and returns an AudioSink.
+// target must be non-empty.
 func (p *DiscordSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 	if target == "" {
 		return nil, fmt.Errorf("voice channel ID is required")
@@ -97,8 +102,9 @@ func (p *DiscordSinkProvider) ReleaseSink(target string) {
 	p.currentChannelID = ""
 }
 
-// InvalidateSink clears the cached VoiceConnection without requiring a target match.
-// The next Sink(target) will join again (e.g. after voice WebSocket loss while gateway reconnects).
+// InvalidateSink clears the cached VoiceConnection without requiring a target
+// match. The next Sink(target) will join again (e.g. after voice WebSocket loss
+// while gateway reconnects).
 func (p *DiscordSinkProvider) InvalidateSink() {
 	p.mu.Lock()
 	defer p.mu.Unlock()

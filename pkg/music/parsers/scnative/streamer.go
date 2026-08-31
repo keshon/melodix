@@ -7,6 +7,9 @@ import (
 	"github.com/keshon/melodix/pkg/music/parsers"
 )
 
+// Streamer extracts SoundCloud audio through api-v2; the only SoundCloud
+// parser, and a transcoding one because SoundCloud serves AAC rather than
+// anything forwardable.
 type Streamer struct{}
 
 func (s *Streamer) Open(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {

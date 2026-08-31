@@ -10,7 +10,7 @@ import (
 
 // ProcessStream represents a streaming reader backed by an external process.
 //
-// It reads from the process stdout and tracks its lifecycle. When the underlying
+// It reads from the process stdout and tracks its lifecycle. When the
 // process exits, Read() inspects the exit status:
 //
 //   - If the process exited successfully, io.EOF is returned as-is.

@@ -11,7 +11,8 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-// ErrMusicPlaybackNotFound is returned when no row matches the id (unknown, trimmed, or typo).
+// ErrMusicPlaybackNotFound is returned when no row matches the id (unknown,
+// trimmed, or typo).
 var ErrMusicPlaybackNotFound = errors.New("music playback not found")
 
 func playbackFromTrack(id uint64, guildID string, at time.Time, tp parsers.Track) *PlaybackEntry {
@@ -27,7 +28,8 @@ func playbackFromTrack(id uint64, guildID string, at time.Time, tp parsers.Track
 	}
 }
 
-// TrackInfoFromMusicPlayback rebuilds resolver metadata for enqueue. Current parser is first in AvailableParsers when possible.
+// TrackInfoFromMusicPlayback rebuilds resolver metadata for enqueue. Current
+// parser is first in AvailableParsers when possible.
 func TrackInfoFromMusicPlayback(m PlaybackEntry) sources.TrackInfo {
 	parsersList := slices.Clone(m.AvailableParsers)
 	if m.CurrentParser != "" {
@@ -74,7 +76,8 @@ func (s *Storage) MusicPlayback(guildID string, id uint64) (PlaybackEntry, error
 	return *row, nil
 }
 
-// ListMusicPlaybackTimeline returns persisted rows oldest-first (chronological).
+// ListMusicPlaybackTimeline returns persisted rows oldest-first
+// (chronological).
 func (s *Storage) ListMusicPlaybackTimeline(guildID string) ([]PlaybackEntry, error) {
 	rows := s.playbackByGuild.Find(guildID)
 	out := make([]PlaybackEntry, 0, len(rows))

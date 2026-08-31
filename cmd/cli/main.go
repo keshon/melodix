@@ -1,4 +1,5 @@
-// cmd/cli/main.go — CLI music player using the same playback engine as the Discord bot.
+// cmd/cli/main.go — CLI music player using the same playback engine as the
+// Discord bot.
 package main
 
 import (

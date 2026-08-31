@@ -1,7 +1,8 @@
 // Package cache stores played tracks as blobs of 20ms Opus packets and serves
 // them back on later plays (a global, content-keyed track cache). Blobs are the
 // engine's native currency, so a cached track replays with no extraction and no
-// ffmpeg — instant, and immune to a source changing its internals or going down.
+// ffmpeg — instant, and immune to a source changing its internals or going
+// down.
 package cache
 
 import (
@@ -15,8 +16,8 @@ import (
 // Key returns a stable, source-agnostic content key for a track, or ok=false
 // when the track is not cacheable (radio and anything without a stable id).
 // There is no id field on a track, so the key is derived from the source name
-// plus a normalized URL — the same video/track resolves to one key regardless of
-// URL form, so the cache is shared across guilds and URL variants.
+// plus a normalized URL — the same video/track resolves to one key regardless
+// of URL form, so the cache is shared across guilds and URL variants.
 func Key(track *parsers.Track) (string, bool) {
 	if track == nil {
 		return "", false

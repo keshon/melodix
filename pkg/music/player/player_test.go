@@ -31,7 +31,8 @@ func swapRegistry(t *testing.T, reg map[string]parsers.Streamer) {
 	t.Cleanup(func() { stream.SetRegistry(orig) })
 }
 
-// openLog records which tracks were opened, in order (mutex-guarded for the hammer test).
+// openLog records which tracks were opened, in order (mutex-guarded for the
+// hammer test).
 type openLog struct {
 	mu     sync.Mutex
 	titles []string
@@ -49,8 +50,8 @@ func (l *openLog) list() []string {
 	return append([]string(nil), l.titles...)
 }
 
-// okStreamer serves a short Opus burst (3 real 20ms packets) and fills in a tiny
-// track.Duration so RecoveryStream treats the end as natural.
+// okStreamer serves a short Opus burst (3 real 20ms packets) and fills in a
+// tiny track.Duration so RecoveryStream treats the end as natural.
 func okStreamer(opened *openLog) fakeStreamer {
 	return fakeStreamer{
 		open: func(track *parsers.Track, seek float64) (opus.Reader, func(), error) {
@@ -81,7 +82,8 @@ func testTrack(title string, parserNames ...string) sources.TrackInfo {
 	}
 }
 
-// fakeSink drains the stream to EOF ("drain") or blocks until stop closes ("block").
+// fakeSink drains the stream to EOF ("drain") or blocks until stop closes
+// ("block").
 type fakeSink struct {
 	block bool
 }
@@ -108,7 +110,8 @@ type fakeProvider struct {
 	sink     sink.AudioSink
 	sinkErr  error
 	releases int
-	// releaseCh receives one signal per ReleaseSink call (buffered; drops when full).
+	// releaseCh receives one signal per ReleaseSink call (buffered; drops when
+	// full).
 	releaseCh chan struct{}
 }
 
@@ -167,7 +170,8 @@ func TestPlayAndAutoAdvance(t *testing.T) {
 	provider := newFakeProvider(&fakeSink{})
 	p := New(provider, fakeResolver{})
 
-	// Count Playing statuses live: one per started track proves auto-advance reached track 2.
+	// Count Playing statuses live: one per started track proves auto-advance
+	// reached track 2.
 	var playingMu sync.Mutex
 	playing := 0
 	stopCollect := make(chan struct{})
@@ -289,7 +293,8 @@ func TestAllTracksFailToStart(t *testing.T) {
 	}
 }
 
-// TestConcurrentHammer races the public API; the assertion is clean completion under -race.
+// TestConcurrentHammer races the public API; the assertion is clean completion
+// under -race.
 func TestConcurrentHammer(t *testing.T) {
 	swapRegistry(t, map[string]parsers.Streamer{"ok": okStreamer(nil)})
 	provider := newFakeProvider(&fakeSink{})

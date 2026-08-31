@@ -27,7 +27,8 @@ func AppendSlashSubcommands(sb *strings.Builder, commandName string, options []*
 	}
 }
 
-// FormatCommandWithSubcommands returns help text for a command including nested subcommands.
+// FormatCommandWithSubcommands returns help text for a command including nested
+// subcommands.
 func FormatCommandWithSubcommands(c command.Command) string {
 	var sb strings.Builder
 	sb.WriteString(FormatCommandEntry(c))

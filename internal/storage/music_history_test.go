@@ -14,9 +14,12 @@ import (
 )
 
 // Manual verification (Discord):
-// - Play the same URL twice; timeline shows two lines with different ids and times; counts shows one row with count 2.
-// - Replay from counts row uses the representative id after bot restart; ids and list survive restart.
-// - Trim: with many plays, oldest ids return ErrMusicPlaybackNotFound on replay.
+//   - Play the same URL twice; the timeline shows two lines with different
+//     ids and times, while counts shows one row with count 2.
+//   - Replay from a counts row uses the representative id after a restart;
+//     ids and list survive it.
+//   - Trim: with many plays, the oldest ids return ErrMusicPlaybackNotFound
+//     on replay.
 
 func newTestStorage(t *testing.T) *Storage {
 	t.Helper()

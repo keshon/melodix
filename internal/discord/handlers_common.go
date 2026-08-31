@@ -41,9 +41,10 @@ func (b *Bot) runWithCommandContext(opts commandRunOptions, fn func(cmdCtx conte
 	}
 }
 
-// runGuardedInteraction runs a slash/component interaction under the bot's command guard.
-// kind is the dispatch kind ("slash" or "component"); name is the resolved command name.
-// Both end up as structured fields ("kind", "command") on every emitted log event.
+// runGuardedInteraction runs a slash/component interaction under the bot's
+// command guard. kind is the dispatch kind ("slash" or "component"); name is
+// the resolved command name. Both end up as structured fields ("kind",
+// "command") on every emitted log event.
 func (b *Bot) runGuardedInteraction(
 	s *discordgo.Session,
 	i *discordgo.InteractionCreate,

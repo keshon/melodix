@@ -27,8 +27,8 @@ func NewLogger(s *discordgo.Session, store *storage.Storage, log zerolog.Logger)
 // Ensure Logger satisfies the discord.Logger interface at compile time.
 var _ cmdadapter.Logger = (*Logger)(nil)
 
-// LogCommand records a command execution to storage, resolving channel and guild
-// names from Discord state (falling back to an API call when not cached).
+// LogCommand records a command execution to storage, resolving channel and
+// guild names from Discord state (falling back to an API call when not cached).
 func (l *Logger) LogCommand(guildID, channelID, userID, username, commandName string) error {
 	channelName := l.resolveChannelName(channelID)
 	guildName := l.resolveGuildName(guildID)
@@ -41,7 +41,7 @@ func (l *Logger) resolveChannelName(channelID string) string {
 	if err != nil {
 		ch, err = l.session.Channel(channelID)
 		if err != nil {
-			l.log.Warn().Str("channel_id", channelID).Err(err).Msg("failed to resolve channel name")
+			l.log.Warn().Str("channel_id", channelID).Err(err).Msg("channel_name_resolve_failed")
 			return ""
 		}
 	}
@@ -53,7 +53,7 @@ func (l *Logger) resolveGuildName(guildID string) string {
 	if err != nil {
 		g, err = l.session.Guild(guildID)
 		if err != nil {
-			l.log.Warn().Str("guild_id", guildID).Err(err).Msg("failed to resolve guild name")
+			l.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_name_resolve_failed")
 			return ""
 		}
 	}

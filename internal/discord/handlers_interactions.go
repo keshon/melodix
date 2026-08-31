@@ -9,7 +9,8 @@ import (
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
-// onInteractionCreate dispatches slash commands, context menu commands, and component interactions.
+// onInteractionCreate dispatches slash commands, context menu commands, and
+// component interactions.
 func (b *Bot) onInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
@@ -94,7 +95,8 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 }
 
 // matchesComponentID reports whether a component customID belongs to a command.
-// CustomIDs follow the convention "commandName", "commandName:...", or "commandName_...".
+// CustomIDs follow the convention "commandName", "commandName:...", or
+// "commandName_...".
 func matchesComponentID(customID, commandName string) bool {
 	if customID == commandName {
 		return true

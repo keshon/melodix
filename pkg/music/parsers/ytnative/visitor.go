@@ -11,12 +11,13 @@ import (
 	"time"
 )
 
-// visitorData is InnerTube's anonymous session identity. Without it every player
-// request looks like a brand-new client with no history, which is one of the
-// signals behind LOGIN_REQUIRED ("Sign in to confirm you're not a bot") -- the
-// failure this package hits first. It is bootstrapped from the YouTube home
+// visitorData is InnerTube's anonymous session identity. Without it every
+// player request looks like a brand-new client with no history, which is one of
+// the signals behind LOGIN_REQUIRED ("Sign in to confirm you're not a bot") --
+// the failure this package hits first. It is bootstrapped from the YouTube home
 // page's ytcfg blob and refreshed from any player response that carries one, so
-// a long-running bot keeps one identity instead of minting a fresh one per call.
+// a long-running bot keeps one identity instead of minting a fresh one per
+// call.
 //
 // This is a plausibility fix, not a guarantee: LOGIN_REQUIRED is also driven by
 // IP reputation, which no header can undo. Failing to obtain an id is therefore
@@ -47,10 +48,11 @@ var visitor struct {
 var visitorDataRe = regexp.MustCompile(`"visitorData":"([^"]+)"`)
 
 // visitorID returns the cached id, bootstrapping one when the cache is empty or
-// stale. It returns "" when none could be obtained; callers then proceed without
-// one. The HTTP call happens under the lock, which serializes a concurrent first
-// play across guilds for at most httpc's timeout -- acceptable given it runs
-// once per visitorTTL on success and once per visitorRetryWait on failure.
+// stale. It returns "" when none could be obtained; callers then proceed
+// without one. The HTTP call happens under the lock, which serializes a
+// concurrent first play across guilds for at most httpc's timeout -- acceptable
+// given it runs once per visitorTTL on success and once per visitorRetryWait on
+// failure.
 func visitorID(httpc *http.Client) string {
 	visitor.mu.Lock()
 	defer visitor.mu.Unlock()

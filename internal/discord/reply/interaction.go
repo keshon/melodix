@@ -12,8 +12,8 @@ import (
 
 const EmbedColor = 0xb01e66
 
-// responder implements command.Responder so commands can reply without importing
-// the discord package directly (avoids import cycles).
+// responder implements command.Responder so commands can reply without
+// importing the discord package directly (avoids import cycles).
 type responder struct{}
 
 func (responder) RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
@@ -27,13 +27,15 @@ func (responder) CheckBotPermissions(s *discordgo.Session, channelID string) boo
 }
 func (responder) EmbedColor() int { return EmbedColor }
 
-// DefaultResponder is injected into command contexts so commands never import discord directly.
+// DefaultResponder is injected into command contexts so commands never import
+// discord directly.
 var DefaultResponder cmdadapter.Responder = responder{}
 
 // --- Interaction responses ---
 
-// isAlreadyAcknowledged reports whether an interaction was already ACK'd/responded to.
-// In that case, we must use InteractionResponseEdit or followups instead of InteractionRespond.
+// isAlreadyAcknowledged reports whether an interaction was already
+// ACK'd/responded to. In that case, we must use InteractionResponseEdit or
+// followups instead of InteractionRespond.
 func isAlreadyAcknowledged(err error) bool {
 	if err == nil {
 		return false
@@ -45,7 +47,8 @@ func isAlreadyAcknowledged(err error) bool {
 		strings.Contains(msg, "Interaction has already been acknowledged")
 }
 
-// AckDeferred sends a fast public ACK for slash interactions and ignores duplicate ACK errors.
+// AckDeferred sends a fast public ACK for slash interactions and ignores
+// duplicate ACK errors.
 func AckDeferred(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -84,8 +87,8 @@ func RespondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, cont
 		return nil
 	}
 	if isAlreadyAcknowledged(err) {
-		// Editing an existing (likely public) deferred response cannot turn it ephemeral,
-		// so we fall back to an ephemeral followup.
+		// Editing an existing (likely public) deferred response cannot turn it
+		// ephemeral, so we fall back to an ephemeral followup.
 		return FollowupEphemeral(s, i, content)
 	}
 	return err
@@ -155,7 +158,8 @@ func RespondEmbedEphemeralWithFile(
 	return err
 }
 
-// RespondDeferredEphemeral acknowledges an interaction ephemerally without an immediate reply.
+// RespondDeferredEphemeral acknowledges an interaction ephemerally without an
+// immediate reply.
 func RespondDeferredEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,

@@ -20,7 +20,8 @@ type SpeakerSink struct {
 	log       zerolog.Logger
 }
 
-// NewSpeakerSink creates a new speaker sink. The oto context is created lazily on first Stream().
+// NewSpeakerSink creates a new speaker sink. The oto context is created lazily
+// on first Stream().
 func NewSpeakerSink() *SpeakerSink {
 	return NewSpeakerSinkWithLogger(zerolog.Nop())
 }
@@ -54,8 +55,8 @@ func (s *SpeakerSink) ensureContext() error {
 	return nil
 }
 
-// Stream decodes the Opus packets to PCM and plays them. Returns when the stream
-// ends or stop is closed.
+// Stream decodes the Opus packets to PCM and plays them. Returns when the
+// stream ends or stop is closed.
 func (s *SpeakerSink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	if err := s.ensureContext(); err != nil {
 		return err
@@ -79,7 +80,8 @@ func (s *SpeakerSink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	return nil
 }
 
-// speakerStopReader wraps a reader and makes Read return (0, io.EOF) when stop is closed.
+// speakerStopReader wraps a reader and makes Read return (0, io.EOF) when stop
+// is closed.
 type speakerStopReader struct {
 	r    io.Reader
 	stop <-chan struct{}
@@ -103,7 +105,8 @@ func (s *speakerStopReader) Read(p []byte) (n int, err error) {
 	}
 }
 
-// Close releases the oto context. Call when the CLI exits to free the audio device.
+// Close releases the oto context. Call when the CLI exits to free the audio
+// device.
 func (s *SpeakerSink) Close() error {
 	s.contextMu.Lock()
 	defer s.contextMu.Unlock()

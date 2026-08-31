@@ -13,9 +13,9 @@ import (
 	"github.com/keshon/melodix/pkg/music/innertube"
 )
 
-// Playlist expansion goes through InnerTube rather than page scraping: the watch
-// and playlist pages moved to a "view model" JSON shape that carries no stable
-// video list, while the API still answers with the classic renderers.
+// Playlist expansion goes through InnerTube rather than page scraping: the
+// watch and playlist pages moved to a "view model" JSON shape that carries no
+// stable video list, while the API still answers with the classic renderers.
 //
 // Two endpoints are needed because YouTube treats the two kinds of list
 // differently. A real playlist (PL…, UU… channel uploads, LL…) is a stored,
@@ -58,8 +58,8 @@ type PlaylistResult struct {
 	Entries []PlaylistEntry
 }
 
-// PlaylistFetcher expands a YouTube list id into entries. BaseURL and Client are
-// fields so tests can point it at an httptest server, matching Searcher.
+// PlaylistFetcher expands a YouTube list id into entries. BaseURL and Client
+// are fields so tests can point it at an httptest server, matching Searcher.
 type PlaylistFetcher struct {
 	BaseURL string
 	Client  *http.Client
@@ -163,12 +163,12 @@ func (p *PlaylistFetcher) fetchPlaylist(listID string) (PlaylistResult, error) {
 
 // fetchMix reads a generated mix from /next.
 //
-// This one call uses the WEB client rather than the shared one: VISIONOS answers
-// /next without any playlist panel, so a mix comes back empty. WEB is not a
-// second maintenance knob in practice — it is the site itself, and it still
-// serves this endpoint against a clientVersion from 2022, whereas app clients
-// get retired. The CDN's per-issuing-client rules do not apply here: nothing in
-// this response is a stream URL.
+// This one call uses the WEB client rather than the shared one: VISIONOS
+// answers /next without any playlist panel, so a mix comes back empty. WEB is
+// not a second maintenance knob in practice — it is the site itself, and it
+// still serves this endpoint against a clientVersion from 2022, whereas app
+// clients get retired. The CDN's per-issuing-client rules do not apply here:
+// nothing in this response is a stream URL.
 func (p *PlaylistFetcher) fetchMix(listID, seedVideoID string) (PlaylistResult, error) {
 	body := map[string]any{
 		"context": map[string]any{"client": map[string]any{

@@ -1,4 +1,5 @@
-// Package applog configures the process-wide zerolog root (console + optional rotated JSON file).
+// Package applog configures the process-wide zerolog root (console + optional
+// rotated JSON file).
 package applog
 
 import (
@@ -11,8 +12,9 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Setup builds a zerolog.Logger: pretty JSON lines to stderr via ConsoleWriter, and if cfg.LogFile
-// is set, the same JSON events to a rotated file. service is stored on every event (e.g. discord, cli).
+// Setup builds a zerolog.Logger: pretty JSON lines to stderr via ConsoleWriter,
+// and if cfg.LogFile is set, the same JSON events to a rotated file. service is
+// stored on every event (e.g. discord, cli).
 func Setup(service string, cfg *config.Config) zerolog.Logger {
 	_ = service
 	level, err := zerolog.ParseLevel(cfg.LogLevel)

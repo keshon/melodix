@@ -9,10 +9,10 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-// Track is the playback entity that flows through the queue, parsers, and sinks.
-// It starts as a thin copy of the resolver's TrackInfo; parsers fill in Title,
-// Artist and Duration at open time, and recovery updates CurrentParser as
-// fallbacks engage.
+// Track is the playback entity that flows through the queue, parsers, and
+// sinks. It starts as a thin copy of the resolver's TrackInfo; parsers fill in
+// Title, Artist and Duration at open time, and recovery updates CurrentParser
+// as fallbacks engage.
 type Track struct {
 	URL      string
 	Title    string
@@ -21,8 +21,8 @@ type Track struct {
 	// CurrentParser is the registry key of the parser currently playing this
 	// track (starts as the first preference, updated by recovery fallback).
 	CurrentParser string
-	// Passthrough is true when the active stream forwards native Opus packets
-	// with no ffmpeg/transcode (set by the parser at open time; reset per attempt).
+	// Passthrough is true when the active stream forwards native Opus packets with
+	// no ffmpeg/transcode (set by the parser at open time; reset per attempt).
 	Passthrough bool
 	// Cached is true when the active stream is served from the local track cache
 	// (set by RecoveryStream at open; not persisted).

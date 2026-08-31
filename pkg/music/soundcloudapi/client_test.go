@@ -8,7 +8,8 @@ import (
 	"testing"
 )
 
-// newTestClient points a Client at the given test server for both web and API bases.
+// newTestClient points a Client at the given test server for both web and API
+// bases.
 func newTestClient(srv *httptest.Server) *Client {
 	return &Client{
 		HTTP:    srv.Client(),

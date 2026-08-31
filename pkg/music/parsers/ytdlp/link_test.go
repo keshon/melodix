@@ -29,8 +29,9 @@ func TestHeaderValue(t *testing.T) {
 	}
 }
 
-// Guards the json tags against a yt-dlp output change: the UA has to survive the
-// decode, or ffmpeg silently goes back to asking googlevideo as Lavf/… and 403s.
+// Guards the json tags against a yt-dlp output change: the UA has to survive
+// the decode, or ffmpeg silently goes back to asking googlevideo as Lavf/… and
+// 403s.
 func TestYtdlpInfo_DecodesHTTPHeaders(t *testing.T) {
 	const payload = `{
 		"duration": 244.0,

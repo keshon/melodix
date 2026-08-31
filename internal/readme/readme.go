@@ -16,9 +16,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// RecommendedBotPermissions is the bitmask for the minimal permissions the bot needs.
-// Used in the OAuth2 invite URL so the generated README shows the correct link.
-// Combines: View Channel, Send Messages, Embed Links, Read Message History, Manage Messages.
+// RecommendedBotPermissions is the bitmask for the minimal permissions the bot
+// needs. Used in the OAuth2 invite URL so the generated README shows the
+// correct link. Combines: View Channel, Send Messages, Embed Links, Read
+// Message History, Manage Messages.
 var RecommendedBotPermissions = discordgo.PermissionManageRoles |
 	discordgo.PermissionViewChannel |
 	discordgo.PermissionSendMessages |
@@ -28,7 +29,8 @@ var RecommendedBotPermissions = discordgo.PermissionManageRoles |
 	discordgo.PermissionManageMessages |
 	discordgo.PermissionUseApplicationCommands
 
-// RecommendedBotPermissionsList is a human-readable list of these permissions for the README.
+// RecommendedBotPermissionsList is a human-readable list of these permissions
+// for the README.
 var RecommendedBotPermissionsList = []string{
 	"View Channel",
 	"Send Messages",
@@ -37,8 +39,8 @@ var RecommendedBotPermissionsList = []string{
 	"Manage Messages",
 }
 
-// UpdateReadme generates README.md from the command registry and category ordering.
-// categoryWeights maps category name to sort order (lower first).
+// UpdateReadme generates README.md from the command registry and category
+// ordering. categoryWeights maps category name to sort order (lower first).
 func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, log zerolog.Logger) error {
 	commands := registry.GetAll()
 

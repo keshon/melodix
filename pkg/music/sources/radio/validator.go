@@ -36,7 +36,7 @@ func NewValidator() *Validator {
 			// routinely redirect once or twice to a regional edge, never five.
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 5 {
-					return fmt.Errorf("too many redirects")
+					return fmt.Errorf("radio: too many redirects")
 				}
 				return nil
 			},
@@ -44,11 +44,12 @@ func NewValidator() *Validator {
 	}
 }
 
-// IsValidURL checks stream validity based on headers, content-type, and file extension heuristics.
+// IsValidURL checks stream validity based on headers, content-type, and file
+// extension heuristics.
 func (r *Validator) IsValidURL(rawURL string) (bool, string, error) {
 	contentType, finalURL, err := r.fetchContentType(rawURL)
 	if err != nil {
-		return false, "", fmt.Errorf("failed to fetch content type: %w", err)
+		return false, "", fmt.Errorf("radio: fetch content type: %w", err)
 	}
 
 	if r.isAllowedType(contentType) || r.isLikelyPlaylist(finalURL) {
@@ -58,13 +59,13 @@ func (r *Validator) IsValidURL(rawURL string) (bool, string, error) {
 	// The rejected content-type and the post-redirect URL both go in the error:
 	// this is the one place a user finds out why their station link was refused,
 	// and "invalid stream" alone leaves nothing to act on.
-	return false, contentType, fmt.Errorf("invalid stream content-type: %q, url: %s", contentType, finalURL)
+	return false, contentType, fmt.Errorf("radio: invalid stream content-type: %q, url: %s", contentType, finalURL)
 }
 
 func (r *Validator) fetchContentType(rawURL string) (string, string, error) {
 	req, err := http.NewRequest(http.MethodHead, rawURL, nil)
 	if err != nil {
-		return "", "", fmt.Errorf("request creation failed: %w", err)
+		return "", "", fmt.Errorf("radio: build request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
@@ -77,7 +78,7 @@ func (r *Validator) fetchContentType(rawURL string) (string, string, error) {
 		req.Method = http.MethodGet
 		resp, err = r.Client.Do(req)
 		if err != nil {
-			return "", "", fmt.Errorf("GET fallback failed: %w", err)
+			return "", "", fmt.Errorf("radio: GET fallback: %w", err)
 		}
 		defer resp.Body.Close()
 		_, _ = io.Copy(io.Discard, resp.Body) // drain the body

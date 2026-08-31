@@ -148,8 +148,8 @@ func TestRecoveryStream_ParserConfirmed_NamesThePlayingParser(t *testing.T) {
 	}
 }
 
-// A transport reopen re-confirms, so the parser reported to the player is always
-// the live one rather than a stale memory of the first open.
+// A transport reopen re-confirms, so the parser reported to the player is
+// always the live one rather than a stale memory of the first open.
 func TestRecoveryStream_ReopenAfterTransportFailure_ReConfirms(t *testing.T) {
 	orig := SetRegistry(map[string]parsers.Streamer{
 		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {

@@ -81,8 +81,8 @@ func (b *BufferedReader) Stop() {
 func (b *BufferedReader) Wait() { b.wg.Wait() }
 
 // Close stops read-ahead, closes the source, and waits for the goroutine to
-// exit. For standalone use; when composed into a RecoveryStream the caller pairs
-// Stop with the parser's own cleanup instead.
+// exit. For standalone use; when composed into a RecoveryStream the caller
+// pairs Stop with the parser's own cleanup instead.
 func (b *BufferedReader) Close() error {
 	b.Stop()
 	err := b.src.Close()

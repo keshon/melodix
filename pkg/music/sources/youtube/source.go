@@ -80,13 +80,13 @@ func (y *Source) Resolve(input string, selectedParser string) ([]source.TrackInf
 	}
 
 	if source.IsURL(input) {
-		return nil, errors.New("invalid YouTube URL format")
+		return nil, errors.New("youtube: invalid URL format")
 	}
 
 	// by title
 	hits, err := y.searcher.Search(input, 1)
 	if err != nil || len(hits) == 0 {
-		return nil, errors.New("could not find YouTube video for query")
+		return nil, errors.New("youtube: no video found for query")
 	}
 
 	// Title is the video's own, not the query the user typed: the queue and the

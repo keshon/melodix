@@ -10,15 +10,15 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-// Music status embeds shared by the slash handlers (synchronous updates) and the
-// voice service's per-player status watcher (async updates: auto-advance, queue end).
-// They live here because voice.Service cannot import internal/command/music/common
-// without an import cycle.
+// Music status embeds shared by the slash handlers (synchronous updates) and
+// the voice service's per-player status watcher (async updates: auto-advance,
+// queue end). They live here because voice.Service cannot import
+// internal/command/music/common without an import cycle.
 
-// NowPlayingEmbed builds the guild music status embed for a track that just started:
-// a title/link line plus a line of inline-code "chips" (source · parser, duration or
-// `live` for radio, artist when known). Embeds don't render -# subtext, so code spans
-// are the chip look Discord gives us.
+// NowPlayingEmbed builds the guild music status embed for a track that just
+// started: a title/link line plus a line of inline-code "chips" (source ·
+// parser, duration or `live` for radio, artist when known). Embeds don't render
+// -# subtext, so code spans are the chip look Discord gives us.
 func NowPlayingEmbed(track *parsers.Track) *discordgo.MessageEmbed {
 	var title, url string
 	if track != nil {

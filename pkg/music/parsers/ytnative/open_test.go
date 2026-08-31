@@ -14,10 +14,11 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-// These cover ytnativeLink itself rather than fetchPlayer, which is the gap that
-// let a broken live-stream gate ship: every existing test — the unit ones and
-// the opt-in live ones both — called fetchPlayer and pickOpusFormat directly,
-// so a check sitting between them and the caller was exercised by nothing.
+// These cover ytnativeLink itself rather than fetchPlayer, which is the gap
+// that let a broken live-stream gate ship: every existing test — the unit ones
+// and the opt-in live ones both — called fetchPlayer and pickOpusFormat
+// directly, so a check sitting between them and the caller was exercised by
+// nothing.
 
 // withPlayerResponse points ytnativeLink at a stub player endpoint returning
 // body, and restores the real one afterwards.
@@ -42,8 +43,8 @@ func testTrack() *parsers.Track {
 
 // vodPlayerResponse is the shape VISIONOS actually returns for an ordinary
 // video: playable, a real duration, and — the part that matters — an
-// hlsManifestUrl sitting right next to usable Opus formats. Verified against the
-// live API on a 213-second music video.
+// hlsManifestUrl sitting right next to usable Opus formats. Verified against
+// the live API on a 213-second music video.
 const vodPlayerResponse = `{
 	"playabilityStatus": {"status": "OK"},
 	"videoDetails": {"title": "A Song", "lengthSeconds": "213", "isLiveContent": false},

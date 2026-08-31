@@ -1,5 +1,6 @@
-// Package playbackerr holds shared formatting for user-visible playback errors (Discord embeds, etc.).
-// Kept separate from internal/command/music/common to avoid import cycles with internal/discord/voice.
+// Package playbackerr holds shared formatting for user-visible playback errors
+// (Discord embeds, etc.). Kept separate from internal/command/music/common to
+// avoid import cycles with internal/discord/voice.
 package playbackerr
 
 // String applies a rune-length cap suitable for Discord embed descriptions.

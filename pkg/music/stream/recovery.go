@@ -24,8 +24,8 @@ const (
 // RecoveryStream wraps a parser's Opus packet stream and auto-recovers on early
 // termination (flaky media, not Discord transport — that's handled by the
 // player/sink layer). It is the engine's packet source: ReadPacket yields the
-// next 20ms Opus packet with recovery applied; Read/Close expose the same stream
-// as decoded PCM (io.ReadCloser) for consumers that still want samples.
+// next 20ms Opus packet with recovery applied; Read/Close expose the same
+// stream as decoded PCM (io.ReadCloser) for consumers that still want samples.
 type RecoveryStream struct {
 	track       *parsers.Track
 	parserIndex int
@@ -69,7 +69,8 @@ func NewRecoveryStream(track *parsers.Track) *RecoveryStream {
 	return NewRecoveryStreamWithLogger(track, zerolog.Nop())
 }
 
-// NewRecoveryStreamWithLogger creates a resilient wrapper using the given logger.
+// NewRecoveryStreamWithLogger creates a resilient wrapper using the given
+// logger.
 func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *RecoveryStream {
 	return &RecoveryStream{
 		track:     track,
@@ -80,15 +81,15 @@ func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *Reco
 }
 
 // SetOnParserConfirmed registers a callback fired when a stream first yields a
-// packet (see confirmOpen). Call before the first ReadPacket; not safe to change
-// once packets are flowing.
+// packet (see confirmOpen). Call before the first ReadPacket; not safe to
+// change once packets are flowing.
 func (rs *RecoveryStream) SetOnParserConfirmed(fn func(parser string)) {
 	rs.onParserConfirmed = fn
 }
 
 // Open acquires the packet stream for the current parser, advancing through the
-// track's parser list past any that fail or exhausted their recovery budget.
-// A successful Open is NOT proof that audio will flow: the ffmpeg-backed parsers
+// track's parser list past any that fail or exhausted their recovery budget. A
+// successful Open is NOT proof that audio will flow: the ffmpeg-backed parsers
 // only spawn a process here, so a CDN 403 surfaces later, on the first read.
 // confirmOpen is where a parser is known to be playing.
 func (rs *RecoveryStream) Open(seek float64) error {
@@ -140,7 +141,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		rs.log.Info().Str("parser", parser).Float64("seek", seek).Msg("stream_opening")
 		return nil
 	}
-	return errors.New("all parsers failed or exceeded recovery attempts")
+	return errors.New("stream: all parsers failed or exceeded recovery attempts")
 }
 
 // startCacheWrite begins caching a clean from-start play of an as-yet-uncached
@@ -195,7 +196,7 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 		reader := rs.reader
 		rs.mu.Unlock()
 		if reader == nil {
-			return nil, errors.New("stream not opened")
+			return nil, errors.New("stream: not opened")
 		}
 		pkt, err := reader.ReadPacket()
 		if err == nil {
@@ -291,7 +292,8 @@ func (rs *RecoveryStream) confirmOpen() {
 	}
 }
 
-// Read exposes the recovered packet stream as decoded PCM (s16le, 48kHz stereo).
+// Read exposes the recovered packet stream as decoded PCM (s16le, 48kHz
+// stereo).
 func (rs *RecoveryStream) Read(p []byte) (int, error) {
 	if rs.pcm == nil {
 		rs.pcm = opus.DecodeReader(packetView{rs})
@@ -364,7 +366,8 @@ func (rs *RecoveryStream) reopen(cause error) error {
 }
 
 // ReopenAfterTransportFailure reopens the media stream at the current position
-// (e.g. after a Discord voice reconnect); does not count against parser recovery.
+// (e.g. after a Discord voice reconnect); does not count against parser
+// recovery.
 func (rs *RecoveryStream) ReopenAfterTransportFailure() error {
 	rs.closeCurrent()
 	return rs.Open(rs.seekSec)

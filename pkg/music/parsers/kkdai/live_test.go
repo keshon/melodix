@@ -9,11 +9,12 @@ import (
 )
 
 // kkdai resolves through the real YouTube API, so there is no useful seam short
-// of the network — these are opt-in via MELODIX_LIVE_TESTS=1. They exist because
-// both kkdai paths once carried a gate on video.HLSManifestURL, which is not a
-// live-broadcast signal under the VISIONOS client this parser rides: Apple
-// clients attach an HLS manifest to ordinary VOD, so the gate refused every
-// playable track and caught no live one. Nothing at the time exercised Open.
+// of the network — these are opt-in via MELODIX_LIVE_TESTS=1. They exist
+// because both kkdai paths once carried a gate on video.HLSManifestURL, which
+// is not a live-broadcast signal under the VISIONOS client this parser rides:
+// Apple clients attach an HLS manifest to ordinary VOD, so the gate refused
+// every playable track and caught no live one. Nothing at the time exercised
+// Open.
 
 const vodURL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 

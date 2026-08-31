@@ -6,9 +6,10 @@ import (
 	"testing"
 )
 
-// TestLiveSoundCloudPipeline hits the real SoundCloud endpoints: client_id scrape →
-// search → resolve → transcoding pick → signed stream URL → HTTP reachability.
-// Opt-in (network + third-party dependent): MELODIX_LIVE_TESTS=1 go test -run Live -v ./pkg/music/soundcloudapi
+// TestLiveSoundCloudPipeline hits the real SoundCloud endpoints: client_id
+// scrape → search → resolve → transcoding pick → signed stream URL → HTTP
+// reachability. Opt-in (network + third-party dependent): MELODIX_LIVE_TESTS=1
+// go test -run Live -v ./pkg/music/soundcloudapi
 func TestLiveSoundCloudPipeline(t *testing.T) {
 	if os.Getenv("MELODIX_LIVE_TESTS") == "" {
 		t.Skip("set MELODIX_LIVE_TESTS=1 to hit real SoundCloud")

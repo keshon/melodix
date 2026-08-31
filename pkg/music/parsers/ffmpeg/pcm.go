@@ -10,7 +10,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// FFmpegPath is the ffmpeg binary invoked by all parsers; override for non-PATH installs.
+// FFmpegPath is the ffmpeg binary invoked by all parsers; override for non-PATH
+// installs.
 var FFmpegPath = "ffmpeg"
 
 var logPtr atomic.Pointer[zerolog.Logger]
@@ -28,11 +29,11 @@ func logger() zerolog.Logger {
 	return zerolog.Nop()
 }
 
-// NewPCMCommand builds the ffmpeg invocation shared by all parsers: decode input
-// (a URL or "pipe:0") to raw PCM s16le 48kHz stereo on stdout. reconnect adds HTTP
-// reconnect flags (URL inputs only). Stderr is classified and logged line-by-line
-// under tag via the package logger; exec.Cmd owns the stderr copy and Wait
-// synchronizes with it, so there is no StderrPipe-vs-Wait race.
+// NewPCMCommand builds the ffmpeg invocation shared by all parsers: decode
+// input (a URL or "pipe:0") to raw PCM s16le 48kHz stereo on stdout. reconnect
+// adds HTTP reconnect flags (URL inputs only). Stderr is classified and logged
+// line-by-line under tag via the package logger; exec.Cmd owns the stderr copy
+// and Wait synchronizes with it, so there is no StderrPipe-vs-Wait race.
 func NewPCMCommand(input string, seekSec float64, reconnect bool, tag string) *exec.Cmd {
 	return NewPCMCommandUA(input, seekSec, reconnect, tag, "")
 }
@@ -66,8 +67,8 @@ func NewPCMCommandUA(input string, seekSec float64, reconnect bool, tag, userAge
 	return cmd
 }
 
-// stderrLineWriter splits ffmpeg stderr into lines: likely-failure lines log at Warn,
-// the rest at Debug to limit noise.
+// stderrLineWriter splits ffmpeg stderr into lines: likely-failure lines log at
+// Warn, the rest at Debug to limit noise.
 type stderrLineWriter struct {
 	tag string
 	buf []byte

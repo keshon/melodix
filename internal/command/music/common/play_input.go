@@ -7,10 +7,12 @@ import (
 	"unicode"
 )
 
-// maxPlayBatchItems limits history ids or URLs enqueued in one /play to avoid huge interactions.
+// maxPlayBatchItems limits history ids or URLs enqueued in one /play to avoid
+// huge interactions.
 const maxPlayBatchItems = 15
 
-// ErrPlayInputTooManyItems is returned when the parsed id or URL count exceeds maxPlayBatchItems.
+// ErrPlayInputTooManyItems is returned when the parsed id or URL count exceeds
+// maxPlayBatchItems.
 var ErrPlayInputTooManyItems = errors.New("too many items in one command")
 
 type PlayInputKind int
@@ -21,17 +23,20 @@ const (
 	PlayInputKindQuery
 )
 
-// ParsedPlayInput is the result of ParsePlayInput (no Discord or resolver dependencies).
+// ParsedPlayInput is the result of ParsePlayInput (no Discord or resolver
+// dependencies).
 type ParsedPlayInput struct {
 	Kind       PlayInputKind
 	HistoryIDs []uint64
 	URLs       []string
-	// Query is the full trimmed string for a single resolver call (search/title or a lone URL token).
+	// Query is the full trimmed string for a single resolver call (search/title or
+	// a lone URL token).
 	Query string
 }
 
-// ParsePlayInput classifies play text as history ids, multiple URLs, or one resolver query.
-// source/parser apply only to the resolver (query/URL) path; callers may ignore them for history ids.
+// ParsePlayInput classifies play text as history ids, multiple URLs, or one
+// resolver query. source/parser apply only to the resolver (query/URL) path;
+// callers may ignore them for history ids.
 func ParsePlayInput(s string) (ParsedPlayInput, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {

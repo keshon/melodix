@@ -56,10 +56,10 @@ func TestLivePassthrough(t *testing.T) {
 	}
 }
 
-// TestLiveInnerTube hits the real InnerTube API with the configured client and checks
-// that a direct (cipher-free) audio URL comes back and the CDN accepts our UA.
-// This is the canary for clientVersion rot.
-// Opt-in: MELODIX_LIVE_TESTS=1 go test -run Live -v ./pkg/music/parsers/ytnative
+// TestLiveInnerTube hits the real InnerTube API with the configured client and
+// checks that a direct (cipher-free) audio URL comes back and the CDN accepts
+// our UA. This is the canary for clientVersion rot. Opt-in:
+// MELODIX_LIVE_TESTS=1 go test -run Live -v ./pkg/music/parsers/ytnative
 func TestLiveInnerTube(t *testing.T) {
 	if os.Getenv("MELODIX_LIVE_TESTS") == "" {
 		t.Skip("set MELODIX_LIVE_TESTS=1 to hit real YouTube")
@@ -96,9 +96,9 @@ func TestLiveInnerTube(t *testing.T) {
 }
 
 // TestLiveOpenEndedRequestAccepted guards the reason this package uses VISIONOS.
-// googlevideo applies per-issuing-client rules to stream URLs: an ANDROID_VR URL
-// answers 403 to any open-ended request and serves only bounded ranges of about
-// 1 MiB, while a VISIONOS URL serves open-ended ones. The chunked passthrough
+// googlevideo applies per-issuing-client rules to stream URLs: an ANDROID_VR
+// URL answers 403 to any open-ended request and serves only bounded ranges of
+// about 1 MiB, while a VISIONOS URL serves open-ended ones. The chunked
 // path no longer needs that — it asks for bounded ranges — but ffmpeg still
 // sends Range: bytes=0- and openCDNBody's fallback still opens an unbounded
 // response, so if this test starts failing, those paths are broken and the

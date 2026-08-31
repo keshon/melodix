@@ -14,6 +14,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Streamer extracts YouTube audio from a cipher-free InnerTube URL; the first
+// parser tried, and the one that gives up soonest — see the package comment
+// for what it refuses to do.
 type Streamer struct{}
 
 // httpClient is for the quick InnerTube POST. streamClient has no total timeout
@@ -30,11 +33,11 @@ func (s *Streamer) Open(track *parsers.Track, seekSec float64) (opus.Reader, fun
 
 // maxBitrate caps which audio format is chosen, in bits per second (0 = no cap,
 // take the best on offer). It exists for links that cannot afford the best:
-// YouTube offers the same track at roughly 49, 66 and 137 kbps, so capping turns
-// a 3.3 MiB download into a 1.2 MiB one — which is both less to stream and, when
-// a stream has to be reopened after a drop, far less to re-fetch. A Discord
-// voice channel is 64 kbps unless the guild is boosted, so the top format is
-// largely spent on bandwidth that the channel will not carry anyway.
+// YouTube offers the same track at roughly 49, 66 and 137 kbps, so capping
+// turns a 3.3 MiB download into a 1.2 MiB one — which is both less to stream
+// and, when a stream has to be reopened after a drop, far less to re-fetch. A
+// Discord voice channel is 64 kbps unless the guild is boosted, so the top
+// format is largely spent on bandwidth that the channel will not carry anyway.
 var maxBitrate atomic.Int64
 
 // SetMaxBitrate sets the audio-format ceiling in bits per second (<=0 disables

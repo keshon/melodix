@@ -10,9 +10,9 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// commandFingerprint produces a stable SHA-1 fingerprint of the fields that matter for
-// command registration. Changing name, description, type, or options will produce
-// a different hash and trigger an upsert.
+// commandFingerprint produces a stable SHA-1 fingerprint of the fields that
+// matter for command registration. Changing name, description, type, or options
+// will produce a different hash and trigger an upsert.
 func commandFingerprint(c *discordgo.ApplicationCommand) string {
 	stable := map[string]interface{}{
 		"name":        c.Name,
@@ -28,8 +28,8 @@ func commandFingerprint(c *discordgo.ApplicationCommand) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-// normalizeOptions recursively converts ApplicationCommandOptions into a stable,
-// sorted structure suitable for deterministic JSON marshalling.
+// normalizeOptions recursively converts ApplicationCommandOptions into a
+// stable, sorted structure suitable for deterministic JSON marshalling.
 func normalizeOptions(opts []*discordgo.ApplicationCommandOption) []map[string]interface{} {
 	out := make([]map[string]interface{}, len(opts))
 

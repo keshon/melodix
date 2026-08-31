@@ -12,8 +12,9 @@ import (
 	"github.com/keshon/melodix/internal/discord/watchdog"
 )
 
-// RunSession opens one Discord session and blocks until ctx is cancelled or the API probe
-// decides the session is unhealthy (transient gateway reconnects do not exit this function).
+// RunSession opens one Discord session and blocks until ctx is cancelled or the
+// API probe decides the session is unhealthy (transient gateway reconnects do
+// not exit this function).
 func (b *Bot) RunSession(ctx context.Context) error {
 	dg, err := discordgo.New("Bot " + b.cfg.DiscordToken)
 	if err != nil {
