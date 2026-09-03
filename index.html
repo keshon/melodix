@@ -20,8 +20,17 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon/favicon.svg" />
   <link rel="shortcut icon" href="/assets/favicon/favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon/apple-touch-icon.png" />
-  <meta name="apple-mobile-web-app-title" content="Melodix Website" />
+  <meta name="apple-mobile-web-app-title" content="Melodix" />
   <link rel="manifest" href="/assets/favicon/site.webmanifest" />
+
+  <!-- Fonts. The whole look is Martian Mono + IBM Plex Sans; without these
+       links only a machine that has them installed sees the design. Martian
+       Mono is served at width 85: the 100 cut is a fifth wider and wraps the
+       headline. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Martian+Mono:wdth,wght@85,400;85,700&display=swap">
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
@@ -169,48 +178,15 @@
       }
     }
 
-    :root[data-theme="dark"] {
-      --ink: #171118;
-      --surface: #201724;
-      --surface-2: #2a1e2e;
-      --line: #3a2b3d;
-      --text: #f2e9ee;
-      --muted: #a58fa0;
-      --accent: #e13a86;
-      --accent-soft: #e13a861f;
-      --ok: #4cc492;
-      --chip-bg: #322336;
-      --chip-text: #cfb3c4;
-      --code-bg: #120d13;
-      --code-text: #e9dce4;
-      --code-comment: #8d7383;
-      --code-label: #9a7289;
-    }
-
-    :root[data-theme="light"] {
-      --ink: #fbf6f9;
-      --surface: #ffffff;
-      --surface-2: #f5ecf2;
-      --line: #e5d5de;
-      --text: #241a21;
-      --muted: #7d6875;
-      --accent: #b01e66;
-      --accent-soft: #b01e6614;
-      --ok: #2c8f63;
-      --chip-bg: #ede0e7;
-      --chip-text: #5c4553;
-      --code-bg: #241a21;
-      --code-text: #f2e6ec;
-      --code-comment: #8d7383;
-      --code-label: #b98aa4;
-    }
-
     * {
       box-sizing: border-box;
     }
 
     html {
       scroll-behavior: smooth;
+      /* selects the 85-width Martian Mono face; every other font here has a
+         single width and ignores it */
+      font-stretch: 85%;
     }
 
     html,
@@ -377,9 +353,13 @@
 
     .hero-grid {
       display: grid;
-      grid-template-columns: 1.05fr .95fr;
+      grid-template-columns: 1.1fr .9fr;
       gap: 52px;
       align-items: start;
+    }
+
+    .hero-grid>* {
+      min-width: 0;
     }
 
     @media (max-width: 880px) {
@@ -391,12 +371,6 @@
       .lede {
         margin-bottom: 32px;
       }
-
-      .install-line {
-        display: inline-flex;
-      }
-
-      /* handy on mobile; noise on desktop */
     }
 
     .eyebrow {
@@ -410,7 +384,7 @@
 
     h1 {
       font-family: "Martian Mono", "IBM Plex Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
-      font-size: clamp(36px, 5.2vw, 56px);
+      font-size: clamp(36px, 5vw, 52px);
       line-height: 1.3;
       letter-spacing: -0.02em;
       margin: 0 0 28px;
@@ -437,8 +411,8 @@
       font-weight: 600;
     }
 
-    /* On desktop the install line is hidden, so open up the text→buttons gap to
-     roughly balance the taller demo column on the right. */
+    /* Open up the text→buttons gap on desktop to roughly balance the taller
+       demo column on the right. */
     @media (min-width: 881px) {
       .lede {
         margin-bottom: 64px;
@@ -492,41 +466,10 @@
       text-decoration: none;
     }
 
-    .install-line {
-      margin-top: 26px;
-      display: none;
-      align-items: center;
-      gap: 12px;
-      background: var(--code-bg);
-      color: var(--code-text);
-      border-radius: 6px;
-      padding: 10px 10px 10px 16px;
-      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 13px;
-      max-width: 100%;
-      overflow-x: auto;
-    }
-
-    .install-line .dollar {
-      color: var(--accent);
-      user-select: none;
-    }
-
-    .copy-btn {
-      border: 1px solid #4a3644;
-      background: transparent;
-      color: var(--code-comment);
-      border-radius: 4px;
-      padding: 3px 10px;
-      font-size: 11.5px;
-      cursor: pointer;
-      font-family: inherit;
-      white-space: nowrap;
-    }
-
-    .copy-btn:hover {
-      color: var(--code-text);
-      border-color: var(--code-comment);
+    .hero-try {
+      margin: 20px 0 0;
+      font-size: 14px;
+      color: var(--muted);
     }
 
     /* ============ generic chips (also used by the parser tabs) ============ */
@@ -538,7 +481,7 @@
 
     .chip {
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 11.5px;
+      font-size: 12px;
       background: var(--chip-bg);
       color: var(--chip-text);
       padding: 3px 9px;
@@ -575,7 +518,7 @@
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: url(https://raw.githubusercontent.com/keshon/melodix/master/assets/avatar.webp);
+      background: url(/assets/avatar.webp);
       background-size: contain;
       color: #fff;
       display: grid;
@@ -711,14 +654,14 @@
 
     .term-body {
       padding: 12px 14px;
-      height: 156px;
+      height: 150px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      gap: 3px;
+      gap: 4px;
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 11.5px;
+      font-size: 12.5px;
       line-height: 1.45;
       color: #b9adc4;
     }
@@ -817,7 +760,7 @@
     .stage small {
       display: block;
       color: var(--muted);
-      font-size: 10.5px;
+      font-size: 11.5px;
       margin-top: 3px;
     }
 
@@ -1022,12 +965,6 @@
 
     @media (max-width: 880px) {
       .dl-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    @media (max-width: 560px) {
-      .dl-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -1036,20 +973,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
       background: var(--surface);
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 14px 18px;
+      padding: 12px 12px 12px 18px;
       color: var(--text);
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
       font-size: 13px;
-      transition: border-color .15s ease, transform .15s ease;
-    }
-
-    .dl:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-      text-decoration: none;
     }
 
     .dl .os {
@@ -1063,17 +994,24 @@
       color: var(--muted);
     }
 
-    .dl:hover .os .ic {
-      color: var(--accent);
+    .dl .archs {
+      display: flex;
+      gap: 6px;
     }
 
-    .dl .arch {
-      color: var(--muted);
+    .dl .archs a {
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 5px 11px;
       font-size: 12px;
+      transition: border-color .12s ease, color .12s ease;
     }
 
-    .dl:hover .arch {
+    .dl .archs a:hover {
+      border-color: var(--accent);
       color: var(--accent);
+      text-decoration: none;
     }
 
     .dl-note {
@@ -1126,12 +1064,25 @@
     }
 
     .ver-chip {
+      display: inline-block;
+      vertical-align: middle;
       background: var(--accent-soft);
       color: var(--accent);
-      padding: 2px 9px;
+      padding: 3px 10px;
       border-radius: 4px;
-      font-size: 11.5px;
-      margin-left: 8px;
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0;
+      margin-left: 12px;
+    }
+
+    .ver-chip:hover {
+      text-decoration: none;
+      filter: brightness(1.1);
+    }
+
+    .ver-chip[hidden] {
+      display: none;
     }
 
     /* ============ small phones ============ */
@@ -1160,16 +1111,20 @@
         padding: 12px 18px;
       }
 
-      /* one scrollable line, not two wrapped ones: the bar is pinned now, so
-         every row it grows by is a row of content permanently off screen */
+      /* The bar is pinned, so every row it grows by is content permanently
+         off screen: one line, and only the links that earn their place. */
+      nav .brand-tail,
+      nav .links .nav-wide {
+        display: none;
+      }
+
       nav .links {
         margin-left: 0;
         gap: 18px;
         flex-wrap: nowrap;
-        overflow-x: auto;
         max-width: 100%;
+        overflow-x: auto;
         scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
       }
 
       nav .links::-webkit-scrollbar {
@@ -1289,13 +1244,13 @@
         aria-label="Melodix — back to top"><svg class="logo" aria-hidden="true"
           focusable="false">
           <use href="#i-melodix" />
-        </svg>Melodix Discord Player</a>
+        </svg>Melodix<span class="brand-tail">&nbsp;Discord Player</span></a>
       <div class="links">
-        <a href="#survives">Why</a>
+        <a href="#survives" class="nav-wide">Why</a>
         <a href="#quickstart">Quick start</a>
-        <a href="#commands">Commands</a>
+        <a href="#commands" class="nav-wide">Commands</a>
         <a href="#downloads">Downloads</a>
-        <a href="#faq">FAQ</a>
+        <a href="#faq" class="nav-wide">FAQ</a>
         <a href="https://github.com/keshon/melodix"><svg class="ic" aria-hidden="true" focusable="false">
             <use href="#i-github" />
           </svg> GitHub</a>
@@ -1323,11 +1278,9 @@
                 <use href="#i-github" />
               </svg>Source on GitHub</a>
           </div>
-          <div class="install-line">
-            <span class="dollar">$</span>
-            <span id="installCmd">go build -o melodix-discord ./cmd/discord</span>
-            <button class="copy-btn" id="copyBtn" type="button">copy</button>
-          </div>
+          <p class="hero-try">Want to hear it first? It runs in the
+            <a href="https://discord.gg/uDnTenPxAY">Ctrl+Z Discord server</a> —
+            join a voice channel and <span class="mono">/play</span> something.</p>
         </div>
 
         <div class="demo" aria-label="Melodix in action">
@@ -1495,25 +1448,24 @@
 
     <section id="quickstart">
       <p class="kicker">quick start</p>
-      <h2>Two commands, once you have a token.</h2>
+      <h2>Unzip, paste a token, run.</h2>
       <div class="qs-grid">
         <div class="qs">
-          <h3>Discord bot</h3>
+          <h3>Prebuilt binary</h3>
           <pre><span class="c"># token from the Discord Developer Portal</span>
+<span class="a">$</span> unzip melodix-linux-amd64.zip &amp;&amp; cd melodix-linux-amd64
+<span class="a">$</span> nano .env   <span class="c"># DISCORD_TOKEN=…</span>
+<span class="a">$</span> ./melodix-discord</pre>
+        </div>
+        <div class="qs">
+          <h3>From source</h3>
+          <pre><span class="c"># Go 1.26 or newer</span>
 <span class="a">$</span> go build -o melodix-discord ./cmd/discord
 <span class="a">$</span> DISCORD_TOKEN=your-token ./melodix-discord</pre>
         </div>
-        <div class="qs">
-          <h3>Terminal player</h3>
-          <pre><span class="c"># no Discord account required</span>
-<span class="a">$</span> go build -o melodix-cli ./cmd/cli
-<span class="a">$</span> ./melodix-cli</pre>
-        </div>
       </div>
-      <p class="dl-note">FFmpeg is only needed for SoundCloud and internet radio; the common
-        YouTube path does not touch it. yt-dlp is the
-        last-resort fallback, and the one thing that plays YouTube live
-        broadcasts.
+      <p class="dl-note">The same bundle carries <span class="mono">melodix-cli</span>, a
+        terminal player for your own speakers that needs no Discord account.
         Full setup — bot creation, invite link, every config knob, Docker —
         lives in
         <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.
@@ -1583,37 +1535,34 @@
         <div class="cmd"><code>/about</code><span>where this bot came
             from</span></div>
       </div>
-      <p class="dl-note">Try it live in the <a href="https://discord.gg/uDnTenPxAY">Ctrl+Z server</a> —
-        join a voice channel and play something in <span class="mono">#music-spam</span>. Or browse the
-        <a href="https://github.com/keshon/melodix#commands">full command
-          reference on GitHub</a>.
+      <p class="dl-note">Every command with its options is in the
+        <a href="https://github.com/keshon/melodix#commands">reference on GitHub</a>.
       </p>
     </section>
 
     <section id="downloads">
       <p class="kicker">downloads</p>
-      <h2>Prebuilt binaries.</h2>
+      <h2>Prebuilt binaries.<a class="ver-chip" id="ver" href="https://github.com/keshon/melodix/releases/latest" hidden></a></h2>
       <div class="dl-grid">
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-amd64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+        <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-linux" />
-            </svg>linux</span><span class="arch">amd64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-arm64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
-              <use href="#i-linux" />
-            </svg>linux</span><span class="arch">arm64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-amd64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+            </svg>linux</span><span class="archs">
+            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-amd64.zip">amd64</a>
+            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-arm64.zip">arm64</a></span></div>
+        <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-windows" />
-            </svg>windows</span><span class="arch">amd64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-arm64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
-              <use href="#i-windows" />
-            </svg>windows</span><span class="arch">arm64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-amd64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+            </svg>windows</span><span class="archs">
+            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-amd64.zip">amd64</a>
+            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-arm64.zip">arm64</a></span></div>
+        <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-apple" />
-            </svg>macos</span><span class="arch">amd64 →</span></a>
-        <a class="dl" href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-arm64.zip"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
-              <use href="#i-apple" />
-            </svg>macos</span><span class="arch">arm64 →</span></a>
+            </svg>macos</span><span class="archs">
+            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-amd64.zip">amd64</a>
+            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-arm64.zip">arm64</a></span></div>
       </div>
-      <p class="dl-note">Each bundle ships both binaries, a ready-to-edit
+      <p class="dl-note">Not sure which? <span class="mono">arm64</span> is Apple Silicon,
+        Raspberry Pi and ARM cloud instances; <span class="mono">amd64</span> is
+        everything else. Each bundle ships both binaries, a ready-to-edit
         <span class="mono">.env</span>, and the docs.
         Or run it in <a href="https://github.com/keshon/melodix/tree/main/docker">Docker</a>.
       </p>
@@ -1748,7 +1697,7 @@
         line.className = "ln";
         line.innerHTML = '<span class="t">' + fmtClock() + '</span> ' + lvl + " " + html;
         logEl.appendChild(line);
-        while (logEl.children.length > 8) logEl.removeChild(logEl.firstChild);
+        while (logEl.children.length > 6) logEl.removeChild(logEl.firstChild);
       }
 
       function setParser(name) {
@@ -1825,7 +1774,7 @@
       }
 
       // Pre-fill the terminal so it opens looking mid-session (timestamps a few
-      // seconds apart; the buffer caps at 8 lines).
+      // seconds apart; the buffer caps at 6 lines).
       clock -= 24;
       log("INF", 'track_now_playing <span class="val">parser=ytnative-link</span>'); clock += 5;
       log("INF", 'stream_opened <span class="val">parser=ytnative-link</span> <span class="ok">✓</span>'); clock += 6;
@@ -1872,6 +1821,21 @@
       }
       tabs.forEach(function (t, i) { t.addEventListener("click", function () { selectTab(i); }); });
 
+      /* ============ latest release tag ============ */
+      var ver = document.getElementById("ver");
+      if (ver && window.fetch) {
+        fetch("https://api.github.com/repos/keshon/melodix/releases/latest", {
+          headers: { Accept: "application/vnd.github+json" }
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (rel) {
+            if (!rel || !rel.tag_name) return;
+            ver.textContent = rel.tag_name;
+            if (rel.html_url) ver.href = rel.html_url;
+            ver.hidden = false;
+          })
+          .catch(function () { /* the chip simply stays hidden */ });
+      }
+
       /* ============ footer year ============ */
       var yr = document.getElementById("yr");
       if (yr) yr.textContent = new Date().getFullYear();
@@ -1892,16 +1856,6 @@
         if (location.hash && window.history.replaceState) {
           window.history.replaceState(null, "", location.pathname + location.search);
         }
-      });
-
-      /* ============ copy button ============ */
-      var copyBtn = document.getElementById("copyBtn");
-      copyBtn.addEventListener("click", function () {
-        var text = document.getElementById("installCmd").textContent;
-        function done() { copyBtn.textContent = "copied ✓"; setTimeout(function () { copyBtn.textContent = "copy"; }, 1400); }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(done, done);
-        } else { done(); }
       });
     })();
   </script>
