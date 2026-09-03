@@ -10,7 +10,8 @@
     content="Melodix is a self-hosted Discord music bot built in Go. Streams YouTube, SoundCloud and internet radio, auto-recovers from failures, and runs on your own server. Open source and free.">
   
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
-  <meta name="theme-color" content="#b01e66">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0a0c">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f1ea">
   <meta name="author" content="keshon">
 
   <link rel="canonical" href="https://melodix.keshon.ru/">
@@ -23,14 +24,26 @@
   <meta name="apple-mobile-web-app-title" content="Melodix" />
   <link rel="manifest" href="/assets/favicon/site.webmanifest" />
 
-  <!-- Fonts. The whole look is Martian Mono + IBM Plex Sans; without these
-       links only a machine that has them installed sees the design. Martian
-       Mono is served at width 85: the 100 cut is a fifth wider and wraps the
-       headline. -->
+  <!-- Fonts. The whole look is Martian Mono for display and IBM Plex Mono
+       for body copy; without these links only a machine that has them
+       installed sees the design. Martian Mono is served at width 85: the 100
+       cut is a fifth wider and wraps the headline. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Martian+Mono:wdth,wght@85,400;85,700&display=swap">
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@85,400;85,700&display=swap">
+
+  <!-- Applies a stored theme before the first paint. Inline and in <head>
+       on purpose: deferred or bundled, the page renders in the system theme
+       and then snaps to the stored one, which is a visible flash. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("melodix-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) { /* blocked storage: fall back to the system preference */ }
+    })();
+  </script>
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
@@ -40,9 +53,9 @@
   <meta property="og:title" content="Melodix — Self-Hosted Discord Music Bot in Go">
   <meta property="og:description"
     content="Stream YouTube, SoundCloud and radio into your Discord server. Auto-recovery, fallback parsers, no dependency on public bots. Run it yourself.">
-  <meta property="og:image" content="https://melodix.keshon.ru/assets/about-banner.webp">
-  <meta property="og:image:width" content="768">
-  <meta property="og:image:height" content="484">
+  <meta property="og:image" content="https://melodix.keshon.ru/assets/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Melodix — a self-hosted Discord music bot written in Go">
 
   <!-- Twitter -->
@@ -50,7 +63,7 @@
   <meta name="twitter:title" content="Melodix — Self-Hosted Discord Music Bot">
   <meta name="twitter:description"
     content="A Go bot that streams YouTube, SoundCloud and radio into Discord. Recovers from failures automatically. Open source.">
-  <meta name="twitter:image" content="https://melodix.keshon.ru/assets/about-banner.webp">
+  <meta name="twitter:image" content="https://melodix.keshon.ru/assets/og-image.jpg">
   <meta name="twitter:image:alt" content="Melodix — a self-hosted Discord music bot written in Go">
   <meta name="twitter:site" content="@keshon_">
 
@@ -73,7 +86,7 @@
     "codeRepository": "https://github.com/keshon/melodix",
     "programmingLanguage": "Go",
     "isAccessibleForFree": true,
-    "image": "https://melodix.keshon.ru/assets/about-banner.webp",
+    "image": "https://melodix.keshon.ru/assets/og-image.jpg",
     "offers": {
       "@type": "Offer",
       "price": "0",
@@ -140,42 +153,136 @@
   </script>
   <style>
     /* ============ tokens ============ */
+    /* Two themes, one design. Dark emits: hot #ff2d7e on black. Light prints:
+       deep #c00040 on newsprint. Neon needs a dark ground to read as neon; on
+       paper the same pink goes bubblegum, so the value changes with the theme
+       even though the hue family does not.
+
+       --fill       the accent at fill strength (headline mark, band, primary
+                    button, the printed offset behind the objects)
+       --knock      type sitting ON a fill        --knock-dim  secondary of it
+       --knock-line the spine crossing a fill     --slab-edge  dark object border
+       --grid-op    hero grid weight: a hairline reads heavier on paper
+
+       Cascade: :root is dark (the design's home), the media query swaps to
+       light unless dark is forced, and [data-theme] beats both. Forcing dark
+       has to restate the palette, because on a light system the media query
+       has already swapped every token. */
     :root {
-      --ink: #fbf6f9;
-      --surface: #ffffff;
-      --surface-2: #f5ecf2;
-      --line: #e5d5de;
-      --text: #241a21;
-      --muted: #7d6875;
-      --accent: #b01e66;
-      --accent-soft: #b01e6614;
-      --ok: #2c8f63;
-      --chip-bg: #ede0e7;
-      --chip-text: #5c4553;
-      --code-bg: #241a21;
-      --code-text: #f2e6ec;
-      --code-comment: #8d7383;
-      --code-label: #b98aa4;
+      color-scheme: dark;
+      --ink: #0b0a0c;
+      --surface: #121016;
+      --surface-2: #17141b;
+      --line: #2a2430;
+      --text: #f4eff2;
+      --muted: #8a7f8a;
+      --accent: #ff2d7e;
+      --accent-soft: #ff2d7e1a;
+      --accent-2: #7a3bff;
+      --ok: #2ce39c;
+      --chip-bg: #1d1822;
+      --chip-text: #c8b8c6;
+      --code-bg: #000000;
+      --code-text: #eee6ec;
+      --code-comment: #6d6270;
+      --code-label: #ff2d7e;
+      --fill: #ff2d7e;
+      --knock: #0b0a0c;
+      --knock-dim: #0b0a0cc7;
+      --knock-line: #0b0a0c3d;
+      --slab-edge: #2a2430;
+      --grid-op: .55;
+
+      /* layout */
+      --sec-pad: 104px;
+      --gut: 200px;
+      --gap: 56px;
+      --wrap-max: 1400px;
+      --wrap-pad: 28px;
+      /* viewport edge to the spine; the full-bleed section needs this because
+         a percentage inside it resolves against 100vw, not the wrap */
+      --spine-x: calc(max(0px, (100vw - var(--wrap-max)) / 2)
+                  + var(--wrap-pad) + var(--gut) + var(--gap) / 2);
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --ink: #171118;
-        --surface: #201724;
-        --surface-2: #2a1e2e;
-        --line: #3a2b3d;
-        --text: #f2e9ee;
-        --muted: #a58fa0;
-        --accent: #e13a86;
-        --accent-soft: #e13a861f;
-        --ok: #4cc492;
-        --chip-bg: #322336;
-        --chip-text: #cfb3c4;
-        --code-bg: #120d13;
-        --code-text: #e9dce4;
-        --code-comment: #8d7383;
-        --code-label: #9a7289;
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        color-scheme: light;
+        --ink: #f4f1ea;
+        --surface: #fffdf8;
+        --surface-2: #e9e3d7;
+        --line: #cdc5b7;
+        --text: #16120f;
+        --muted: #665d53;
+        --accent: #c00040;
+        --accent-soft: #c000401a;
+        --accent-2: #c00040;
+        --ok: #167f52;
+        --chip-bg: #e6e0d4;
+        --chip-text: #4a4239;
+        --code-bg: #14110f;
+        --code-text: #f2ece4;
+        --code-comment: #8a8074;
+        --code-label: #ff5c96;
+        --fill: #c00040;
+        --knock: #fffdf8;
+        --knock-dim: #fffdf8d1;
+        --knock-line: #fffdf840;
+        --slab-edge: #241f26;
+        --grid-op: .38;
       }
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --ink: #f4f1ea;
+      --surface: #fffdf8;
+      --surface-2: #e9e3d7;
+      --line: #cdc5b7;
+      --text: #16120f;
+      --muted: #665d53;
+      --accent: #c00040;
+      --accent-soft: #c000401a;
+      --accent-2: #c00040;
+      --ok: #167f52;
+      --chip-bg: #e6e0d4;
+      --chip-text: #4a4239;
+      --code-bg: #14110f;
+      --code-text: #f2ece4;
+      --code-comment: #8a8074;
+      --code-label: #ff5c96;
+      --fill: #c00040;
+      --knock: #fffdf8;
+      --knock-dim: #fffdf8d1;
+      --knock-line: #fffdf840;
+      --slab-edge: #241f26;
+      --grid-op: .38;
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --ink: #0b0a0c;
+      --surface: #121016;
+      --surface-2: #17141b;
+      --line: #2a2430;
+      --text: #f4eff2;
+      --muted: #8a7f8a;
+      --accent: #ff2d7e;
+      --accent-soft: #ff2d7e1a;
+      --accent-2: #7a3bff;
+      --ok: #2ce39c;
+      --chip-bg: #1d1822;
+      --chip-text: #c8b8c6;
+      --code-bg: #000000;
+      --code-text: #eee6ec;
+      --code-comment: #6d6270;
+      --code-label: #ff2d7e;
+      --fill: #ff2d7e;
+      --knock: #0b0a0c;
+      --knock-dim: #0b0a0cc7;
+      --knock-line: #0b0a0c3d;
+      --slab-edge: #2a2430;
+      --grid-op: .55;
     }
 
     * {
@@ -198,9 +305,12 @@
     body {
       background: var(--ink);
       color: var(--text);
-      font-family: "IBM Plex Sans", "Segoe UI Variable Text", system-ui, "Segoe UI", Roboto, sans-serif;
-      font-size: 16.5px;
-      line-height: 1.62;
+      /* mono body copy is the point, not an accident: on a poster the text
+         is set on the same machine as the headline */
+      font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      font-size: 14.5px;
+      line-height: 1.72;
+      overflow-x: clip;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -217,7 +327,9 @@
     }
 
     .wrap {
-      max-width: 1080px;
+      max-width: var(--wrap-max);
+      position: relative;
+      z-index: 1;
       margin: 0 auto;
       padding: 0 28px;
     }
@@ -266,26 +378,36 @@
       top: 0;
       z-index: 50;
       background: var(--ink);
-      border-bottom: 1px solid transparent;
-      transition: border-color .18s ease;
+      position: sticky;
       display: flex;
       align-items: center;
       gap: 28px;
       margin: 0 -28px;
-      padding: 22px 28px;
-      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 13px;
+      padding: 18px 28px;
+      font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      font-size: 11.5px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+
+    /* drawn, not a border: a border stops at the wrap, and the hero grid
+       below it spans the viewport */
+    nav::after {
+      content: "";
+      position: absolute;
+      left: calc(50% - 50vw);
+      right: calc(50% - 50vw);
+      bottom: 0;
+      height: 1px;
+      background: var(--accent);
     }
 
     nav .brand {
       font-weight: 700;
-      letter-spacing: .04em;
+      letter-spacing: 0;
+      text-transform: none;
       color: var(--text);
       font-size: 15px;
-    }
-
-    nav.scrolled {
-      border-bottom-color: var(--line);
     }
 
     /* the brand is a link now; it must not pick up the global underline */
@@ -326,6 +448,43 @@
       position: relative;
     }
 
+    /* An icon, not a label: the label changed width on every click and shoved
+       the nav sideways. The words live in the tooltip and the accessible name,
+       where they cost no layout. */
+    .theme-btn {
+      font: inherit;
+      line-height: inherit;
+      background: none;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      transition: color .12s ease;
+    }
+
+    .theme-btn .ic {
+      width: 1.15em;
+      height: 1.15em;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: -0.15em;
+    }
+
+    .theme-btn .ic .solid {
+      fill: currentColor;
+      stroke: none;
+    }
+
+    .theme-btn:hover {
+      color: var(--accent);
+    }
+
     nav .links a::after {
       content: "";
       position: absolute;
@@ -348,75 +507,81 @@
 
     /* ============ hero ============ */
     header {
-      padding: 56px 0 46px;
+      position: relative;
+      padding: 96px 0 104px;
     }
 
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1.1fr .9fr;
-      gap: 52px;
-      align-items: start;
+    /* the column grid, hero only — texture, not wallpaper */
+    header::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: calc(50% - 50vw);
+      right: calc(50% - 50vw);
+      pointer-events: none;
+      opacity: var(--grid-op);
+      background: repeating-linear-gradient(90deg,
+          transparent 0 calc(8.3333% - 1px),
+          var(--line) calc(8.3333% - 1px) 8.3333%);
     }
 
-    .hero-grid>* {
-      min-width: 0;
+    /* closes the field: without it the verticals end in mid-air */
+    header::after {
+      content: "";
+      position: absolute;
+      left: calc(50% - 50vw);
+      right: calc(50% - 50vw);
+      bottom: 0;
+      height: 1px;
+      background: var(--line);
     }
 
-    @media (max-width: 880px) {
-      .hero-grid {
-        grid-template-columns: 1fr;
-        gap: 40px;
-      }
-
-      .lede {
-        margin-bottom: 32px;
-      }
+    header > * {
+      position: relative;
+      z-index: 1;
     }
 
     .eyebrow {
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 12px;
-      letter-spacing: .16em;
+      font-size: 11.5px;
+      letter-spacing: .32em;
       text-transform: uppercase;
-      color: var(--muted);
-      margin: 0 0 18px;
+      color: var(--accent);
+      margin: 0 0 30px;
     }
 
     h1 {
       font-family: "Martian Mono", "IBM Plex Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
-      font-size: clamp(36px, 5vw, 52px);
-      line-height: 1.3;
-      letter-spacing: -0.02em;
-      margin: 0 0 28px;
+      font-size: clamp(40px, 6.6vw, 104px);
+      line-height: .99;
+      letter-spacing: -.035em;
+      margin: 0 0 34px;
       font-weight: 700;
-      text-wrap: balance;
+      text-transform: uppercase;
+      max-width: 13em;
     }
 
+    /* inline-block keeps the fill inside its own line box; as a plain inline
+       it inherits the full line box and bleeds up into the line above */
     h1 mark {
-      background: var(--accent);
-      color: #fff;
-      padding: 0 .14em;
-      border-radius: 0px;
+      display: inline-block;
+      background: var(--fill);
+      color: var(--knock);
+      line-height: .86;
+      padding: .07em .06em .05em;
     }
 
     .lede {
-      font-size: 18px;
+      font-size: 15px;
       color: var(--muted);
-      max-width: 30em;
-      margin: 0 0 40px;
+      max-width: 52em;
+      margin: 0 0 38px;
     }
 
     .lede strong {
       color: var(--text);
       font-weight: 600;
-    }
-
-    /* Open up the text→buttons gap on desktop to roughly balance the taller
-       demo column on the right. */
-    @media (min-width: 881px) {
-      .lede {
-        margin-bottom: 64px;
-      }
     }
 
     .cta-row {
@@ -430,10 +595,11 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 22px;
-      border-radius: 6px;
-      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 14px;
+      padding: 18px 30px;
+      font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
       font-weight: 600;
       border: 1px solid transparent;
       cursor: pointer;
@@ -445,8 +611,9 @@
     }
 
     .btn-primary {
-      background: var(--accent);
-      color: #fff;
+      background: var(--fill);
+      border-color: var(--fill);
+      color: var(--knock);
     }
 
     .btn-primary:hover {
@@ -494,18 +661,21 @@
       color: #fff;
     }
 
-    /* ============ hero demo: discord embed + terminal (committed to dark) ============ */
+    /* ============ the objects: discord embed + terminal (committed to dark) ============
+       A real 3/4, not a tilt: the perspective is short enough that the near
+       edge is genuinely larger than the far one. Thickness is a hard printed
+       offset — a riso misregistration — never a soft shadow, and never blur. */
     .demo {
       display: flex;
       flex-direction: column;
       gap: 16px;
+      perspective: 820px;
+      perspective-origin: 78% 44%;
     }
 
     .discord {
       background: #323339;
-      border-radius: 10px;
       padding: 15px 16px 16px;
-      box-shadow: 0 24px 60px -30px rgba(0, 0, 0, .6);
     }
 
     .dc-msg {
@@ -612,10 +782,38 @@
 
     .terminal {
       background: #14101a;
-      border: 1px solid #2c2336;
-      border-radius: 10px;
       overflow: hidden;
-      box-shadow: 0 24px 60px -30px rgba(0, 0, 0, .6);
+    }
+
+    .demo > .discord,
+    .demo > .terminal {
+      border: 1px solid var(--slab-edge);
+      transform: rotateY(-19deg) rotateX(7deg) rotate(-1.5deg);
+      transition: transform .45s cubic-bezier(.2, .7, .2, 1);
+      box-shadow: 16px 16px 0 0 var(--fill);
+    }
+
+    .demo > .terminal {
+      margin-left: 7%;
+    }
+
+    /* the objects turn to face you */
+    .demo:hover > .discord,
+    .demo:hover > .terminal {
+      transform: rotateY(-6deg) rotateX(2deg) rotate(-.5deg);
+    }
+
+    @media (max-width: 1020px) {
+      .demo {
+        perspective: none;
+      }
+
+      .demo > .discord,
+      .demo > .terminal {
+        transform: none;
+        margin-left: 0;
+        box-shadow: 8px 8px 0 0 var(--fill);
+      }
     }
 
     .term-bar {
@@ -692,27 +890,108 @@
       color: #57c98e;
     }
 
-    /* ============ sections ============ */
-    section {
-      padding: 64px 0 8px;
+    .demo-cap {
+      margin: 30px 0 0;
+      font-size: 12.5px;
+      color: var(--muted);
     }
 
-    .kicker {
+    /* hard edges: this is a poster, not a dashboard */
+    .btn,
+    .stage,
+    .qs,
+    .qs pre,
+    .dl,
+    .dl a,
+    .tab-detail,
+    .chip,
+    .ver-chip,
+    .discord,
+    .terminal,
+    .dc-embed,
+    .demo-cap,
+    .faq,
+    .faq details,
+    .cmd {
+      border-radius: 0;
+    }
+
+    /* ============ sections ============ */
+    /* Sections are separated by space and by the sticky index, not by rules.
+       One vertical spine runs the whole page instead; sections hang off it. */
+    section {
+      position: relative;
+      display: grid;
+      grid-template-columns: var(--gut) minmax(0, 1fr);
+      gap: var(--gap);
+      padding: var(--sec-pad) 0 0;
+    }
+
+    /* drawn on the SECTION, not on .sec-body: the body ends where its text
+       ends, so a section with bottom padding left the line hanging short */
+    section::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: calc(var(--gut) + var(--gap) / 2);
+      width: 1px;
+      background: var(--line);
+    }
+
+    .sec-idx {
+      position: sticky;
+      top: 84px;
+      align-self: start;
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 12px;
-      letter-spacing: .16em;
+      font-size: 11px;
+      letter-spacing: .22em;
       text-transform: uppercase;
+      line-height: 1.9;
+    }
+
+    .sec-idx .n {
+      display: block;
       color: var(--accent);
-      margin: 0 0 10px;
+      margin-bottom: 6px;
+    }
+
+    .sec-idx .k {
+      color: var(--muted);
+    }
+
+    .sec-body > :first-child {
+      margin-top: 0;
+    }
+
+    @media (max-width: 940px) {
+      section {
+        grid-template-columns: 1fr;
+        gap: 18px;
+        padding-top: 72px;
+      }
+
+      section::before {
+        display: none;
+      }
+
+      .sec-idx {
+        position: static;
+      }
+
+      .sec-idx .n {
+        display: inline;
+        margin-right: 12px;
+      }
     }
 
     h2 {
       font-family: "Martian Mono", "IBM Plex Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
-      font-size: clamp(25px, 3.2vw, 33px);
-      line-height: 1.16;
-      letter-spacing: -0.015em;
-      margin: 0 0 18px;
-      text-wrap: balance;
+      font-size: clamp(25px, 3.4vw, 44px);
+      line-height: 1.02;
+      letter-spacing: -.03em;
+      margin: 0 0 22px;
+      text-transform: uppercase;
     }
 
     .prose {
@@ -734,61 +1013,105 @@
       border-bottom: 1px dotted var(--muted);
     }
 
-    /* fallback rail — tabs */
+    /* the exhibit: the chain on the left, the objects on the right. The
+       detail card carries the longest prose on the page, so it gets the
+       slightly larger share. */
+    .exhibit {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+      gap: 48px;
+      align-items: start;
+      margin: 40px 0 34px;
+    }
+
+    @media (max-width: 1020px) {
+      .exhibit {
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+    }
+
+    /* The chain runs top to bottom because that is what "ordered
+       fastest-first" means; a row of equal boxes says nothing about order.
+       Its connecting line is the one decorative-looking rule on the page
+       that is not decorative — that line IS the chain. */
     .rail {
-      display: flex;
-      align-items: stretch;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin: 30px 0 0;
+      display: block;
+      position: relative;
+      padding-left: 26px;
+      margin: 0;
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
       font-size: 13px;
     }
 
+    .rail::before {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 12px;
+      bottom: 12px;
+      width: 1px;
+      background: var(--line);
+    }
+
+    .rail .arrow {
+      display: none;
+    }
+
     .stage {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      padding: 9px 16px;
-      border-radius: 6px;
+      display: block;
+      width: 100%;
+      position: relative;
+      background: none;
+      border: 0;
+      padding: 14px 0 14px 4px;
       color: var(--text);
       font: inherit;
       text-align: left;
       cursor: pointer;
-      transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+      transition: color .15s ease;
+    }
+
+    .stage::before {
+      content: "";
+      position: absolute;
+      left: -26px;
+      top: 20px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--ink);
+      border: 1.5px solid var(--line);
+      transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
     }
 
     .stage small {
       display: block;
       color: var(--muted);
-      font-size: 11.5px;
+      font-size: 12.5px;
       margin-top: 3px;
     }
 
     .stage:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
+      color: var(--accent);
     }
 
     .stage[aria-selected="true"] {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px var(--accent);
-      background: var(--accent-soft);
+      color: var(--accent);
     }
 
-    .rail .arrow {
-      color: var(--muted);
-      user-select: none;
-      align-self: center;
+    .stage[aria-selected="true"]::before {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
     }
 
     .tab-detail {
-      margin-top: 14px;
+      margin-top: 22px;
       background: var(--surface);
-      border: 1px solid var(--line);
-      border-left: 3px solid var(--accent);
-      border-radius: 6px;
-      padding: 18px 22px;
-      max-width: 52em;
+      border: 0;
+      border-left: 2px solid var(--accent);
+      padding: 20px 22px;
     }
 
     .tab-detail h3 {
@@ -829,61 +1152,157 @@
       max-width: 46em;
     }
 
-    .feat-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 22px;
-      margin-top: 36px;
-    }
-
-    @media (max-width: 880px) {
-      .feat-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .feat {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 22px 22px 18px;
-      transition: border-color .15s ease, transform .15s ease;
-    }
-
-    .feat:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-    }
-
-    .feat h3 {
-      margin: 0 0 8px;
-      font-size: 15px;
+    /* sub-heading inside a section */
+    .sub {
       font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      font-size: 15px;
+      line-height: 1.3;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin: 52px 0 0;
     }
 
-    .feat p {
+    /* ============ the one inversion ============
+       One gear change in 6600px, at the angriest point in the copy. Padding,
+       not margin: a gap here would break the spine. */
+    #selfhost {
+      background: var(--fill);
+      color: var(--knock);
+      margin: 0 calc(50% - 50vw);
+      padding: var(--sec-pad) calc(50vw - 50%) 96px;
+    }
+
+    /* its padding box IS the viewport, so a percentage inside it resolves
+       against 100vw and any "50vw - 50%" collapses to zero */
+    #selfhost::before {
+      left: var(--spine-x);
+      background: var(--knock-line);
+    }
+
+    #selfhost h2,
+    #selfhost .prose strong,
+    #selfhost .sec-idx .n {
+      color: var(--knock);
+    }
+
+    #selfhost .prose {
+      color: var(--knock-dim);
+    }
+
+    #selfhost .sec-idx .k {
+      color: var(--knock);
+      opacity: .66;
+    }
+
+    /* ============ the ledger ============
+       Recovery steps, requirements and commands were three components saying
+       the same shape of thing. They are one now: index, term, description.
+       This is also the only place in the body where a line appears, and there
+       it is doing table work. */
+    .steps,
+    .reqs,
+    .cmd-grid {
+      display: block;
+      border-top: 1px solid var(--line);
+      margin: 26px 0 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+    }
+
+    .steps li,
+    .reqs div,
+    .cmd {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 240px) minmax(0, 1fr);
+      gap: 26px;
+      align-items: baseline;
+      background: none;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      padding: 20px 0;
       margin: 0;
       font-size: 14.5px;
       color: var(--muted);
     }
 
-    .feat p code {
+    .steps li {
+      counter-increment: step;
+    }
+
+    .steps li::before {
+      content: "0" counter(step);
+      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
       font-size: 12px;
-      background: var(--chip-bg);
-      color: var(--chip-text);
-      padding: 1px 5px;
-      border-radius: 3px;
+      letter-spacing: .16em;
+      color: var(--accent);
+    }
+
+    .steps li strong,
+    .reqs dt,
+    .cmd code {
+      color: var(--text);
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .reqs dt {
+      grid-column: 2;
+      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .reqs dd {
+      grid-column: 3;
+      margin: 0;
+    }
+
+    .reqs dd .mono {
+      font-size: 12.5px;
+      color: var(--text);
+    }
+
+    .cmd code {
+      grid-column: 2;
+      font-size: 15px;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .cmd span {
+      grid-column: 3;
+    }
+
+    @media (max-width: 860px) {
+      .steps li,
+      .reqs div,
+      .cmd {
+        grid-template-columns: 1fr;
+        gap: 5px;
+      }
+
+      .reqs dt,
+      .reqs dd,
+      .cmd code,
+      .cmd span {
+        grid-column: 1;
+      }
     }
 
     /* quick start */
     .qs-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1.22fr 1fr;
       gap: 22px;
       margin-top: 30px;
     }
 
-    @media (max-width: 880px) {
+    /* the longest line needs ~470px; below this two columns cannot give it
+       that, so stack rather than scroll */
+    @media (max-width: 1340px) {
       .qs-grid {
         grid-template-columns: 1fr;
       }
@@ -900,16 +1319,22 @@
     .qs h3 {
       margin: 0 0 14px;
       font-size: 12px;
-      letter-spacing: .16em;
+      letter-spacing: .14em;
       text-transform: uppercase;
       color: var(--code-label);
       font-weight: 600;
-      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    }
+
+    /* Martian Mono is a wide face — good for display, bad for a terminal
+       line. Plex Mono is the same texture, narrower. */
+    .qs pre,
+    .qs pre * {
+      font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
     }
 
     .qs pre {
       margin: 0;
-      font-size: 13px;
+      font-size: 12.5px;
       line-height: 1.75;
     }
 
@@ -919,40 +1344,6 @@
 
     .qs .a {
       color: var(--accent);
-    }
-
-    /* commands */
-    .cmd-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px 40px;
-      margin-top: 28px;
-    }
-
-    @media (max-width: 700px) {
-      .cmd-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .cmd {
-      display: flex;
-      gap: 16px;
-      align-items: baseline;
-      padding: 11px 4px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .cmd code {
-      font-size: 13.5px;
-      color: var(--accent);
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    .cmd span {
-      color: var(--muted);
-      font-size: 14px;
     }
 
     /* downloads */
@@ -979,8 +1370,8 @@
       border-radius: 6px;
       padding: 12px 12px 12px 18px;
       color: var(--text);
-      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 13px;
+      font-size: 14px;
+      font-weight: 500;
     }
 
     .dl .os {
@@ -1004,7 +1395,9 @@
       border: 1px solid var(--line);
       border-radius: 4px;
       padding: 5px 11px;
+      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
       font-size: 12px;
+      font-weight: 400;
       transition: border-color .12s ease, color .12s ease;
     }
 
@@ -1022,12 +1415,16 @@
 
     /* footer */
     footer {
-      margin-top: 80px;
-      border-top: 1px solid var(--line);
+      margin-top: 104px;
+      border-top: 1px solid var(--accent);
       padding: 34px 0 48px;
-      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-      font-size: 12.5px;
+      font-size: 13.5px;
       color: var(--muted);
+    }
+
+    footer .brand {
+      font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      font-weight: 700;
     }
 
     footer .cols {
@@ -1054,7 +1451,7 @@
       justify-content: space-between;
       align-items: center;
       margin-top: 4px;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--muted);
     }
 
@@ -1096,7 +1493,7 @@
       }
 
       section {
-        padding: 48px 0 6px;
+        padding-top: 56px;
       }
 
       h1 {
@@ -1154,9 +1551,11 @@
       }
 
       .btn,
-      .feat,
-      .dl,
       .stage,
+      .stage::before,
+      .theme-btn,
+      .demo > .discord,
+      .demo > .terminal,
       nav .links a::after {
         transition: none;
       }
@@ -1254,6 +1653,9 @@
         <a href="https://github.com/keshon/melodix"><svg class="ic" aria-hidden="true" focusable="false">
             <use href="#i-github" />
           </svg> GitHub</a>
+        <button class="theme-btn" type="button" id="themeBtn" title="Theme: auto"
+          aria-label="Theme: auto. Change theme."><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"
+            focusable="false"></svg></button>
       </div>
     </nav>
 
@@ -1264,7 +1666,7 @@
         <div>
           <p class="eyebrow">discord music bot · self-hosted · go · open
             source</p>
-          <h1>Playback should <mark>survive</mark>.</h1>
+          <h1>Playback<br>should <mark>survive</mark>.</h1>
           <p class="lede">Melodix streams YouTube, SoundCloud and internet
             radio into your Discord server. A flaky stream, a dead voice
             connection, a gateway reconnect — these are expected, and it
@@ -1283,319 +1685,291 @@
             join a voice channel and <span class="mono">/play</span> something.</p>
         </div>
 
-        <div class="demo" aria-label="Melodix in action">
-          <div class="discord">
-            <div class="dc-msg">
-              <div class="dc-avatar"></div>
-              <div class="dc-body">
-                <div class="dc-head">
-                  <span class="dc-name">Melodix</span>
-                  <span class="dc-bot">BOT</span>
-                  <span class="dc-time" id="dcTime">Today at 12:32</span>
-                </div>
-                <div class="dc-embed">
-                  <div class="dc-embed-in">
-                    <div class="dc-title" id="npTitle">▶️ Now Playing</div>
-                    <div class="dc-desc">🎶 <a href="#survives" id="trackTitle">Never Gonna Give You Up</a></div>
-                    <div class="chips">
-                      <span class="chip">youtube</span>
-                      <span class="chip" id="chipParser">ytnative-link</span>
-                      <span class="chip" id="chipDur">3:32</span>
-                      <span class="chip" id="chipArtist">Rick Astley</span>
-                    </div>
-                    <canvas id="wave" width="640" height="128"></canvas>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="terminal" aria-label="Melodix log output">
-            <div class="term-bar">
-              <span class="tl tl-r"></span><span class="tl tl-y"></span><span class="tl tl-g"></span>
-              <span class="term-title">melodix · logs</span>
-            </div>
-            <div class="term-body" id="log" aria-live="off"></div>
-          </div>
-        </div>
       </div>
     </header>
 
     <section id="survives">
-      <p class="kicker">why it survives</p>
-      <h2>Every track carries its own fallback chain.</h2>
-      <p class="prose"> Sources break. That is assumed from the start, not handled as a
-        special case.</p>
-      <p class="prose">When someone pastes a link, Melodix has to turn that
-        web page into an actual audio stream it can pipe into a voice
-        channel. The component that does this is called a <em>parser</em>,
-        and YouTube fights it constantly — reshuffling its internals every
-        few weeks. So Melodix doesn't bet everything on one parser. It
-        keeps a <strong>chain</strong> of them, ordered fastest-first, and
-        works down the list until one returns a playable stream. The panel
-        above shows that chain running live: the embed your users would
-        see, and the log underneath it. Click a parser below to see what it does.</p>
+      <div class="sec-idx"><span class="n">[01]</span><span class="k">why it survives</span></div>
+      <div class="sec-body">
+        <h2>Every track carries its own fallback chain.</h2>
+        <p class="prose">When someone pastes a link, Melodix has to turn that
+          web page into an audio stream it can pipe into a voice channel. The
+          component that does this is called a <em>parser</em>, and YouTube
+          fights it constantly, reshuffling its internals every few weeks. So
+          Melodix keeps a <strong>chain</strong> of them, ordered fastest-first,
+          and works down the list until one returns a playable stream. The
+          panel beside it is that chain running: the embed your users see, and
+          the log underneath it. Click a parser to see what it does.</p>
 
-      <div class="rail" role="tablist" aria-label="Parsers">
-        <button class="stage" type="button" role="tab" id="tab-0" aria-selected="true" aria-controls="detail">ytnative<small>built
-            in-house · zero deps</small></button>
-        <span class="arrow">→</span>
-        <button class="stage" type="button" role="tab" id="tab-1" aria-selected="false" aria-controls="detail">kkdai<small>open-source
-            library</small></button>
-        <span class="arrow">→</span>
-        <button class="stage" type="button" role="tab" id="tab-2" aria-selected="false" aria-controls="detail">yt-dlp<small>external ·
-            optional</small></button>
-      </div>
+        <div class="exhibit">
+          <div>
+          <div class="rail" role="tablist" aria-label="Parsers">
+            <button class="stage" type="button" role="tab" id="tab-0" aria-selected="true" aria-controls="detail">ytnative<small>built
+                in-house · zero deps</small></button>
+            <span class="arrow">→</span>
+            <button class="stage" type="button" role="tab" id="tab-1" aria-selected="false" aria-controls="detail">kkdai<small>open-source
+                library</small></button>
+            <span class="arrow">→</span>
+            <button class="stage" type="button" role="tab" id="tab-2" aria-selected="false" aria-controls="detail">yt-dlp<small>external ·
+                optional</small></button>
+          </div>
 
-      <div class="tab-detail" id="detail" role="tabpanel">
-        <h3 id="detailTitle">ytnative <span class="chip">built in-house · zero
-            deps</span></h3>
-        <p id="detailBody">Melodix's own parser, written specifically for
-          this project. It speaks YouTube's private <em>InnerTube</em> API —
-          the same protocol the official phone and TV apps use — pretending
-          to be the YouTube app on an Apple Vision Pro, which hands back
-          direct audio links with nothing to decrypt. No external programs and no embedded
-          JavaScript engine, just plain HTTP calls from Go. With nothing to
-          decrypt it is the cheapest route, so it is the default. When YouTube changes
-          something, which it will, ytnative tends to <strong>fail
-            instantly</strong> instead of hanging, and past breakages have
-          been fixed by bumping one client version string.</p>
-      </div>
-      <p class="rail-note">SoundCloud has its own parser,
-        <span class="mono">scnative</span>, built on SoundCloud's api-v2.
-        Internet-radio URLs skip straight to ffmpeg, since there is nothing
-        to extract. The pattern repeats: try the fast native path, keep
-        sturdier fallbacks in reserve.</p>
+          <div class="tab-detail" id="detail" role="tabpanel">
+            <h3 id="detailTitle">ytnative <span class="chip">built in-house · zero
+                deps</span></h3>
+            <p id="detailBody">Melodix's own parser, written specifically for
+              this project. It speaks YouTube's private <em>InnerTube</em> API —
+              the same protocol the official phone and TV apps use — pretending
+              to be the YouTube app on an Apple Vision Pro, which hands back
+              direct audio links with nothing to decrypt. No external programs and no embedded
+              JavaScript engine, just plain HTTP calls from Go. With nothing to
+              decrypt it is the cheapest route, so it is the default. When YouTube changes
+              something, which it will, ytnative tends to <strong>fail
+                instantly</strong> instead of hanging, and past breakages have
+              been fixed by bumping one client version string.</p>
+          </div>
+          </div>
+          <div>
+              <div class="demo" aria-label="Melodix in action">
+                <div class="discord">
+                  <div class="dc-msg">
+                    <div class="dc-avatar"></div>
+                    <div class="dc-body">
+                      <div class="dc-head">
+                        <span class="dc-name">Melodix</span>
+                        <span class="dc-bot">BOT</span>
+                        <span class="dc-time" id="dcTime">Today at 12:32</span>
+                      </div>
+                      <div class="dc-embed">
+                        <div class="dc-embed-in">
+                          <div class="dc-title" id="npTitle">▶️ Now Playing</div>
+                          <div class="dc-desc">🎶 <a href="#survives" id="trackTitle">Never Gonna Give You Up</a></div>
+                          <div class="chips">
+                            <span class="chip">youtube</span>
+                            <span class="chip" id="chipParser">ytnative-link</span>
+                            <span class="chip" id="chipDur">3:32</span>
+                            <span class="chip" id="chipArtist">Rick Astley</span>
+                          </div>
+                          <canvas id="wave" width="640" height="128"></canvas>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-      <div class="feat-grid">
-        <div class="feat">
-          <h3>survives discord too</h3>
-          <p>A silent gateway or a dead voice connection is detected and
-            recovered automatically.
-            Queues survive restarts.</p>
+                <div class="terminal" aria-label="Melodix log output">
+                  <div class="term-bar">
+                    <span class="tl tl-r"></span><span class="tl tl-y"></span><span class="tl tl-g"></span>
+                    <span class="term-title">melodix · logs</span>
+                  </div>
+                  <div class="term-body" id="log" aria-live="off"></div>
+                </div>
+                <p class="demo-cap">Scripted from a real session: ytnative fails,
+                  kkdai takes over mid-track, and the queue never notices.</p>
+              </div>
+          </div>
         </div>
-        <div class="feat">
-          <h3>keeps a memory</h3>
-          <p><code>/history</code> shows what was played; <code>/play
-              42</code> replays entry 42.
-            No link hunting.</p>
-        </div>
-        <div class="feat">
-          <h3>stays small</h3>
-          <p>One binary. State is an embedded store in a directory you
-            pick — no database server to run.
-            Also runs as a terminal player, straight to your speakers.</p>
-        </div>
+
+        <p class="rail-note">SoundCloud has its own parser,
+          <span class="mono">scnative</span>, built on SoundCloud's api-v2.
+          Internet-radio URLs skip straight to ffmpeg, since there is nothing
+          to extract.</p>
       </div>
     </section>
 
     <section id="recovery">
-      <p class="kicker">when things break</p>
-      <h2>A dropped connection should not end the song.</h2>
-      <p class="prose">A fallback chain decides <strong>which</strong> parser
-        plays a track. It does nothing for the far more common problem: the
-        track was already playing fine, and then the network moved. Melodix
-        treats that as a separate job, handled at three levels.</p>
-      <div class="feat-grid">
-        <div class="feat">
-          <h3>read ahead</h3>
-          <p class="prose">Playback runs from a buffer, not straight off the socket, so a
-            stall underneath is absorbed instead of heard. The buffer does
-            not pre-fill: playback still starts immediately, and it fills as
-            the track plays.</p>
-        </div>
-        <div class="feat">
-          <h3>repair in place</h3>
-          <p class="prose">When a connection is cut mid-track, Melodix asks the
-            server for the next byte it had not yet received and carries on.
-            The player above it never notices, and nothing already downloaded
-            is fetched twice.</p>
-        </div>
-        <div class="feat">
-          <h3>reopen, then switch</h3>
-          <p class="prose">If the source is genuinely gone, not briefly interrupted, the same
-            parser reopens at the position it had reached. Only when that
-            fails too does the chain move on.</p>
-        </div>
+      <div class="sec-idx"><span class="n">[02]</span><span class="k">when things break</span></div>
+      <div class="sec-body">
+        <h2>A dropped connection should not end the song.</h2>
+        <p class="prose">The chain decides <strong>which</strong> parser plays a
+          track. The more common failure is different: the track was playing
+          fine, and then the network moved. That is handled in three steps,
+          cheapest first.</p>
+        <ol class="steps">
+          <li><strong>Read ahead</strong>Playback runs from a buffer, not straight off
+            the socket, so a stall underneath is absorbed instead of heard. The
+            buffer does not pre-fill, so playback still starts immediately.</li>
+          <li><strong>Repair in place</strong>When the connection is cut, Melodix asks
+            the server for the next byte it had not yet received and carries
+            on. Nothing already downloaded is fetched twice.</li>
+          <li><strong>Reopen, then switch</strong>If the source is genuinely gone, the
+            same parser reopens at the position it had reached. Only when that
+            fails too does the chain move on.</li>
+        </ol>
+        <p class="dl-note">Discord is covered the same way: a voice reconnect
+          or a gateway drop rejoins and resumes without losing the queue, and
+          the buffer keeps playing while it happens. Queues survive restarts.</p>
       </div>
-      <p class="dl-note">Discord itself is covered separately: a voice
-        reconnect or a gateway drop rejoins and resumes without losing the
-        queue, and the buffer keeps playing while it happens.</p>
     </section>
 
     <section id="selfhost">
-      <p class="kicker">self-hosted</p>
-      <h2>The bot you invited can be taken away.</h2>
-      <p class="prose">Public music bots are a single point of failure you do
-        not control. The two largest, Groovy and Rythm, were shut
-        down in 2021 after a request from YouTube, taking every server's setup
-        with them. Others have drifted in the same direction since: listener
-        caps, queue limits, a premium tier for what used to be free, and an
-        outage that takes out every server at once, because there is only one
-        instance.</p>
-      <p class="prose">Self-hosting removes the middleman instead of betting on a kinder
-        one. Melodix runs under <strong>your</strong> Discord
-        application, on a machine you already have, with no account to sign up
-        for and nothing phoning home. Nobody can revoke it, meter it, or decide
-        that skipping tracks is now a paid feature. If a source breaks, you can
-        read the log, see which parser failed and why, and update on your own
-        schedule — not wait for someone else's.</p>
-      <p class="prose">The trade is real and worth stating plainly: you are the
-        one keeping it online. That means a machine that stays on, a token you
-        keep secret, and an occasional update when YouTube changes something.
-        In exchange the bot is yours, and it does not disappear.</p>
+      <div class="sec-idx"><span class="n">[03]</span><span class="k">self-hosted</span></div>
+      <div class="sec-body">
+        <h2>The bot you invited can be taken away.</h2>
+        <p class="prose">Public music bots are a single point of failure you do
+          not control. Groovy and Rythm were shut down in 2021 at YouTube's
+          request, taking every server's setup with them, and the survivors
+          have added listener caps, queue limits and premium tiers since.
+          Melodix runs under <strong>your</strong> Discord application, on a
+          machine you already have, with no account to sign up for and nothing
+          phoning home. Nobody can revoke it, meter it, or decide that skipping
+          tracks is now a paid feature.</p>
+        <p class="prose">The trade is real: you are the one keeping it online.
+          That means a machine that stays on, a token you keep secret, and an
+          occasional update when YouTube changes something. In exchange the bot
+          is yours, and it does not disappear.</p>
+      </div>
     </section>
 
     <section id="quickstart">
-      <p class="kicker">quick start</p>
-      <h2>Unzip, paste a token, run.</h2>
-      <div class="qs-grid">
-        <div class="qs">
-          <h3>Prebuilt binary</h3>
-          <pre><span class="c"># token from the Discord Developer Portal</span>
-<span class="a">$</span> unzip melodix-linux-amd64.zip &amp;&amp; cd melodix-linux-amd64
-<span class="a">$</span> nano .env   <span class="c"># DISCORD_TOKEN=…</span>
-<span class="a">$</span> ./melodix-discord</pre>
+      <div class="sec-idx"><span class="n">[04]</span><span class="k">quick start</span></div>
+      <div class="sec-body">
+        <h2>Unzip, paste a token, run.</h2>
+        <div class="qs-grid">
+          <div class="qs">
+            <h3>Prebuilt binary</h3>
+            <pre><span class="c"># token from the Discord Developer Portal</span>
+  <span class="a">$</span> unzip melodix-linux-amd64.zip &amp;&amp; cd melodix-linux-amd64
+  <span class="a">$</span> nano .env   <span class="c"># DISCORD_TOKEN=…</span>
+  <span class="a">$</span> ./melodix-discord</pre>
+          </div>
+          <div class="qs">
+            <h3>From source</h3>
+            <pre><span class="c"># Go 1.26 or newer</span>
+  <span class="a">$</span> go build -o melodix-discord ./cmd/discord
+  <span class="a">$</span> DISCORD_TOKEN=your-token ./melodix-discord</pre>
+          </div>
         </div>
-        <div class="qs">
-          <h3>From source</h3>
-          <pre><span class="c"># Go 1.26 or newer</span>
-<span class="a">$</span> go build -o melodix-discord ./cmd/discord
-<span class="a">$</span> DISCORD_TOKEN=your-token ./melodix-discord</pre>
-        </div>
-      </div>
-      <p class="dl-note">The same bundle carries <span class="mono">melodix-cli</span>, a
-        terminal player for your own speakers that needs no Discord account.
-        Full setup — bot creation, invite link, every config knob, Docker —
-        lives in
-        <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.
-      </p>
-    </section>
+        <p class="dl-note">The same bundle carries <span class="mono">melodix-cli</span>, a
+          terminal player for your own speakers that needs no Discord account.
+          Full setup — bot creation, invite link, every config knob, Docker —
+          lives in
+          <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.
+        </p>
 
-    <section id="requirements">
-      <p class="kicker">requirements</p>
-      <h2>One binary, one token, one machine.</h2>
-      <p class="prose">There is no database server to provision and no Redis. State lives in an embedded
-        file-backed store inside a directory you pick, so a backup is a copy of
-        that folder. Everything in the cards below is optional except the first.</p>
-      <div class="feat-grid">
-        <div class="feat">
-          <h3>required</h3>
-          <p class="prose">A Discord bot token, and a machine that stays
-            online. Prebuilt binaries cover Linux, Windows and macOS on both
-            amd64 and arm64 — a small VPS or a Raspberry Pi is plenty, since
-            YouTube playback does no transcoding.</p>
-        </div>
-        <div class="feat">
-          <h3>ffmpeg</h3>
-          <p class="prose">Needed for SoundCloud and internet radio, which have to be
-            decoded. Melodix prefers YouTube's Opus formats, which Discord
-            takes unchanged, so the common YouTube path never reaches it.</p>
-        </div>
-        <div class="feat">
-          <h3>yt-dlp + a js runtime</h3>
-          <p class="prose">The last parser in the chain, and the one that
-            plays live broadcasts. Keep Node, Deno or Bun on
-            <span class="mono">PATH</span> beside it — without one, yt-dlp
-            cannot answer YouTube's challenges and live streams fail.</p>
-        </div>
+        <h3 class="sub" id="requirements">What you need</h3>
+        <dl class="reqs">
+          <div>
+            <dt>required</dt>
+            <dd>A Discord bot token and a machine that stays online. One
+              binary, no database server: state is a folder you pick. A small
+              VPS or a Raspberry Pi is plenty, since YouTube playback does no
+              transcoding.</dd>
+          </div>
+          <div>
+            <dt>ffmpeg · optional</dt>
+            <dd>Only for SoundCloud and internet radio. YouTube's Opus formats
+              go to Discord unchanged, so the common path never touches it.</dd>
+          </div>
+          <div>
+            <dt>yt-dlp + a JS runtime · optional</dt>
+            <dd>The last parser in the chain, and the one that plays live
+              broadcasts. Keep Node, Deno or Bun on
+              <span class="mono">PATH</span> beside it, or live streams fail.</dd>
+          </div>
+          <div>
+            <dt>on a thin connection</dt>
+            <dd><span class="mono">BUFFER_AHEAD_MS</span> sets how long an
+              interruption can last before anyone hears it.
+              <span class="mono">MAX_AUDIO_BITRATE</span> roughly halves
+              bandwidth, since Discord carries 64 kbps anyway unless the server
+              is boosted.</dd>
+          </div>
+        </dl>
       </div>
-      <p class="dl-note">Two settings are worth knowing about on a constrained
-        connection: <span class="mono">BUFFER_AHEAD_MS</span> sets how long an interruption can last before
-        anyone hears it, and
-        <span class="mono">MAX_AUDIO_BITRATE</span> caps the audio format —
-        roughly halving bandwidth with little audible difference, because
-        Discord re-encodes to 64 kbps anyway unless the server is boosted. Both are
-        documented in
-        <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.
-      </p>
     </section>
 
     <section id="commands">
-      <p class="kicker">commands</p>
-      <h2>Few commands. Easy to remember.</h2>
-      <div class="cmd-grid">
-        <div class="cmd"><code>/play</code><span>link, search query, radio
-            URL, or history id</span></div>
-        <div class="cmd"><code>/search</code><span>pick from five results
-            instead of the top hit</span></div>
-        <div class="cmd"><code>/queue</code><span>what is playing and what is
-            waiting</span></div>
-        <div class="cmd"><code>/next</code><span>skip to the next
-            track</span></div>
-        <div class="cmd"><code>/stop</code><span>stop playback and clear the
-            queue</span></div>
-        <div class="cmd"><code>/history</code><span>recently played tracks,
-            replayable by id</span></div>
-        <div class="cmd"><code>/help</code><span>commands by category, group,
-            or flat</span></div>
-        <div class="cmd"><code>/settings</code><span>enable or disable command
-            groups per server</span></div>
-        <div class="cmd"><code>/maintenance</code><span>ping, stats, state export</span></div>
-        <div class="cmd"><code>/about</code><span>where this bot came
-            from</span></div>
+      <div class="sec-idx"><span class="n">[05]</span><span class="k">commands</span></div>
+      <div class="sec-body">
+        <h2>Few commands. Easy to remember.</h2>
+        <div class="cmd-grid">
+          <div class="cmd"><code>/play</code><span>link, search query, radio
+              URL, or history id</span></div>
+          <div class="cmd"><code>/search</code><span>pick from five results
+              instead of the top hit</span></div>
+          <div class="cmd"><code>/queue</code><span>what is playing and what is
+              waiting</span></div>
+          <div class="cmd"><code>/next</code><span>skip to the next
+              track</span></div>
+          <div class="cmd"><code>/stop</code><span>stop playback and clear the
+              queue</span></div>
+          <div class="cmd"><code>/history</code><span>recently played tracks,
+              replayable by id</span></div>
+          <div class="cmd"><code>/help</code><span>commands by category, group,
+              or flat</span></div>
+          <div class="cmd"><code>/settings</code><span>enable or disable command
+              groups per server</span></div>
+          <div class="cmd"><code>/maintenance</code><span>ping, stats, state export</span></div>
+          <div class="cmd"><code>/about</code><span>where this bot came
+              from</span></div>
+        </div>
+        <p class="dl-note">Every command with its options is in the
+          <a href="https://github.com/keshon/melodix#commands">reference on GitHub</a>.
+        </p>
       </div>
-      <p class="dl-note">Every command with its options is in the
-        <a href="https://github.com/keshon/melodix#commands">reference on GitHub</a>.
-      </p>
     </section>
 
     <section id="downloads">
-      <p class="kicker">downloads</p>
-      <h2>Prebuilt binaries.<a class="ver-chip" id="ver" href="https://github.com/keshon/melodix/releases/latest" hidden></a></h2>
-      <div class="dl-grid">
-        <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
-              <use href="#i-linux" />
-            </svg>linux</span><span class="archs">
-            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-amd64.zip">amd64</a>
-            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-arm64.zip">arm64</a></span></div>
-        <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
-              <use href="#i-windows" />
-            </svg>windows</span><span class="archs">
-            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-amd64.zip">amd64</a>
-            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-arm64.zip">arm64</a></span></div>
-        <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
-              <use href="#i-apple" />
-            </svg>macos</span><span class="archs">
-            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-amd64.zip">amd64</a>
-            <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-arm64.zip">arm64</a></span></div>
+      <div class="sec-idx"><span class="n">[06]</span><span class="k">downloads</span></div>
+      <div class="sec-body">
+        <h2>Prebuilt binaries.<a class="ver-chip" id="ver" href="https://github.com/keshon/melodix/releases/latest" hidden></a></h2>
+        <div class="dl-grid">
+          <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+                <use href="#i-linux" />
+              </svg>linux</span><span class="archs">
+              <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-amd64.zip">amd64</a>
+              <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-linux-arm64.zip">arm64</a></span></div>
+          <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+                <use href="#i-windows" />
+              </svg>windows</span><span class="archs">
+              <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-amd64.zip">amd64</a>
+              <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-windows-arm64.zip">arm64</a></span></div>
+          <div class="dl"><span class="os"><svg class="ic" aria-hidden="true" focusable="false">
+                <use href="#i-apple" />
+              </svg>macos</span><span class="archs">
+              <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-amd64.zip">amd64</a>
+              <a href="https://github.com/keshon/melodix/releases/latest/download/melodix-darwin-arm64.zip">arm64</a></span></div>
+        </div>
+        <p class="dl-note">Not sure which? <span class="mono">arm64</span> is Apple Silicon,
+          Raspberry Pi and ARM cloud instances; <span class="mono">amd64</span> is
+          everything else. Each bundle ships both binaries, a ready-to-edit
+          <span class="mono">.env</span>, and the docs.
+          Or run it in <a href="https://github.com/keshon/melodix/tree/main/docker">Docker</a>.
+        </p>
       </div>
-      <p class="dl-note">Not sure which? <span class="mono">arm64</span> is Apple Silicon,
-        Raspberry Pi and ARM cloud instances; <span class="mono">amd64</span> is
-        everything else. Each bundle ships both binaries, a ready-to-edit
-        <span class="mono">.env</span>, and the docs.
-        Or run it in <a href="https://github.com/keshon/melodix/tree/main/docker">Docker</a>.
-      </p>
     </section>
 
     <section id="faq">
-      <p class="kicker">faq</p>
-      <h2>Questions worth asking first.</h2>
-      <div class="faq">
-        <details>
-          <summary>Is Melodix free?</summary>
-          <p class="prose">Yes. Melodix is open source under the MIT license, with no paid tier, no premium commands and no usage limits. You run it on your own machine with your own Discord token, so the only cost is whatever you already pay for that machine.</p>
-        </details>
-        <details>
-          <summary>Can Melodix play YouTube playlists and mixes?</summary>
-          <p class="prose">Yes. Pasting a playlist or mix link expands the whole list into the queue instead of playing only the first video. If the link names a video inside a playlist, that video plays first and the rest of the list follows it.</p>
-        </details>
-        <details>
-          <summary>Does Melodix support Spotify?</summary>
-          <p class="prose">No. Melodix plays YouTube, SoundCloud and internet radio. Spotify does not offer a way for a third-party bot to stream its catalogue, so bots that appear to support it are really searching for the same track on YouTube. If that is what you want, paste the track name into /play and you get the same result without the indirection.</p>
-        </details>
-        <details>
-          <summary>Can one instance serve several Discord servers?</summary>
-          <p class="prose">Yes. Each server gets its own queue and its own player, so playback in one is unaffected by playback in another. One process handles them all; the limit is the bandwidth and CPU of the machine you run it on.</p>
-        </details>
-        <details>
-          <summary>Where does Melodix store data, and how do I back it up?</summary>
-          <p class="prose">In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and is safe to delete at any time.</p>
-        </details>
+      <div class="sec-idx"><span class="n">[07]</span><span class="k">faq</span></div>
+      <div class="sec-body">
+        <h2>Questions worth asking first.</h2>
+        <div class="faq">
+          <details>
+            <summary>Is Melodix free?</summary>
+            <p class="prose">Yes. Melodix is open source under the MIT license, with no paid tier, no premium commands and no usage limits. You run it on your own machine with your own Discord token, so the only cost is whatever you already pay for that machine.</p>
+          </details>
+          <details>
+            <summary>Can Melodix play YouTube playlists and mixes?</summary>
+            <p class="prose">Yes. Pasting a playlist or mix link expands the whole list into the queue instead of playing only the first video. If the link names a video inside a playlist, that video plays first and the rest of the list follows it.</p>
+          </details>
+          <details>
+            <summary>Does Melodix support Spotify?</summary>
+            <p class="prose">No. Melodix plays YouTube, SoundCloud and internet radio. Spotify does not offer a way for a third-party bot to stream its catalogue, so bots that appear to support it are really searching for the same track on YouTube. If that is what you want, paste the track name into /play and you get the same result without the indirection.</p>
+          </details>
+          <details>
+            <summary>Can one instance serve several Discord servers?</summary>
+            <p class="prose">Yes. Each server gets its own queue and its own player, so playback in one is unaffected by playback in another. One process handles them all; the limit is the bandwidth and CPU of the machine you run it on.</p>
+          </details>
+          <details>
+            <summary>Where does Melodix store data, and how do I back it up?</summary>
+            <p class="prose">In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and is safe to delete at any time.</p>
+          </details>
+        </div>
+        <p class="dl-note">Something not covered here? Ask in the
+          <a href="https://discord.gg/uDnTenPxAY">Ctrl+Z server</a> or open an
+          issue on <a href="https://github.com/keshon/melodix/issues">GitHub</a>.</p>
       </div>
-      <p class="dl-note">Something not covered here? Ask in the
-        <a href="https://discord.gg/uDnTenPxAY">Ctrl+Z server</a> or open an
-        issue on <a href="https://github.com/keshon/melodix/issues">GitHub</a>.</p>
     </section>
 
     </main>
@@ -1841,10 +2215,6 @@
       if (yr) yr.textContent = new Date().getFullYear();
 
       /* ============ sticky nav ============ */
-      var navEl = document.querySelector("nav");
-      function syncNav() { navEl.classList.toggle("scrolled", window.scrollY > 8); }
-      window.addEventListener("scroll", syncNav, { passive: true });
-      syncNav();
 
       /* The href="#top" works without JS. With JS we scroll to a true zero and
          skip the hash, so the URL stays clean and Back is unaffected. */
@@ -1857,6 +2227,59 @@
           window.history.replaceState(null, "", location.pathname + location.search);
         }
       });
+
+      /* ============ theme switch ============
+         Three states, not two: a two-state toggle strands anyone who taps it
+         once, because "follow my system" stops being reachable. The stored
+         choice is applied by the bootstrap in <head>; this only draws the
+         control and cycles it. */
+      (function () {
+        var KEY = "melodix-theme";
+        var ORDER = ["auto", "light", "dark"];
+        var root = document.documentElement;
+        var btn = document.getElementById("themeBtn");
+        var svg = btn.querySelector("svg");
+        var light = window.matchMedia("(prefers-color-scheme: light)");
+
+        var GLYPH = {
+          /* half-filled disc: the page is following something outside itself */
+          auto: '<circle cx="12" cy="12" r="8"/><path class="solid" d="M12 4a8 8 0 0 1 0 16z"/>',
+          light: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4L17 7M7 17l-1.6 1.6M18.6 18.6L17 17M7 7L5.4 5.4"/>',
+          dark: '<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>'
+        };
+
+        function current() {
+          var t = root.getAttribute("data-theme");
+          return (t === "light" || t === "dark") ? t : "auto";
+        }
+
+        function render(mode) {
+          svg.innerHTML = GLYPH[mode];
+          var name = mode === "auto"
+            ? "auto (" + (light.matches ? "light" : "dark") + ")"
+            : mode;
+          btn.title = "Theme: " + name;
+          btn.setAttribute("aria-label", "Theme: " + name + ". Change theme.");
+        }
+
+        btn.addEventListener("click", function () {
+          var next = ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length];
+          if (next === "auto") root.removeAttribute("data-theme");
+          else root.setAttribute("data-theme", next);
+          try {
+            if (next === "auto") localStorage.removeItem(KEY);
+            else localStorage.setItem(KEY, next);
+          } catch (e) { /* blocked storage: the choice just will not persist */ }
+          render(next);
+        });
+
+        /* while on auto, follow the system if it changes under us */
+        light.addEventListener("change", function () {
+          if (current() === "auto") render("auto");
+        });
+
+        render(current());
+      })();
     })();
   </script>
 
