@@ -4,10 +4,10 @@
 
 # Melodix
 
-A self-hosted Discord music bot written in Go, with a terminal player thrown in.
-It streams YouTube, SoundCloud and internet radio, and it's built around one
-stubborn idea: playback should survive — flaky streams, dead voice
-connections, gateway reconnects, all of it.
+A self-hosted Discord music bot written in Go, built around one stubborn idea:
+playback should survive — flaky streams, dead voice connections, gateway
+reconnects, all of it. It streams YouTube, SoundCloud and internet radio, and
+for YouTube it hands Discord the original Opus audio without re-encoding it.
 
 Public music bots tend to disappear eventually, usually with a
 cease-and-desist attached. Melodix skips that risk: it's a small binary you
@@ -23,8 +23,14 @@ off for you.
 - It survives Discord too — a silent gateway or a dead voice connection
   gets detected and recovered automatically, and queues live through
   session restarts.
+- It doesn't touch the audio. YouTube already serves Opus and Opus is exactly
+  what Discord wants, so Melodix demuxes the packets and forwards them
+  untouched — no decode, no re-encode, no ffmpeg in the path. Less CPU, no
+  second-generation quality loss, one less thing to install. Streams that
+  can't be forwarded that way fall back to ffmpeg on their own.
 - It keeps a memory: `/history` shows what was played, and `/play 42`
-  replays entry 42. No digging through chat for the original link.
+  replays entry 42. No digging through chat for the original link. Switch the
+  track cache on and a replay skips extraction altogether.
 - Paste a playlist or a mix and the whole thing queues up; `/queue` shows
   what's waiting. When you'd rather not trust the top hit, `/search` lists
   five results with title, uploader and length, and you pick one by pressing
@@ -32,7 +38,9 @@ off for you.
 - It stays small. Just one binary, and for YouTube alone that's genuinely
   all you need — no ffmpeg required. Add ffmpeg for SoundCloud and internet
   radio, and yt-dlp as a last-resort fallback if you want the extra
-  reliability. Storage is a single JSON file, no database to babysit.
+  reliability. State lives in an embedded write-ahead-logged store
+  ([datastore](https://github.com/keshon/datastore)) that survives being
+  killed mid-write — a directory the bot owns, with no database to babysit.
 - It doubles as a terminal player. The same engine drives `melodix-cli`,
   which plays straight to your speakers — handy for testing, or just for
   listening.
