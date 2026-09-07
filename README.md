@@ -1,4 +1,4 @@
-![Melodix banner](https://raw.githubusercontent.com/keshon/melodix/master/assets/readme-banner.webp)
+![Melodix banner](https://raw.githubusercontent.com/keshon/melodix/main/assets/readme-banner.webp)
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/keshon/melodix.svg)](https://pkg.go.dev/github.com/keshon/melodix) [![Release](https://img.shields.io/github/v/release/keshon/melodix)](https://github.com/keshon/melodix/releases) [![License](https://img.shields.io/github/license/keshon/melodix)](LICENSE)
 
@@ -29,8 +29,9 @@ off for you.
   second-generation quality loss, one less thing to install. Streams that
   can't be forwarded that way fall back to ffmpeg on their own.
 - It keeps a memory: `/history` shows what was played, and `/play 42`
-  replays entry 42. No digging through chat for the original link. Switch the
-  track cache on and a replay skips extraction altogether.
+  replays entry 42 — or `/play 45 16 15` to queue several at once. No digging
+  through chat for the original link. Switch the track cache on and a replay
+  skips extraction altogether.
 - Paste a playlist or a mix and the whole thing queues up; `/queue` shows
   what's waiting. When you'd rather not trust the top hit, `/search` lists
   five results with title, uploader and length, and you pick one by pressing
@@ -44,6 +45,22 @@ off for you.
 - It doubles as a terminal player. The same engine drives `melodix-cli`,
   which plays straight to your speakers — handy for testing, or just for
   listening.
+
+## See it work
+
+`/search`, for when you'd rather not trust the top hit — five results, one
+button press to queue the right one:
+
+![Discord: /search returns five results with uploader and duration, picked with a numbered button](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-search.gif)
+
+One playlist link, 70 tracks queued behind the first:
+
+![Discord: /play with a YouTube playlist link queues 70 tracks](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-play-youtube-playlist.gif)
+
+`/history` hands every past track an id and a play count, so `/play 45 16 15`
+queues three of them straight back:
+
+![Discord: /history lists past tracks by id, then /play 45 16 15 replays them](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-history-multiple-play.gif)
 
 ## Try it
 
@@ -115,6 +132,7 @@ every config knob, Docker — is in [docs/running.md](docs/running.md).
 /play https://www.youtube.com/watch?v=...&list=RD   YouTube mix / radio
 /play http://stream-uk1.radioparadise.com/aac-320   internet radio stream
 /play 42                                            replay entry 42 from /history
+/play 45 16 15                                      replay several, in that order
 ```
 
 Any link carrying a `list=` queues the whole list, up to 100 tracks, and
