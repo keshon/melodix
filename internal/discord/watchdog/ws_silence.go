@@ -10,6 +10,11 @@ type WSSilenceMeta struct {
 	SinceLastHeartbeatAck time.Duration
 	HeartbeatLatency      time.Duration
 	Timeout               time.Duration
+	// SessionLockWedged reports that the heartbeat ACK could not be read at
+	// all, rather than that it was read and found stale. Nothing releases a
+	// wedged session mutex, so the watcher treats it as terminal instead of
+	// waiting for a staleness threshold that will never be evaluated.
+	SessionLockWedged bool
 }
 
 // WSSilence restarts a session when the gateway receive loop appears silent.
@@ -19,6 +24,7 @@ type WSSilenceMeta struct {
 // - ticks every tick interval
 // - does nothing until tracker reports ready
 // - triggers unhealthy when both dispatch traffic and heartbeat ACKs are stale
+// - triggers unhealthy when the ACK cannot be read at all
 // - preserves dispatch-only behavior when no heartbeat ACK source is configured
 type WSSilence struct {
 	tracker     *Tracker
@@ -27,14 +33,19 @@ type WSSilence struct {
 	tick        time.Duration
 
 	heartbeatLatency func() time.Duration
-	lastHeartbeatAck func() time.Time
+	lastHeartbeatAck func() (time.Time, bool)
 	onUnhealthy      func(meta WSSilenceMeta)
 }
 
 type WSSilenceOptions struct {
-	SettleDelay      time.Duration
-	Tick             time.Duration
-	LastHeartbeatAck func() time.Time
+	SettleDelay time.Duration
+	Tick        time.Duration
+	// LastHeartbeatAck reads the session's last heartbeat ACK, reporting false
+	// when it could not complete the read. A source that can block forever
+	// must return false rather than wait: this watcher is the thing that
+	// notices a dead gateway, so blocking it blinds the bot instead of
+	// delaying it.
+	LastHeartbeatAck func() (time.Time, bool)
 }
 
 func NewWSSilence(tracker *Tracker, timeout time.Duration, heartbeatLatency func() time.Duration, onUnhealthy func(meta WSSilenceMeta), opts WSSilenceOptions) *WSSilence {
@@ -67,7 +78,14 @@ func (w *WSSilence) unhealthyMeta(now time.Time) (WSSilenceMeta, bool) {
 
 	var sinceHeartbeatAck time.Duration
 	if w.lastHeartbeatAck != nil {
-		lastAck := w.lastHeartbeatAck()
+		lastAck, ok := w.lastHeartbeatAck()
+		if !ok {
+			return WSSilenceMeta{
+				SinceLastWS:       sinceWS,
+				Timeout:           w.timeout,
+				SessionLockWedged: true,
+			}, true
+		}
 		if !lastAck.IsZero() {
 			if now.Before(lastAck) {
 				sinceHeartbeatAck = 0

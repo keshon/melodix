@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+func ackAt(t time.Time) func() (time.Time, bool) {
+	return func() (time.Time, bool) { return t, true }
+}
+
 func readyTrackerAt(lastWS time.Time) *Tracker {
 	tracker := NewTracker()
 	tracker.lastWSNano.Store(lastWS.UnixNano())
@@ -19,7 +23,7 @@ func TestWSSilenceKeepsQuietSessionWithFreshHeartbeatHealthy(t *testing.T) {
 		2*time.Minute,
 		func() time.Duration { return 100 * time.Millisecond },
 		nil,
-		WSSilenceOptions{LastHeartbeatAck: func() time.Time { return now.Add(-10 * time.Second) }},
+		WSSilenceOptions{LastHeartbeatAck: ackAt(now.Add(-10 * time.Second))},
 	)
 
 	if meta, unhealthy := watcher.unhealthyMeta(now); unhealthy {
@@ -34,7 +38,7 @@ func TestWSSilenceTriggersWhenDispatchAndHeartbeatAreStale(t *testing.T) {
 		2*time.Minute,
 		func() time.Duration { return 100 * time.Millisecond },
 		nil,
-		WSSilenceOptions{LastHeartbeatAck: func() time.Time { return now.Add(-4 * time.Minute) }},
+		WSSilenceOptions{LastHeartbeatAck: ackAt(now.Add(-4 * time.Minute))},
 	)
 
 	meta, unhealthy := watcher.unhealthyMeta(now)
@@ -71,7 +75,7 @@ func TestWSSilencePreservesLegacyBehaviorBeforeFirstHeartbeatAck(t *testing.T) {
 		2*time.Minute,
 		nil,
 		nil,
-		WSSilenceOptions{LastHeartbeatAck: func() time.Time { return time.Time{} }},
+		WSSilenceOptions{LastHeartbeatAck: ackAt(time.Time{})},
 	)
 
 	if _, unhealthy := watcher.unhealthyMeta(now); !unhealthy {
@@ -87,5 +91,47 @@ func TestWSSilenceWaitsUntilReady(t *testing.T) {
 
 	if _, unhealthy := watcher.unhealthyMeta(now); unhealthy {
 		t.Fatal("session was unhealthy before ready")
+	}
+}
+
+// A wedged session mutex is the failure that once cost 22 hours of silent
+// downtime: the ACK source could not answer, so the watcher that existed to
+// report the dead gateway blocked instead. It must now decide without one.
+func TestWSSilenceTriggersWhenHeartbeatAckCannotBeRead(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	watcher := NewWSSilence(
+		readyTrackerAt(now.Add(-3*time.Minute)),
+		2*time.Minute,
+		nil,
+		nil,
+		WSSilenceOptions{LastHeartbeatAck: func() (time.Time, bool) { return time.Time{}, false }},
+	)
+
+	meta, unhealthy := watcher.unhealthyMeta(now)
+	if !unhealthy {
+		t.Fatal("session whose heartbeat ACK could not be read was healthy")
+	}
+	if !meta.SessionLockWedged {
+		t.Fatal("SessionLockWedged = false, want true so the log says why")
+	}
+	if meta.SinceLastWS != 3*time.Minute {
+		t.Fatalf("SinceLastWS = %s, want 3m", meta.SinceLastWS)
+	}
+}
+
+// The unreadable-ACK path must not swallow the healthy case: an ACK source
+// that answers keeps deciding on staleness as before.
+func TestWSSilenceKeepsSessionHealthyWhenAckIsReadable(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	watcher := NewWSSilence(
+		readyTrackerAt(now.Add(-3*time.Minute)),
+		2*time.Minute,
+		nil,
+		nil,
+		WSSilenceOptions{LastHeartbeatAck: ackAt(now.Add(-1 * time.Second))},
+	)
+
+	if meta, unhealthy := watcher.unhealthyMeta(now); unhealthy {
+		t.Fatalf("session with a fresh readable ACK was unhealthy: %+v", meta)
 	}
 }

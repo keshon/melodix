@@ -386,6 +386,16 @@ There are three distinct failure classes here, each with its own mechanism:
    service outlives individual sessions, queues and players survive
    reconnects — sinks just get invalidated and re-acquired.
 
+   Both watchdogs read the heartbeat ACK, and that read is bounded on
+   purpose. `discordgo` holds the session write lock across gateway reads
+   that carry no deadline, so a wedged session parks every reader — which in
+   server-domme once meant 22 hours of a dead gateway with nothing in the log,
+   because the two watchdogs that existed to report it were queued behind the
+   same mutex. `lastHeartbeatAck` gives up after a timeout and reports that as
+   its own unhealthy signal (`session_lock_wedged`), and `closeSession`
+   abandons a session whose close will not return, so the restart loop is
+   never stranded on the same lock.
+
 On the user-facing side: synchronous failures get answered directly by the
 handler, as an ephemeral embed. Asynchronous failures — a track dying
 mid-play — travel through
