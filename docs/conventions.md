@@ -370,15 +370,22 @@ writes files at runtime.
 bot, not by whoever fixed the bug. Lead with what changed *for them*, in plain
 language — "YouTube plays again, and now without ffmpeg" — and say whether
 upgrading costs them anything: config changes, a migration, a new dependency.
-One short paragraph of context is plenty.
+
+**[practice]** The body stays under 200 words: a bold one-line headline, at
+most two short paragraphs, then the upgrade cost. That is a budget, not an
+aspiration. The failure mode is a post-mortem written for the author, and it
+arrives by addition — every sentence is defensible on its own, and the essay
+is what they add up to. A release carrying three user-facing changes gets
+three headlines with a short paragraph each, not three essays.
 
 **[practice]** Root-cause detail does not go on the release page at all — not
 at the top, and not folded into a `<details>` block at the end either. It
 lives in the commit messages, where the next maintainer actually looks. Parser
 keys, InnerTube client names, HTTP header syntax and internal log-event names
-mean nothing to someone choosing a music bot. Commit messages are the opposite
-case and stay as technical as they need to be, which is what makes leaving the
-detail out here cost nothing.
+mean nothing to someone choosing a music bot. Neither does how the bug was
+found, what it cost some other project, or why the previous approach was
+wrong. Commit messages are the opposite case and stay as technical as they
+need to be, which is what makes leaving the detail out here cost nothing.
 
 **[invariant]** The release body comes from the **annotated tag's message
 body** — `.github/workflows/release.yml` reads `%(contents:body)` — so that is
@@ -386,9 +393,14 @@ where the notes get written:
 
 ```bash
 git tag -a --cleanup=verbatim vYYYY.MM.DD -F notes.md
+git for-each-ref refs/tags/vYYYY.MM.DD --format='%(contents:body)'   # read it back
 ```
 
 `--cleanup=verbatim` is not optional. Git's default cleanup strips every line
 beginning with `#` as a comment, which silently eats Markdown headings and
-publishes a release with its structure missing. The tag's subject line is not
-part of the release body either, so nothing load-bearing goes there.
+publishes a release with its structure missing. Read the body back before
+pushing the tag: that second command is the entire check, and nothing else
+catches a forgotten flag, because the tag is created successfully either way
+and nothing complains until the release page is already public. The tag's
+subject line is not part of the release body either, so nothing load-bearing
+goes there.
