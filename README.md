@@ -14,62 +14,71 @@ cease-and-desist attached. Melodix skips that risk: it's a small binary you
 run yourself, with your own token, on your own machine. Nobody can turn it
 off for you.
 
-## What it does well
+## What it does
 
-- Melodix refuses to drop a track. Every track has several extraction
-  backends behind it (native extractors, kkdai, yt-dlp). If a stream dies
-  mid-play, it reopens at the same position; if a backend keeps failing, it
-  falls through to the next one.
-- It survives Discord too — a silent gateway or a dead voice connection
-  gets detected and recovered automatically, and queues live through
-  session restarts.
-- It doesn't touch the audio. YouTube already serves Opus and Opus is exactly
-  what Discord wants, so Melodix demuxes the packets and forwards them
-  untouched — no decode, no re-encode, no ffmpeg in the path. Less CPU, no
-  second-generation quality loss, one less thing to install. Streams that
-  can't be forwarded that way fall back to ffmpeg on their own.
-- It keeps a memory: `/history` shows what was played, and `/play 42`
-  replays entry 42 — or `/play 45 16 15` to queue several at once. No digging
-  through chat for the original link. Switch the track cache on and a replay
-  skips extraction altogether.
-- Paste a playlist or a mix and the whole thing queues up; `/queue` shows
-  what's waiting. When you'd rather not trust the top hit, `/search` lists
-  five results with title, uploader and length, and you pick one by pressing
-  a number.
-- It stays small. Just one binary, and for YouTube alone that's genuinely
-  all you need — no ffmpeg required. Add ffmpeg for SoundCloud and internet
-  radio, and yt-dlp as a last-resort fallback if you want the extra
-  reliability. State lives in an embedded write-ahead-logged store
-  ([datastore](https://github.com/keshon/datastore)) that survives being
-  killed mid-write — a directory the bot owns, with no database to babysit.
-- It doubles as a terminal player. The same engine drives `melodix-cli`,
-  which plays straight to your speakers — handy for testing, or just for
-  listening.
+- Plays YouTube, SoundCloud and internet radio, across as many servers as you
+  put it in — one binary, one machine.
+- Never re-encodes the YouTube path. YouTube serves Opus, Discord wants Opus,
+  so the packets go through as they are — less CPU, no second-generation
+  quality loss, and no ffmpeg to install. SoundCloud and radio aren't served
+  in a forwardable format, so those take the ffmpeg route.
+- Falls through when an extractor breaks, and they do break. Every track has
+  several behind it — native, kkdai, yt-dlp — and a stream that dies mid-play
+  reopens where it stopped rather than starting the song again.
+- Survives Discord too. A silent gateway or a dead voice connection is spotted
+  and recovered on its own, and the queue lives through the reconnect.
+- Numbers everything it plays, so something from last week is `/play 42`
+  rather than a scroll back through chat. Turn the track cache on and a repeat
+  never touches the network at all.
+- Keeps its state in a directory you choose — an embedded write-ahead log
+  ([datastore](https://github.com/keshon/datastore)) that survives being killed
+  mid-write. No database server, no migrations.
+- Doubles as a terminal player: the same engine drives `melodix-cli`, straight
+  to your speakers, no Discord account involved.
 
 ## See it work
 
-`/search`, for when you'd rather not trust the top hit — five results, one
-button press to queue the right one:
+| Pick the right hit | Queue a whole playlist | Replay from history |
+|:---:|:---:|:---:|
+| [![Discord: /search returns five results with uploader and duration, picked with a numbered button](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-search.gif)](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-search.gif) | [![Discord: /play with a YouTube playlist link queues 70 tracks](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-play-youtube-playlist.gif)](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-play-youtube-playlist.gif) | [![Discord: /history lists past tracks by id, then /play 45 16 15 replays them](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-history-multiple-play.gif)](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-history-multiple-play.gif) |
+| `/search` lists five results with uploader and length; one button press queues the one you meant. | One link, 70 tracks queued behind the first. | `/history` gives every track an id, so `/play 45 16 15` queues three of them straight back. |
 
-![Discord: /search returns five results with uploader and duration, picked with a numbered button](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-search.gif)
+Click any of them to play full size.
 
-One playlist link, 70 tracks queued behind the first:
+## What it doesn't do
 
-![Discord: /play with a YouTube playlist link queues 70 tracks](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-play-youtube-playlist.gif)
+A niche bot, and the niche is worth naming: music on servers you run yourself,
+for people you know. Several things people reasonably expect are missing
+because of that, and it's better to find out here than after installing.
 
-`/history` hands every past track an id and a play count, so `/play 45 16 15`
-queues three of them straight back:
+- **No volume control or audio filters.** Both mean decoding and re-encoding
+  every packet, which is the one thing the audio path is built to avoid.
+  Discord's own per-user volume still works.
+- **No web dashboard.** Configuration is environment variables and slash
+  commands. Nothing to log into, nothing listening on a port.
+- **No accounts, premium tier or telemetry.** Your token, your machine,
+  nothing phoning home.
+- **No Spotify, Apple Music or Tidal.** Their audio is DRM-protected. Quietly
+  playing whichever YouTube video matches the title is a different product,
+  and a worse one.
+- **No loop, shuffle or seek** — yet. Nothing in the way; they just aren't
+  built.
+- **No horizontal scaling.** One process is one failure domain, sized for
+  servers you know rather than for hosting hundreds. A supervisor brings it
+  back in seconds, but a crash still costs the queue.
+- **Doesn't squat in the channel.** When the queue runs out it leaves.
 
-![Discord: /history lists past tracks by id, then /play 45 16 15 replays them](https://raw.githubusercontent.com/keshon/melodix/main/assets/demo-history-multiple-play.gif)
+## Get it running
 
-## Try it
+Hear it before you install anything: the bot lives in the
+[Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server — join a voice channel
+and use slash commands in `#music-spam`.
 
-The bot lives in the [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server —
-hop into a voice channel and use slash commands in `#music-spam`.
+To run your own, take a binary from the
+[releases page](https://github.com/keshon/melodix/releases), put your token in
+`.env`, and start it. Nothing to compile, no runtime to install.
 
-Prebuilt binaries are on the [releases page](https://github.com/keshon/melodix/releases).
-
-## Quick start
+From source instead, with Go 1.26 or newer:
 
 ```bash
 # Discord bot — token from the Discord Developer Portal
@@ -81,17 +90,17 @@ go build -o melodix-cli ./cmd/cli
 ./melodix-cli
 ```
 
-FFmpeg is only needed for SoundCloud and internet radio — a YouTube-only bot
-doesn't need it at all. yt-dlp is a last-resort fallback, optional except for
-YouTube live broadcasts, and it wants a JavaScript runtime (node, deno or bun)
-on `PATH` to be useful. The full setup guide — creating the bot, invite link,
-every config knob, Docker — is in [docs/running.md](docs/running.md).
+FFmpeg is only needed for SoundCloud and internet radio. yt-dlp is a
+last-resort fallback, optional except for YouTube live broadcasts, and it wants
+a JavaScript runtime on `PATH` to be useful. The full setup guide — creating
+the bot, invite link, every config knob, Docker — is in
+[docs/running.md](docs/running.md).
 
 ## Commands
 
 <!-- generated -->
 
-### ℹ️ Information
+### Information
 
 - **/about** — Discover the origin of this bot
 - **/help** — Get a list of available commands
@@ -99,7 +108,7 @@ every config knob, Docker — is in [docs/running.md](docs/running.md).
   - **/help group** — View commands grouped by group
   - **/help flat** — View all commands as a flat list
 
-### 🎵 Music
+### Music
 
 - **/history** — Show recently played tracks (replay by id with /play)
 - **/next** — Skip to the next track
@@ -108,7 +117,7 @@ every config knob, Docker — is in [docs/running.md](docs/running.md).
 - **/search** — Search and pick a track to play
 - **/stop** — Stop playback and clear queue
 
-### ⚙️ Settings
+### Settings
 
 - **/maintenance** — Bot maintenance commands
   - **/maintenance ping** — Check bot latency
@@ -119,7 +128,6 @@ every config knob, Docker — is in [docs/running.md](docs/running.md).
   - **/settings commands status** — Show enabled and disabled command groups
   - **/settings commands enable** — Enable a command group
   - **/settings commands disable** — Disable a command group
-
 
 <!-- /generated -->
 
@@ -149,10 +157,9 @@ is one consumer of it, the CLI is another. If you're curious how the parser
 fallback and voice recovery actually work, [docs/architecture.md](docs/architecture.md)
 walks through the whole thing.
 
-The codebase keeps itself honest: the house rules — naming, concurrency
-contracts, how to add a source or parser — are written down in
-[docs/conventions.md](docs/conventions.md), and CI enforces the mechanical
-half (vet, race-enabled tests, a lint config that passes with zero findings).
+House rules — naming, concurrency contracts, how to add a source or parser —
+are in [docs/conventions.md](docs/conventions.md), where every rule carries the
+check that enforces it or says plainly that nothing does.
 
 ## License
 
