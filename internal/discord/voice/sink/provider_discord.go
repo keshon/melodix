@@ -45,6 +45,12 @@ func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReady
 // (e.g. no permission = no event).
 const voiceJoinTimeout = 15 * time.Second
 
+// daveReadyTimeout bounds the wait for end-to-end encryption to come up on a
+// channel that uses it. The MLS exchange is a handful of round trips and
+// settles in well under a second; ten is long enough that a slow link is not
+// mistaken for a broken handshake.
+const daveReadyTimeout = 10 * time.Second
+
 // Sink joins the voice channel (or reuses existing) and returns an AudioSink.
 // target must be non-empty.
 func (p *DiscordSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
@@ -82,7 +88,45 @@ func (p *DiscordSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 
 	time.Sleep(p.voiceReadyDelay)
 
+	if err := p.awaitEncryption(vc); err != nil {
+		if derr := vc.Disconnect(context.Background()); derr != nil {
+			p.log.Warn().Str("phase", "dave").Err(derr).Msg("voice_disconnect_failed")
+		}
+		p.vc = nil
+		p.currentChannelID = ""
+		return nil, err
+	}
+
 	return &DiscordSink{vc: vc, log: p.log}, nil
+}
+
+// awaitEncryption blocks until the voice connection can encrypt, on a channel
+// where Discord requires it.
+//
+// Discord puts a channel into end-to-end encryption (DAVE) when every
+// participant claims to support it, and from that point it expects encrypted
+// frames. The connection cannot produce them until the MLS group is
+// established, and sending anyway does not merely fail for us: Discord closes
+// the connection within seconds, the rejoin re-keys the group, and while that
+// repeats nobody in the channel can hear anybody. Refusing to play is the mild
+// failure here — one guild gets an error message instead of a whole voice
+// channel going silent.
+//
+// WaitForDAVEReady returns immediately on a channel that is not encrypted, so
+// this costs nothing in the ordinary case.
+func (p *DiscordSinkProvider) awaitEncryption(vc *discordgo.VoiceConnection) error {
+	ctx, cancel := context.WithTimeout(context.Background(), daveReadyTimeout)
+	defer cancel()
+
+	if err := vc.WaitForDAVEReady(ctx); err != nil {
+		p.log.Error().
+			Str("guild_id", p.guildID).
+			Dur("waited", daveReadyTimeout).
+			Err(err).
+			Msg("voice_encryption_unavailable")
+		return fmt.Errorf("voice channel uses end-to-end encryption and it did not come up: %w", err)
+	}
+	return nil
 }
 
 // ReleaseSink disconnects from the voice channel for the given target.
