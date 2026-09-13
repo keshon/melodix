@@ -370,6 +370,42 @@ var ErrVoiceUnknownEncryptionMode = errors.New("unknown encryption mode")
 // nothing to retry and no version to fall back to.
 var ErrVoiceE2EERequired = errors.New("voice channel requires end-to-end encryption (DAVE)")
 
+// daveProtocolVersion is the end-to-end encryption version advertised when
+// identifying to a voice server.
+//
+// There is no fallback to choose here. Discord enforces DAVE on every non-stage
+// voice channel and answers version 0 with close code 4017 — and 0 is also what
+// this field marshals to when a struct literal omits it. Such a literal still
+// compiles and the socket still opens, so the mistake stays invisible until a
+// real voice channel refuses to admit the bot, which is why the payload is
+// built in one place with a test over its JSON.
+const daveProtocolVersion = 1
+
+// voiceHandshakeData is the voice identify payload (op 0).
+type voiceHandshakeData struct {
+	ServerID               string `json:"server_id"`
+	UserID                 string `json:"user_id"`
+	SessionID              string `json:"session_id"`
+	Token                  string `json:"token"`
+	MaxDAVEProtocolVersion int    `json:"max_dave_protocol_version"`
+}
+
+type voiceHandshakeOp struct {
+	Op   int                `json:"op"` // Always 0
+	Data voiceHandshakeData `json:"d"`
+}
+
+// newVoiceHandshake builds the identify sent when a voice websocket opens.
+func newVoiceHandshake(guildID, userID, sessionID, token string) voiceHandshakeOp {
+	return voiceHandshakeOp{Op: 0, Data: voiceHandshakeData{
+		ServerID:               guildID,
+		UserID:                 userID,
+		SessionID:              sessionID,
+		Token:                  token,
+		MaxDAVEProtocolVersion: daveProtocolVersion,
+	}}
+}
+
 // websocket open the voice websocket, handle reconnect, and listens on it for messages and passes them to the voice event handler.
 // This is automatically called by the Open func.
 func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token string) {
@@ -449,24 +485,7 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 		v.Cond.L.Unlock()
 
 		if i == 0 {
-			type voiceHandshakeData struct {
-				ServerID               string `json:"server_id"`
-				UserID                 string `json:"user_id"`
-				SessionID              string `json:"session_id"`
-				Token                  string `json:"token"`
-				MaxDAVEProtocolVersion int    `json:"max_dave_protocol_version"`
-			}
-			type voiceHandshakeOp struct {
-				Op   int                `json:"op"` // Always 0
-				Data voiceHandshakeData `json:"d"`
-			}
-			data := voiceHandshakeOp{0, voiceHandshakeData{
-				ServerID:               v.GuildID,
-				UserID:                 v.session.State.User.ID,
-				SessionID:              v.sessionID,
-				Token:                  token,
-				
-			}}
+			data := newVoiceHandshake(v.GuildID, v.session.State.User.ID, v.sessionID, token)
 
 			v.wsMu.Lock()
 			err = wsConn.WriteJSON(data)

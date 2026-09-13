@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -96,5 +97,33 @@ func TestWaitForDAVEReadyReturnsOnceEncryptionComesUp(t *testing.T) {
 	}
 	if !dave.CanEncrypt() {
 		t.Fatal("returned before the session could encrypt")
+	}
+}
+
+// The regression that prompted this test: the identify literal lost its
+// MaxDAVEProtocolVersion field during an unrelated edit. It compiled, the
+// socket opened, and the field marshalled as 0 — which Discord answers with
+// close code 4017, so the bot could not join any voice channel at all. Assert
+// the JSON that actually goes on the wire, not the constant behind it.
+func TestVoiceHandshakeAdvertisesDAVE(t *testing.T) {
+	raw, err := json.Marshal(newVoiceHandshake("guild", "user", "session", "token"))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var got struct {
+		Data struct {
+			Version *int `json:"max_dave_protocol_version"`
+		} `json:"d"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if got.Data.Version == nil {
+		t.Fatalf("max_dave_protocol_version missing from the identify: %s", raw)
+	}
+	if *got.Data.Version != 1 {
+		t.Fatalf("max_dave_protocol_version = %d, want 1: 0 is refused with close code 4017", *got.Data.Version)
 	}
 }
