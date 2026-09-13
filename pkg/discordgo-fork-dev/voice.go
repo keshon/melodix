@@ -1285,6 +1285,13 @@ func (v *VoiceConnection) handleDAVEBinary(message []byte) {
 		dave := v.dave
 		v.Cond.L.Unlock()
 		if dave != nil {
+			// Logged on success as well as failure, because its absence is the
+			// diagnosis. This is the first thing the server sends back after our
+			// key package and it is small, where the Welcome that follows is
+			// several kilobytes. A connection that receives this and never the
+			// Welcome is losing large frames somewhere on the path, which looks
+			// nothing like a connection that receives neither.
+			v.log(LogInformational, "DAVE external sender package (%d bytes)", len(payload))
 			if err := dave.HandleExternalSenderPackage(payload); err != nil {
 				v.log(LogError, "DAVE external sender package failed: %s", err)
 			}
