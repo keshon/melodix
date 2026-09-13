@@ -2,6 +2,7 @@ package sink
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -45,6 +46,20 @@ func NewDiscordSinkProvider(getSession SessionGetter, guildID string, voiceReady
 // (e.g. no permission = no event).
 const voiceJoinTimeout = 15 * time.Second
 
+// joinFailure explains a refused voice join, where the reason is worth more
+// than the fact.
+//
+// Discord has required end-to-end encryption on every non-stage voice channel
+// since March 2026, and a client that does not negotiate it is closed with code
+// 4017. There is no version to fall back to and nothing to retry, so the one
+// thing worth saying is which of those two situations this is.
+func joinFailure(err error) error {
+	if errors.Is(err, discordgo.ErrVoiceE2EERequired) {
+		return fmt.Errorf("this voice channel requires end-to-end encryption and the bot could not negotiate it: %w", err)
+	}
+	return fmt.Errorf("failed to join voice channel: %w", err)
+}
+
 // daveReadyTimeout bounds the wait for end-to-end encryption to come up on a
 // channel that uses it. The MLS exchange is a handful of round trips and
 // settles in well under a second; ten is long enough that a slow link is not
@@ -80,7 +95,7 @@ func (p *DiscordSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 	defer cancel()
 	vc, err := dg.ChannelVoiceJoin(joinCtx, p.guildID, target, false, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to join voice channel: %w", err)
+		return nil, joinFailure(err)
 	}
 	p.vc = vc
 	p.currentChannelID = target

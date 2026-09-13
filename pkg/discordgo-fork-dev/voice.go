@@ -364,6 +364,12 @@ var ErrVoiceReconnectionLimit = errors.New("reconnection limit reached")
 // ErrVoiceUnknownEncryptionMode means Discord requested encryption mode which is not supported
 var ErrVoiceUnknownEncryptionMode = errors.New("unknown encryption mode")
 
+// ErrVoiceE2EERequired reports voice close code 4017: the channel requires a
+// client that speaks the DAVE protocol, and this connection did not negotiate
+// it. Discord enforces this on every non-stage voice channel, so there is
+// nothing to retry and no version to fall back to.
+var ErrVoiceE2EERequired = errors.New("voice channel requires end-to-end encryption (DAVE)")
+
 // websocket open the voice websocket, handle reconnect, and listens on it for messages and passes them to the voice event handler.
 // This is automatically called by the Open func.
 func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token string) {
@@ -459,7 +465,7 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 				UserID:                 v.session.State.User.ID,
 				SessionID:              v.sessionID,
 				Token:                  token,
-				MaxDAVEProtocolVersion: v.session.MaxDAVEProtocolVersion,
+				
 			}}
 
 			v.wsMu.Lock()
@@ -540,12 +546,22 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 				default:
 				}
 
+				// 4017 is the channel demanding end-to-end encryption we did not
+				// negotiate. It fails the connection rather than returning
+				// quietly like its neighbours below: leaving the status alone
+				// means the join sits until its own deadline and reports a
+				// timeout, which says nothing about a cause that cannot be
+				// retried or worked around.
+				if websocket.IsCloseError(err, 4017) {
+					v.failure(ErrVoiceE2EERequired)
+					return
+				}
+
 				// 4014 indicates a manual disconnection by someone in the guild;
-				// 4017 indicates DAVE protocol required but not supported;
 				// 4021 indicates that the voice connection was dropped due to rate limiting;
 				// 4022 indicates that the call was terminated (e.g., channel deleted, voice server changed, call ended).
 				// we shouldn't reconnect.
-				if websocket.IsCloseError(err, 4014, 4017, 4021, 4022) {
+				if websocket.IsCloseError(err, 4014, 4021, 4022) {
 					v.log(LogInformational, "received close code disconnected")
 
 					return

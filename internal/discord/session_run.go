@@ -25,16 +25,6 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	}
 	dg.LogLevel = discordgo.LogInformational
 
-	// Advertised before the first voice join, so a session carries one answer
-	// for its whole life. Logged either way: when a voice channel refuses to
-	// come up, this is the first thing worth knowing.
-	if !b.cfg.DaveEnabled {
-		dg.MaxDAVEProtocolVersion = 0
-		b.log.Info().Msg("voice_e2ee_disabled")
-	} else {
-		b.log.Debug().Msg("voice_e2ee_enabled")
-	}
-
 	b.mu.Lock()
 	b.dg = dg
 	b.cmdLogger = cmdlogger.NewLogger(dg, b.storage, b.log)

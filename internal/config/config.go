@@ -26,18 +26,6 @@ type Config struct {
 	// received.
 	WSSilenceTimeout time.Duration `env:"WS_SILENCE_TIMEOUT" envDefault:"2m"`
 
-	// DaveEnabled advertises support for Discord's end-to-end voice encryption
-	// (DAVE). Turning it off makes Discord use transport encryption for any
-	// channel this bot is in, which is the pre-DAVE behaviour.
-	//
-	// The reason to turn it off is a network that cannot complete the key
-	// exchange: it needs frames larger than the rest of the protocol, and a path
-	// that silently drops those leaves the bot unable to join a voice channel at
-	// all. Music with transport encryption beats no music. Note the effect is
-	// channel-wide, not per-bot — everyone in the channel loses end-to-end
-	// encryption while the bot is there.
-	DaveEnabled bool `env:"DAVE_ENABLED" envDefault:"true"`
-
 	// DiscordUnhealthyMode controls what happens when the watchdogs or the API
 	// probe decide the session is unhealthy.
 	// Canonical: restart-session|restart-voice|ignore.
