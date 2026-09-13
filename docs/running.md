@@ -31,6 +31,34 @@ ytdlp_no_js_runtime_live_streams_will_fail looked_for=["deno","node","bun"]
 
 The Docker image ships Node, so it needs nothing further.
 
+### Proxies
+
+If YouTube is throttled or blocked where the bot runs, the standard environment
+variables are enough — there is no setting for this, because none is needed:
+
+```bash
+HTTPS_PROXY=http://proxy.example:8080
+```
+
+Every HTTP request Melodix makes goes through Go's default transport, which
+reads `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY`. That covers the native
+extractors, search, playlists, SoundCloud and radio. yt-dlp and ffmpeg are
+started without a scrubbed environment, so they inherit the same variables;
+ffmpeg reads the lowercase `http_proxy`, so set both spellings if you rely on
+it.
+
+To proxy only the media side and leave Discord alone:
+
+```bash
+NO_PROXY=discord.com,discordapp.com,discord.media
+```
+
+`NO_PROXY` bypasses the *proxy*, not a VPN — those work at different layers, so
+a tunnel still carries what this exempts.
+
+Voice audio never goes through any of it. It is UDP straight to Discord, and an
+HTTP proxy cannot carry it.
+
 ---
 
 ## Discord bot
