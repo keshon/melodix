@@ -459,7 +459,7 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 				UserID:                 v.session.State.User.ID,
 				SessionID:              v.sessionID,
 				Token:                  token,
-				MaxDAVEProtocolVersion: 1,
+				MaxDAVEProtocolVersion: v.session.MaxDAVEProtocolVersion,
 			}}
 
 			v.wsMu.Lock()

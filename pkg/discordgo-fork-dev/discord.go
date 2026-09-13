@@ -24,6 +24,11 @@ import (
 // VERSION of DiscordGo, follows Semantic Versioning. (http://semver.org/)
 const VERSION = "0.29.0"
 
+// daveProtocolVersion is the end-to-end voice encryption version a new Session
+// advertises. It is the default for Session.MaxDAVEProtocolVersion, which is
+// where the reason to change it is documented.
+const daveProtocolVersion = 1
+
 // New creates a new Discord session with provided token.
 // If the token is for a bot, it must be prefixed with "Bot "
 //
@@ -50,6 +55,7 @@ func New(token string) (s *Session, err error) {
 		UserAgent:              "DiscordBot (https://github.com/bwmarrin/discordgo, v" + VERSION + ")",
 		sequence:               new(int64),
 		LastHeartbeatAck:       time.Now().UTC(),
+		MaxDAVEProtocolVersion: daveProtocolVersion,
 	}
 
 	// Initialize the Identify Package with defaults

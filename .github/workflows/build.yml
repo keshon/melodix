@@ -42,7 +42,7 @@ jobs:
               working-directory: pkg/discordgo-fork-dev
               env:
                   CGO_ENABLED: 1
-              run: go test -race -vet=off -run 'TestWaitForDAVEReady|TestHeartbeatLatency' ./...
+              run: go test -race -vet=off -run 'TestDAVE|TestWaitForDAVEReady|TestHeartbeatLatency' ./...
 
     lint:
         name: Lint

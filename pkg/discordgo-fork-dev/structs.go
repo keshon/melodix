@@ -101,6 +101,16 @@ type Session struct {
 	// The user agent used for REST APIs
 	UserAgent string
 
+	// MaxDAVEProtocolVersion is the end-to-end voice encryption version this
+	// client advertises when joining a voice channel. 1 enables DAVE, 0 declines
+	// it and Discord falls back to transport encryption for the channel.
+	//
+	// Declining is worth having because the MLS exchange can fail for reasons
+	// outside the client: a path that silently drops the large frames it needs
+	// leaves a bot unable to join at all, and no audio is a worse outcome than
+	// audio without end-to-end encryption. Set it before Open.
+	MaxDAVEProtocolVersion int
+
 	// Stores the last HeartbeatAck that was received (in UTC).
 	// Guarded by the Session's RWMutex; read it under RLock.
 	LastHeartbeatAck time.Time

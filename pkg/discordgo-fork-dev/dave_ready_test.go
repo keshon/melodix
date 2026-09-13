@@ -20,6 +20,32 @@ func newTestVoiceConnection() *VoiceConnection {
 	return &VoiceConnection{Cond: sync.NewCond(&sync.Mutex{})}
 }
 
+// A new session offers end-to-end encryption. Declining it is a deliberate
+// choice a caller makes for a network that cannot carry the key exchange, and
+// it costs everyone in the channel their encryption — so it must never become
+// the default by accident.
+func TestDAVEIsAdvertisedByDefault(t *testing.T) {
+	s, err := New("Bot test-token")
+	if err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	if s.MaxDAVEProtocolVersion != 1 {
+		t.Fatalf("MaxDAVEProtocolVersion = %d, want 1: a new session must offer encryption", s.MaxDAVEProtocolVersion)
+	}
+}
+
+// And declining is possible, which is the whole point of the field.
+func TestDAVECanBeDeclined(t *testing.T) {
+	s, err := New("Bot test-token")
+	if err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	s.MaxDAVEProtocolVersion = 0
+	if s.MaxDAVEProtocolVersion != 0 {
+		t.Fatal("the advertised version should be settable before Open")
+	}
+}
+
 // readyCipher makes CanEncrypt report true, the way an established MLS group
 // would.
 func readyCipher(t *testing.T) cipher.AEAD {
