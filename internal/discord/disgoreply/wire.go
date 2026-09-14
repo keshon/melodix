@@ -351,3 +351,31 @@ func argumentType(t discord.ApplicationCommandOptionType) cmdadapter.SlashOption
 		return cmdadapter.OptionString
 	}
 }
+
+// SlashCommandUpdate renders a declaration into the form an edit sends.
+//
+// disgo separates create from update because Discord does: an update is a
+// patch, so every field is a pointer and an omitted one means "leave it".
+// Everything the declaration can express is sent, because a declaration is
+// the whole intended state rather than a delta -- anything left out here
+// would silently keep whatever the guild had.
+func SlashCommandUpdate(c *cmdadapter.SlashCommand) discord.ApplicationCommandUpdate {
+	if c == nil {
+		return nil
+	}
+	name := c.Name
+	switch c.Type {
+	case cmdadapter.MessageMenuCommand:
+		return discord.MessageCommandUpdate{Name: &name}
+	case cmdadapter.UserMenuCommand:
+		return discord.UserCommandUpdate{Name: &name}
+	default:
+		description := c.Description
+		opts := options(c.Options)
+		return discord.SlashCommandUpdate{
+			Name:        &name,
+			Description: &description,
+			Options:     &opts,
+		}
+	}
+}
