@@ -207,3 +207,22 @@ func (c *MessageApplicationCommandContext) CanJoinVoice(channelID string) (bool,
 func (c *MessageApplicationCommandContext) Raw() (*discordgo.Session, *discordgo.InteractionCreate) {
 	return c.Session, c.Event
 }
+
+// FollowupEphemeralWithButtons answers a deferred interaction with controls
+// attached. Only the caller sees them, which is what makes a chooser private.
+func (c *SlashInteractionContext) FollowupEphemeralWithButtons(embed *Embed, rows ...ActionRow) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.FollowupEmbedEphemeralWithComponents(c.Session, c.Event, embed, rows)
+}
+
+// ReplaceMessage answers a component interaction by rewriting the message it
+// came from, which is how a chooser is consumed: the buttons go away with the
+// same click that acts on them, so nothing can be pressed twice.
+func (c *ComponentInteractionContext) ReplaceMessage(embed *Embed) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.ReplaceComponentMessage(c.Session, c.Event, embed)
+}

@@ -53,6 +53,14 @@ func (responder) EditResponse(s *discordgo.Session, e *discordgo.InteractionCrea
 	return EditResponse(s, e, content)
 }
 
+func (responder) FollowupEmbedEphemeralWithComponents(s *discordgo.Session, e *discordgo.InteractionCreate, embed *cmdadapter.Embed, rows []cmdadapter.ActionRow) error {
+	return FollowupEmbedEphemeralWithComponents(s, e, embed, cmdadapter.DiscordComponents(rows))
+}
+
+func (responder) ReplaceComponentMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *cmdadapter.Embed) error {
+	return ReplaceComponentMessage(s, e, embed)
+}
+
 var DefaultResponder cmdadapter.Responder = responder{}
 
 // --- Interaction responses ---

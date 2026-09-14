@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
-
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/command/music/playback"
 	"github.com/keshon/melodix/internal/discord"
@@ -135,7 +133,7 @@ func (c *Search) Run(ctx interface{}) error {
 	}
 
 	lines := make([]string, 0, len(hits))
-	buttons := make([]discordgo.MessageComponent, 0, len(hits))
+	buttons := make([]cmdadapter.Button, 0, len(hits))
 	for _, h := range hits {
 		// The pick travels entirely in the button id, so choosing needs no
 		// server-side memory of what was offered: the chooser survives a bot
@@ -146,9 +144,8 @@ func (c *Search) Run(ctx interface{}) error {
 		}
 		pos := len(lines) + 1
 		lines = append(lines, common.FormatSearchLine(pos, h.Title, h.URL, h.Author, h.Duration))
-		buttons = append(buttons, discordgo.Button{
+		buttons = append(buttons, cmdadapter.Button{
 			Label:    fmt.Sprintf("%d", pos),
-			Style:    discordgo.SecondaryButton,
 			CustomID: id,
 		})
 	}
@@ -167,8 +164,7 @@ func (c *Search) Run(ctx interface{}) error {
 		Color:       reply.EmbedColor,
 		Footer:      "Pick a number to queue it",
 	}
-	return reply.FollowupEmbedEphemeralWithComponents(s, e, embed,
-		[]discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}})
+	return slashCtx.FollowupEphemeralWithButtons(embed, cmdadapter.ActionRow{Buttons: buttons})
 }
 
 // Component handles a click on one of the chooser's buttons.
@@ -176,7 +172,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 	s := compCtx.Session
 	e := compCtx.Event
 
-	source, payload, ok := parseButtonID(e.MessageComponentData().CustomID)
+	source, payload, ok := parseButtonID(compCtx.CustomID())
 	if !ok {
 		return nil
 	}
@@ -191,7 +187,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	// Rewriting the chooser both acknowledges the click and takes the buttons
 	// away, so a result cannot be queued twice by pressing again.
-	if err := reply.ReplaceComponentMessage(s, e, &cmdadapter.Embed{
+	if err := compCtx.ReplaceMessage(&cmdadapter.Embed{
 		Title:       "🔎 Search",
 		Description: "Adding to the queue…",
 		Color:       reply.EmbedColor,

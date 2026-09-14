@@ -139,3 +139,9 @@ func (stubResponder) FollowupEmbedEphemeral(*discordgo.Session, *discordgo.Inter
 func (stubResponder) EditResponse(*discordgo.Session, *discordgo.InteractionCreate, string) error {
 	return nil
 }
+func (stubResponder) FollowupEmbedEphemeralWithComponents(*discordgo.Session, *discordgo.InteractionCreate, *Embed, []ActionRow) error {
+	return nil
+}
+func (stubResponder) ReplaceComponentMessage(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
+	return nil
+}
