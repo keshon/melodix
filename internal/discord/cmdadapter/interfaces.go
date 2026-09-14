@@ -3,45 +3,92 @@ package cmdadapter
 import (
 	"io"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
 
-// Responder abstracts interaction replies so commands never import the discord
-// package directly (avoids import cycles); reply.DefaultResponder implements
-// it.
+// Responder is everything a command does with the one interaction it was
+// invoked from. It names no library, and it is built per interaction rather
+// than shared: the thing it used to take as two parameters on every call --
+// a session and an event -- is what an implementation now holds.
+//
+// That shape is not a preference. Under discordgo an interaction reply needs
+// the session and the event together, and under disgo the event answers for
+// itself; a single receiver is the only shape both can satisfy, and taking
+// the pair as parameters is what made this interface discordgo's.
+//
+// ephemeral is a parameter rather than a second method because every caller
+// that has one has both, and the pair of names doubled an interface that is
+// already the widest thing here.
 type Responder interface {
-	RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
-	RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
-	CheckBotPermissions(s *discordgo.Session, channelID string) bool
-	CheckBotVoicePermissions(s *discordgo.Session, channelID string) (bool, error)
+	AckDeferred(ephemeral bool) error
+	RespondEmbed(embed *Embed, ephemeral bool) error
+
+	// RespondText answers with plain content rather than an embed. The
+	// difference is not cosmetic: content is capped at 2000 characters where
+	// an embed description takes 4096, and a caller that sized its output to
+	// one limit must not silently be given the other.
+	RespondText(content string, ephemeral bool) error
+
+	RespondEmbedWithFile(embed *Embed, r io.Reader, fileName string) error
+	FollowupEmbed(embed *Embed, ephemeral bool) error
+
+	// FollowupEmbedWithComponents answers a deferred interaction with controls
+	// attached. It is ephemeral: only the caller should be able to press the
+	// buttons of a chooser they asked for.
+	FollowupEmbedWithComponents(embed *Embed, rows []ActionRow) error
+
+	// FollowupEmbedMessage posts a followup and reports where it landed, so a
+	// caller that means to edit it later can find it again. The guild's music
+	// status message works this way: created from an interaction, edited for
+	// as long as the track plays, which is well past the token's expiry.
+	FollowupEmbedMessage(embed *Embed) (channelID, messageID string, err error)
+
+	// EditResponseText replaces the original reply with plain text, which is
+	// the fallback when an embed could not be delivered.
+	EditResponseText(content string) error
+
+	// ReplaceMessage answers a component interaction by rewriting the message
+	// it came from, which is how a chooser is consumed: the buttons go away
+	// with the same click that acts on them, so nothing can be pressed twice.
+	ReplaceMessage(embed *Embed) error
+}
+
+// SessionAPI is what a command asks of the connection rather than of one
+// interaction. It is separate from Responder because its answers outlive the
+// interaction token, and because the asynchronous paths -- auto-advance,
+// queue end -- have one of these and no interaction at all.
+type SessionAPI interface {
+	// MemberPermissions is a caller's effective permission bits in a channel,
+	// which is roles and channel overwrites already resolved.
+	MemberPermissions(userID, channelID string) (int64, error)
+
+	// CheckBotPermissions reports whether the bot may manage messages in a
+	// channel.
+	CheckBotPermissions(channelID string) bool
+
+	// CheckBotVoicePermissions reports whether the bot may connect and speak
+	// in a voice channel. Asked before playback so a refusal is a message
+	// rather than a silent failure to join.
+	CheckBotVoicePermissions(channelID string) (bool, error)
+
+	// SendChannelMessage posts plain content to a channel, which is how a
+	// command with no interaction to answer says anything at all.
+	SendChannelMessage(channelID, content string) error
+
+	SendChannelEmbed(channelID string, embed *Embed) error
+
+	// GuildInfo describes a guild. See GuildInfo for what the counts mean.
+	GuildInfo(guildID string) (GuildInfo, error)
+
+	// Latency is the round trip to the gateway, which is what a ping reports.
+	Latency() time.Duration
+
+	// EmbedColor is the default colour for an embed that did not choose one.
 	EmbedColor() int
+}
 
-	// The rest of what a command does with an interaction. These were plain
-	// functions in the reply package that commands called with a session and
-	// an event in hand; routing them through here is what lets the context
-	// offer them instead, so a command never holds either.
-	AckDeferred(s *discordgo.Session, e *discordgo.InteractionCreate) error
-	AckDeferredEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate) error
-	FollowupEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
-	FollowupEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
-	EditResponse(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error
-	FollowupEmbedEphemeralWithComponents(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, rows []ActionRow) error
-	ReplaceComponentMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
-	FollowupEmbedMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) (string, string, error)
-	RespondEmbedEphemeralWithFile(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, r io.Reader, fileName string) error
-
-	// RespondEphemeralText answers with plain content rather than an embed.
-	// The difference is not cosmetic: content is capped at 2000 characters
-	// where an embed description takes 4096, and a caller that has sized its
-	// output to one limit must not silently be given the other.
-	RespondEphemeralText(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error
-
-	// Session-scoped answers, which need no interaction. They sit here rather
-	// than on a second interface because the contexts already carry a
-	// Responder and a command asks them of the context either way.
-	Latency(s *discordgo.Session) time.Duration
-	GuildInfo(s *discordgo.Session, guildID string) (GuildInfo, error)
+// CommandSyncer registers a guild's slash commands with Discord.
+type CommandSyncer interface {
+	SyncGuildCommands(guildID string) error
 }
 
 // Logger persists command invocations (implemented by cmdlogger).

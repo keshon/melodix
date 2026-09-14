@@ -1,60 +1,76 @@
 package cmdadapter
 
 import (
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
 )
 
-type CommandSyncer interface {
-	SyncGuildCommands(guildID string) error
-}
+// The five kinds of invocation, each carrying what a command may ask of it and
+// nothing that names a library. Session and Event used to sit at the top of
+// every one of these; what replaced them is Invoker for the questions whose
+// answers are fixed, Responder for what can be said back, and API for what
+// must be asked of the connection.
+//
+// The root handlers build these, which is the one place that knows what an
+// invocation arrived as.
 
 type SlashInteractionContext struct {
-	Session   *discordgo.Session
-	Event     *discordgo.InteractionCreate
-	Args      []string
-	Storage   *storage.Storage
-	Config    *config.Config
+	Invoker   Invoker
 	Responder Responder
-	Logger    Logger
-	AppLog    zerolog.Logger
-	Syncer    CommandSyncer
+	API       SessionAPI
+
+	// Arguments are the options this command was invoked with, resolved when
+	// the context was built.
+	Arguments []SlashArgument
+
+	Args    []string
+	Storage *storage.Storage
+	Config  *config.Config
+	Logger  Logger
+	AppLog  zerolog.Logger
+	Syncer  CommandSyncer
 }
 
 type ComponentInteractionContext struct {
-	Session   *discordgo.Session
-	Event     *discordgo.InteractionCreate
-	Storage   *storage.Storage
-	Config    *config.Config
+	Invoker   Invoker
 	Responder Responder
-	Logger    Logger
-	AppLog    zerolog.Logger
+	API       SessionAPI
+
+	// ComponentID identifies which component was used -- the button's own id,
+	// set when the message was built.
+	ComponentID string
+
+	Storage *storage.Storage
+	Config  *config.Config
+	Logger  Logger
+	AppLog  zerolog.Logger
 }
 
 type MessageReactionContext struct {
-	Session *discordgo.Session
-	Event   *discordgo.MessageReactionAdd
+	Invoker Invoker
+	API     SessionAPI
+
 	Storage *storage.Storage
 	Config  *config.Config
 	Logger  Logger
 }
 
 type MessageApplicationCommandContext struct {
-	Session   *discordgo.Session
-	Event     *discordgo.InteractionCreate
-	Storage   *storage.Storage
-	Target    *discordgo.Message
-	Config    *config.Config
+	Invoker   Invoker
 	Responder Responder
-	Logger    Logger
-	AppLog    zerolog.Logger
+	API       SessionAPI
+
+	Storage *storage.Storage
+	Config  *config.Config
+	Logger  Logger
+	AppLog  zerolog.Logger
 }
 
 type MessageContext struct {
-	Session *discordgo.Session
-	Event   *discordgo.MessageCreate
+	Invoker Invoker
+	API     SessionAPI
+
 	Storage *storage.Storage
 	Config  *config.Config
 }

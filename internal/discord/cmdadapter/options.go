@@ -1,7 +1,5 @@
 package cmdadapter
 
-import "github.com/bwmarrin/discordgo"
-
 // SlashArgument is one argument as it arrived, or one subcommand carrying its
 // own. Discord models both as options, which is why this is one type.
 //
@@ -71,12 +69,10 @@ func findOption(opts []SlashArgument, name string) (SlashArgument, bool) {
 
 // --- reading them off an invocation ---
 
-// Options are the arguments this command was invoked with.
+// Options are the arguments this command was invoked with, resolved when the
+// context was built.
 func (c *SlashInteractionContext) Options() []SlashArgument {
-	if c.Event == nil {
-		return nil
-	}
-	return slashArguments(c.Event.ApplicationCommandData().Options)
+	return c.Arguments
 }
 
 // Option finds a top-level argument by name.
@@ -104,50 +100,4 @@ func (c *SlashInteractionContext) FirstOption() (SlashArgument, bool) {
 		return SlashArgument{}, false
 	}
 	return opts[0], true
-}
-
-// CustomID identifies which component was used -- the button's own id, set
-// when the message was built.
-func (c *ComponentInteractionContext) CustomID() string {
-	if c.Event == nil {
-		return ""
-	}
-	return c.Event.MessageComponentData().CustomID
-}
-
-func slashArguments(opts []*discordgo.ApplicationCommandInteractionDataOption) []SlashArgument {
-	if len(opts) == 0 {
-		return nil
-	}
-	out := make([]SlashArgument, 0, len(opts))
-	for _, o := range opts {
-		if o == nil {
-			continue
-		}
-		out = append(out, SlashArgument{
-			Name:    o.Name,
-			Type:    slashOptionType(o.Type),
-			Value:   o.Value,
-			Options: slashArguments(o.Options),
-		})
-	}
-	return out
-}
-
-// slashOptionType is discordOptionType read backwards. Anything this package
-// does not model reads as a string, which is what an unrecognised argument
-// arrives as anyway.
-func slashOptionType(t discordgo.ApplicationCommandOptionType) SlashOptionType {
-	switch t {
-	case discordgo.ApplicationCommandOptionSubCommand:
-		return OptionSubCommand
-	case discordgo.ApplicationCommandOptionSubCommandGroup:
-		return OptionSubCommandGroup
-	case discordgo.ApplicationCommandOptionInteger:
-		return OptionInteger
-	case discordgo.ApplicationCommandOptionBoolean:
-		return OptionBoolean
-	default:
-		return OptionString
-	}
 }

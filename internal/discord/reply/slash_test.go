@@ -1,9 +1,11 @@
-package cmdadapter
+package reply
 
 import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 )
 
 // Every option kind has to land on the value Discord means by it. Getting one
@@ -12,14 +14,14 @@ import (
 func TestOptionTypesMapToDiscords(t *testing.T) {
 	cases := []struct {
 		name string
-		got  SlashOptionType
+		got  cmdadapter.SlashOptionType
 		want discordgo.ApplicationCommandOptionType
 	}{
-		{"subcommand", OptionSubCommand, discordgo.ApplicationCommandOptionSubCommand},
-		{"subcommand group", OptionSubCommandGroup, discordgo.ApplicationCommandOptionSubCommandGroup},
-		{"string", OptionString, discordgo.ApplicationCommandOptionString},
-		{"integer", OptionInteger, discordgo.ApplicationCommandOptionInteger},
-		{"boolean", OptionBoolean, discordgo.ApplicationCommandOptionBoolean},
+		{"subcommand", cmdadapter.OptionSubCommand, discordgo.ApplicationCommandOptionSubCommand},
+		{"subcommand group", cmdadapter.OptionSubCommandGroup, discordgo.ApplicationCommandOptionSubCommandGroup},
+		{"string", cmdadapter.OptionString, discordgo.ApplicationCommandOptionString},
+		{"integer", cmdadapter.OptionInteger, discordgo.ApplicationCommandOptionInteger},
+		{"boolean", cmdadapter.OptionBoolean, discordgo.ApplicationCommandOptionBoolean},
 	}
 
 	for _, tc := range cases {
@@ -32,7 +34,7 @@ func TestOptionTypesMapToDiscords(t *testing.T) {
 // A declaration that says nothing about its type is a chat-input command.
 // Every command in this repo relies on that, by not saying.
 func TestCommandTypeDefaultsToChatInput(t *testing.T) {
-	def := DiscordSlashCommand(&SlashCommand{Name: "play"})
+	def := DiscordSlashCommand(&cmdadapter.SlashCommand{Name: "play"})
 
 	if def.Type != discordgo.ChatApplicationCommand {
 		t.Fatalf("type = %v, want a chat-input command", def.Type)
@@ -44,23 +46,23 @@ func TestCommandTypeDefaultsToChatInput(t *testing.T) {
 // with its choices intact.
 func TestNestedOptionsAndChoicesSurviveTranslation(t *testing.T) {
 	minPage := 1.0
-	def := DiscordSlashCommand(&SlashCommand{
+	def := DiscordSlashCommand(&cmdadapter.SlashCommand{
 		Name:        "settings",
 		Description: "server settings",
-		Options: []SlashOption{{
-			Type: OptionSubCommandGroup,
+		Options: []cmdadapter.SlashOption{{
+			Type: cmdadapter.OptionSubCommandGroup,
 			Name: "commands",
-			Options: []SlashOption{{
-				Type:        OptionSubCommand,
+			Options: []cmdadapter.SlashOption{{
+				Type:        cmdadapter.OptionSubCommand,
 				Name:        "enable",
 				Description: "turn a group on",
-				Options: []SlashOption{{
-					Type:     OptionString,
+				Options: []cmdadapter.SlashOption{{
+					Type:     cmdadapter.OptionString,
 					Name:     "group",
 					Required: true,
-					Choices:  []SlashChoice{{Name: "Music", Value: "music"}},
+					Choices:  []cmdadapter.SlashChoice{{Name: "Music", Value: "music"}},
 				}, {
-					Type:     OptionInteger,
+					Type:     cmdadapter.OptionInteger,
 					Name:     "page",
 					MinValue: &minPage,
 					MaxValue: 10,
@@ -95,7 +97,7 @@ func TestEmptyDeclarationsStayEmpty(t *testing.T) {
 	if DiscordSlashCommand(nil) != nil {
 		t.Error("a nil declaration produced a command")
 	}
-	if def := DiscordSlashCommand(&SlashCommand{Name: "stop"}); def.Options != nil {
+	if def := DiscordSlashCommand(&cmdadapter.SlashCommand{Name: "stop"}); def.Options != nil {
 		t.Errorf("a command with no options produced %v", def.Options)
 	}
 }

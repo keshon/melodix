@@ -3,8 +3,6 @@ package cmdadapter
 import (
 	"io"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 // The reply surface a command works with.
@@ -15,45 +13,50 @@ import (
 // context instead leaves the session and the event where they belong: in the
 // layer that knows what they are.
 //
-// Each interaction context repeats the same six methods. They are one line
-// each and delegate to the shared helpers below; the alternative was embedding
-// a struct, which would have meant rewriting every construction site to say so.
+// Each interaction context repeats the same methods. They are one line each
+// and delegate to the shared helpers below; the alternative was embedding a
+// struct, which would have meant rewriting every construction site to say so.
 
-func ackDeferred(r Responder, s *discordgo.Session, e *discordgo.InteractionCreate, ephemeral bool) error {
+func ackDeferred(r Responder, ephemeral bool) error {
 	if r == nil {
 		return nil
 	}
-	if ephemeral {
-		return r.AckDeferredEphemeral(s, e)
-	}
-	return r.AckDeferred(s, e)
+	return r.AckDeferred(ephemeral)
 }
 
-func respondEmbed(r Responder, s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, ephemeral bool) error {
+func respondEmbed(r Responder, embed *Embed, ephemeral bool) error {
 	if r == nil {
 		return nil
 	}
-	if ephemeral {
-		return r.RespondEmbedEphemeral(s, e, embed)
-	}
-	return r.RespondEmbed(s, e, embed)
+	return r.RespondEmbed(embed, ephemeral)
 }
 
-func followupEmbed(r Responder, s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, ephemeral bool) error {
+func followupEmbed(r Responder, embed *Embed, ephemeral bool) error {
 	if r == nil {
 		return nil
 	}
-	if ephemeral {
-		return r.FollowupEmbedEphemeral(s, e, embed)
-	}
-	return r.FollowupEmbed(s, e, embed)
+	return r.FollowupEmbed(embed, ephemeral)
 }
 
-func editResponse(r Responder, s *discordgo.Session, e *discordgo.InteractionCreate, content string) error {
+func editResponse(r Responder, content string) error {
 	if r == nil {
 		return nil
 	}
-	return r.EditResponse(s, e, content)
+	return r.EditResponseText(content)
+}
+
+func followupEmbedMessage(r Responder, embed *Embed) (string, string, error) {
+	if r == nil {
+		return "", "", nil
+	}
+	return r.FollowupEmbedMessage(embed)
+}
+
+func canJoinVoice(api SessionAPI, channelID string) (bool, error) {
+	if api == nil {
+		return false, nil
+	}
+	return api.CheckBotVoicePermissions(channelID)
 }
 
 // --- SlashInteractionContext ---
@@ -61,95 +64,174 @@ func editResponse(r Responder, s *discordgo.Session, e *discordgo.InteractionCre
 // Defer buys time: Discord wants an acknowledgement within three seconds, and
 // resolving a track takes longer than that.
 func (c *SlashInteractionContext) Defer() error {
-	return ackDeferred(c.Responder, c.Session, c.Event, false)
+	return ackDeferred(c.Responder, false)
 }
 
 // DeferEphemeral is Defer for a reply only the caller should see.
 func (c *SlashInteractionContext) DeferEphemeral() error {
-	return ackDeferred(c.Responder, c.Session, c.Event, true)
+	return ackDeferred(c.Responder, true)
 }
 
 func (c *SlashInteractionContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, c.Session, c.Event, e, false)
+	return respondEmbed(c.Responder, e, false)
 }
 
 func (c *SlashInteractionContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, c.Session, c.Event, e, true)
+	return respondEmbed(c.Responder, e, true)
 }
 
 // Followup is what answers a deferred interaction.
 func (c *SlashInteractionContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, c.Session, c.Event, e, false)
+	return followupEmbed(c.Responder, e, false)
 }
 
 func (c *SlashInteractionContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, c.Session, c.Event, e, true)
+	return followupEmbed(c.Responder, e, true)
 }
 
 // EditResponseText replaces the original reply with plain text, which is the
 // fallback when an embed could not be delivered.
 func (c *SlashInteractionContext) EditResponseText(content string) error {
-	return editResponse(c.Responder, c.Session, c.Event, content)
+	return editResponse(c.Responder, content)
+}
+
+// RespondEphemeralText answers the caller with plain content. See Responder
+// for why this is not the same as an embed carrying the same string.
+func (c *SlashInteractionContext) RespondEphemeralText(content string) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.RespondText(content, true)
+}
+
+// RespondEphemeralWithFile answers the caller with an embed and an attachment
+// only they can see. The reader is consumed during the call, so the caller
+// keeps ownership of closing it.
+func (c *SlashInteractionContext) RespondEphemeralWithFile(embed *Embed, r io.Reader, fileName string) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.RespondEmbedWithFile(embed, r, fileName)
+}
+
+// FollowupEphemeralWithButtons answers a deferred interaction with controls
+// attached. Only the caller sees them, which is what makes a chooser private.
+func (c *SlashInteractionContext) FollowupEphemeralWithButtons(embed *Embed, rows ...ActionRow) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.FollowupEmbedWithComponents(embed, rows)
+}
+
+// Latency is the round trip to Discord's gateway, which is what a ping
+// command reports.
+func (c *SlashInteractionContext) Latency() time.Duration {
+	if c.API == nil {
+		return 0
+	}
+	return c.API.Latency()
+}
+
+// Guild describes the guild this command was invoked in.
+func (c *SlashInteractionContext) Guild() (GuildInfo, error) {
+	if c.API == nil {
+		return GuildInfo{}, nil
+	}
+	return c.API.GuildInfo(c.GuildID())
+}
+
+func (c *SlashInteractionContext) CanJoinVoice(channelID string) (bool, error) {
+	return canJoinVoice(c.API, channelID)
+}
+
+func (c *SlashInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
+	return followupEmbedMessage(c.Responder, embed)
 }
 
 // --- ComponentInteractionContext ---
 
 func (c *ComponentInteractionContext) Defer() error {
-	return ackDeferred(c.Responder, c.Session, c.Event, false)
+	return ackDeferred(c.Responder, false)
 }
 
 func (c *ComponentInteractionContext) DeferEphemeral() error {
-	return ackDeferred(c.Responder, c.Session, c.Event, true)
+	return ackDeferred(c.Responder, true)
 }
 
 func (c *ComponentInteractionContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, c.Session, c.Event, e, false)
+	return respondEmbed(c.Responder, e, false)
 }
 
 func (c *ComponentInteractionContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, c.Session, c.Event, e, true)
+	return respondEmbed(c.Responder, e, true)
 }
 
 func (c *ComponentInteractionContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, c.Session, c.Event, e, false)
+	return followupEmbed(c.Responder, e, false)
 }
 
 func (c *ComponentInteractionContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, c.Session, c.Event, e, true)
+	return followupEmbed(c.Responder, e, true)
 }
 
 func (c *ComponentInteractionContext) EditResponseText(content string) error {
-	return editResponse(c.Responder, c.Session, c.Event, content)
+	return editResponse(c.Responder, content)
+}
+
+func (c *ComponentInteractionContext) CanJoinVoice(channelID string) (bool, error) {
+	return canJoinVoice(c.API, channelID)
+}
+
+func (c *ComponentInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
+	return followupEmbedMessage(c.Responder, embed)
+}
+
+// ReplaceMessage answers a component interaction by rewriting the message it
+// came from, which is how a chooser is consumed: the buttons go away with the
+// same click that acts on them, so nothing can be pressed twice.
+func (c *ComponentInteractionContext) ReplaceMessage(embed *Embed) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.ReplaceMessage(embed)
 }
 
 // --- MessageApplicationCommandContext ---
 
 func (c *MessageApplicationCommandContext) Defer() error {
-	return ackDeferred(c.Responder, c.Session, c.Event, false)
+	return ackDeferred(c.Responder, false)
 }
 
 func (c *MessageApplicationCommandContext) DeferEphemeral() error {
-	return ackDeferred(c.Responder, c.Session, c.Event, true)
+	return ackDeferred(c.Responder, true)
 }
 
 func (c *MessageApplicationCommandContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, c.Session, c.Event, e, false)
+	return respondEmbed(c.Responder, e, false)
 }
 
 func (c *MessageApplicationCommandContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, c.Session, c.Event, e, true)
+	return respondEmbed(c.Responder, e, true)
 }
 
 func (c *MessageApplicationCommandContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, c.Session, c.Event, e, false)
+	return followupEmbed(c.Responder, e, false)
 }
 
 func (c *MessageApplicationCommandContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, c.Session, c.Event, e, true)
+	return followupEmbed(c.Responder, e, true)
 }
 
 func (c *MessageApplicationCommandContext) EditResponseText(content string) error {
-	return editResponse(c.Responder, c.Session, c.Event, content)
+	return editResponse(c.Responder, content)
+}
+
+func (c *MessageApplicationCommandContext) CanJoinVoice(channelID string) (bool, error) {
+	return canJoinVoice(c.API, channelID)
+}
+
+func (c *MessageApplicationCommandContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
+	return followupEmbedMessage(c.Responder, embed)
 }
 
 // Interaction is what a shared helper needs from an invocation, whichever kind
@@ -179,100 +261,4 @@ type Interaction interface {
 	// status message works this way: created from an interaction, edited for
 	// as long as the track plays, which is well past the token's expiry.
 	FollowupEmbedMessage(embed *Embed) (channelID, messageID string, err error)
-}
-
-func canJoinVoice(r Responder, s *discordgo.Session, channelID string) (bool, error) {
-	if r == nil {
-		return false, nil
-	}
-	return r.CheckBotVoicePermissions(s, channelID)
-}
-
-func (c *SlashInteractionContext) CanJoinVoice(channelID string) (bool, error) {
-	return canJoinVoice(c.Responder, c.Session, channelID)
-}
-
-func (c *SlashInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
-	if c.Responder == nil {
-		return "", "", nil
-	}
-	return c.Responder.FollowupEmbedMessage(c.Session, c.Event, embed)
-}
-
-func (c *ComponentInteractionContext) CanJoinVoice(channelID string) (bool, error) {
-	return canJoinVoice(c.Responder, c.Session, channelID)
-}
-
-func (c *ComponentInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
-	if c.Responder == nil {
-		return "", "", nil
-	}
-	return c.Responder.FollowupEmbedMessage(c.Session, c.Event, embed)
-}
-
-func (c *MessageApplicationCommandContext) CanJoinVoice(channelID string) (bool, error) {
-	return canJoinVoice(c.Responder, c.Session, channelID)
-}
-
-func (c *MessageApplicationCommandContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
-	if c.Responder == nil {
-		return "", "", nil
-	}
-	return c.Responder.FollowupEmbedMessage(c.Session, c.Event, embed)
-}
-
-// FollowupEphemeralWithButtons answers a deferred interaction with controls
-// attached. Only the caller sees them, which is what makes a chooser private.
-func (c *SlashInteractionContext) FollowupEphemeralWithButtons(embed *Embed, rows ...ActionRow) error {
-	if c.Responder == nil {
-		return nil
-	}
-	return c.Responder.FollowupEmbedEphemeralWithComponents(c.Session, c.Event, embed, rows)
-}
-
-// ReplaceMessage answers a component interaction by rewriting the message it
-// came from, which is how a chooser is consumed: the buttons go away with the
-// same click that acts on them, so nothing can be pressed twice.
-func (c *ComponentInteractionContext) ReplaceMessage(embed *Embed) error {
-	if c.Responder == nil {
-		return nil
-	}
-	return c.Responder.ReplaceComponentMessage(c.Session, c.Event, embed)
-}
-
-// RespondEphemeralWithFile answers the caller with an embed and an attachment
-// only they can see. The reader is consumed during the call, so the caller
-// keeps ownership of closing it.
-func (c *SlashInteractionContext) RespondEphemeralWithFile(embed *Embed, r io.Reader, fileName string) error {
-	if c.Responder == nil {
-		return nil
-	}
-	return c.Responder.RespondEmbedEphemeralWithFile(c.Session, c.Event, embed, r, fileName)
-}
-
-// RespondEphemeralText answers the caller with plain content. See the
-// Responder method for why this is not the same as an embed carrying the
-// same string.
-func (c *SlashInteractionContext) RespondEphemeralText(content string) error {
-	if c.Responder == nil {
-		return nil
-	}
-	return c.Responder.RespondEphemeralText(c.Session, c.Event, content)
-}
-
-// Latency is the round trip to Discord's gateway, which is what a ping
-// command reports.
-func (c *SlashInteractionContext) Latency() time.Duration {
-	if c.Responder == nil {
-		return 0
-	}
-	return c.Responder.Latency(c.Session)
-}
-
-// Guild describes the guild this command was invoked in.
-func (c *SlashInteractionContext) Guild() (GuildInfo, error) {
-	if c.Responder == nil {
-		return GuildInfo{}, nil
-	}
-	return c.Responder.GuildInfo(c.Session, c.GuildID())
 }

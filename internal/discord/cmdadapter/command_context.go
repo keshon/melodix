@@ -1,7 +1,6 @@
 package cmdadapter
 
 import (
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/storage"
 )
@@ -74,113 +73,104 @@ const (
 	// this is", which are different answers and deserve different treatment.
 	UnknownUserID = "unknown"
 
-	unknownUsername = "Unknown"
+	// UnknownUsername is the matching fallback for a display name.
+	UnknownUsername = "Unknown"
 )
 
-// interactionUser reads the caller off an interaction. A guild interaction
-// carries Member, a direct message carries User, and neither is guaranteed.
-func interactionUser(e *discordgo.InteractionCreate) *discordgo.User {
-	if e == nil {
-		return nil
-	}
-	if e.Member != nil && e.Member.User != nil {
-		return e.Member.User
-	}
-	return e.User
-}
-
-func userID(u *discordgo.User) string {
-	if u == nil {
-		return UnknownUserID
-	}
-	return u.ID
-}
-
-func username(u *discordgo.User) string {
-	if u == nil {
-		return unknownUsername
-	}
-	return u.Username
-}
-
-func channelPermissions(s *discordgo.Session, uID, channelID string) (int64, error) {
-	if s == nil || uID == "" || uID == UnknownUserID {
+// memberPermissions is the shape all five contexts share. A caller nobody
+// could identify has no permissions to resolve, and asking anyway would spend
+// a request to be told so.
+func memberPermissions(api SessionAPI, who Invoker) (int64, error) {
+	if api == nil || who.UserID == "" || who.UserID == UnknownUserID {
 		return 0, nil
 	}
-	return s.UserChannelPermissions(uID, channelID)
+	return api.MemberPermissions(who.UserID, who.ChannelID)
 }
 
-// respondEphemeral is the shape all three interaction contexts share.
-func respondEphemeral(r Responder, s *discordgo.Session, e *discordgo.InteractionCreate, msg string) error {
+// respondEphemeral is the shape the three interaction contexts share.
+func respondEphemeral(r Responder, msg string) error {
 	if r == nil {
 		return nil
 	}
-	return r.RespondEmbedEphemeral(s, e, &Embed{Description: msg})
+	return r.RespondEmbed(&Embed{Description: msg}, true)
+}
+
+// replyInChannel is the fallback for the two contexts Discord offers no
+// ephemeral reply for.
+func replyInChannel(api SessionAPI, channelID, msg string) error {
+	if api == nil {
+		return nil
+	}
+	return api.SendChannelMessage(channelID, msg)
 }
 
 // --- SlashInteractionContext ---
 
-func (c *SlashInteractionContext) GuildID() string         { return c.Event.GuildID }
-func (c *SlashInteractionContext) ChannelID() string       { return c.Event.ChannelID }
-func (c *SlashInteractionContext) UserID() string          { return userID(interactionUser(c.Event)) }
-func (c *SlashInteractionContext) Username() string        { return username(interactionUser(c.Event)) }
+func (c *SlashInteractionContext) GuildID() string         { return c.Invoker.GuildID }
+func (c *SlashInteractionContext) ChannelID() string       { return c.Invoker.ChannelID }
+func (c *SlashInteractionContext) UserID() string          { return c.Invoker.UserID }
+func (c *SlashInteractionContext) Username() string        { return c.Invoker.Username }
 func (c *SlashInteractionContext) AuditLogger() Logger     { return c.Logger }
 func (c *SlashInteractionContext) Store() *storage.Storage { return c.Storage }
 func (c *SlashInteractionContext) MemberPermissions() (int64, error) {
-	return channelPermissions(c.Session, c.UserID(), c.ChannelID())
+	return memberPermissions(c.API, c.Invoker)
 }
 func (c *SlashInteractionContext) CanReplyPrivately() bool { return c.Responder != nil }
 func (c *SlashInteractionContext) ReplyEphemeral(msg string) error {
-	return respondEphemeral(c.Responder, c.Session, c.Event, msg)
+	return respondEphemeral(c.Responder, msg)
 }
 
 // --- ComponentInteractionContext ---
 
-func (c *ComponentInteractionContext) GuildID() string         { return c.Event.GuildID }
-func (c *ComponentInteractionContext) ChannelID() string       { return c.Event.ChannelID }
-func (c *ComponentInteractionContext) UserID() string          { return userID(interactionUser(c.Event)) }
-func (c *ComponentInteractionContext) Username() string        { return username(interactionUser(c.Event)) }
+func (c *ComponentInteractionContext) GuildID() string         { return c.Invoker.GuildID }
+func (c *ComponentInteractionContext) ChannelID() string       { return c.Invoker.ChannelID }
+func (c *ComponentInteractionContext) UserID() string          { return c.Invoker.UserID }
+func (c *ComponentInteractionContext) Username() string        { return c.Invoker.Username }
 func (c *ComponentInteractionContext) AuditLogger() Logger     { return c.Logger }
 func (c *ComponentInteractionContext) Store() *storage.Storage { return c.Storage }
 func (c *ComponentInteractionContext) MemberPermissions() (int64, error) {
-	return channelPermissions(c.Session, c.UserID(), c.ChannelID())
+	return memberPermissions(c.API, c.Invoker)
 }
 func (c *ComponentInteractionContext) CanReplyPrivately() bool { return c.Responder != nil }
 func (c *ComponentInteractionContext) ReplyEphemeral(msg string) error {
-	return respondEphemeral(c.Responder, c.Session, c.Event, msg)
+	return respondEphemeral(c.Responder, msg)
 }
+
+// CustomID identifies which component was used -- the button's own id, set
+// when the message was built.
+func (c *ComponentInteractionContext) CustomID() string { return c.ComponentID }
 
 // --- MessageApplicationCommandContext ---
 
-func (c *MessageApplicationCommandContext) GuildID() string   { return c.Event.GuildID }
-func (c *MessageApplicationCommandContext) ChannelID() string { return c.Event.ChannelID }
-func (c *MessageApplicationCommandContext) UserID() string    { return userID(interactionUser(c.Event)) }
-func (c *MessageApplicationCommandContext) Username() string {
-	return username(interactionUser(c.Event))
+func (c *MessageApplicationCommandContext) GuildID() string   { return c.Invoker.GuildID }
+func (c *MessageApplicationCommandContext) ChannelID() string { return c.Invoker.ChannelID }
+func (c *MessageApplicationCommandContext) UserID() string    { return c.Invoker.UserID }
+func (c *MessageApplicationCommandContext) Username() string  { return c.Invoker.Username }
+func (c *MessageApplicationCommandContext) AuditLogger() Logger {
+	return c.Logger
 }
-func (c *MessageApplicationCommandContext) AuditLogger() Logger     { return c.Logger }
 func (c *MessageApplicationCommandContext) Store() *storage.Storage { return c.Storage }
 func (c *MessageApplicationCommandContext) MemberPermissions() (int64, error) {
-	return channelPermissions(c.Session, c.UserID(), c.ChannelID())
+	return memberPermissions(c.API, c.Invoker)
 }
 func (c *MessageApplicationCommandContext) CanReplyPrivately() bool { return c.Responder != nil }
 func (c *MessageApplicationCommandContext) ReplyEphemeral(msg string) error {
-	return respondEphemeral(c.Responder, c.Session, c.Event, msg)
+	return respondEphemeral(c.Responder, msg)
 }
 
 // --- MessageContext ---
 
-func (c *MessageContext) GuildID() string   { return c.Event.GuildID }
-func (c *MessageContext) ChannelID() string { return c.Event.ChannelID }
-func (c *MessageContext) UserID() string    { return userID(c.Event.Author) }
-func (c *MessageContext) Username() string  { return username(c.Event.Author) }
+func (c *MessageContext) GuildID() string   { return c.Invoker.GuildID }
+func (c *MessageContext) ChannelID() string { return c.Invoker.ChannelID }
+func (c *MessageContext) UserID() string    { return c.Invoker.UserID }
+func (c *MessageContext) Username() string  { return c.Invoker.Username }
 
 // AuditLogger is nil on purpose: message commands are not written to the
 // audit log, and a context that cannot reach a logger cannot start being.
 func (c *MessageContext) AuditLogger() Logger     { return nil }
 func (c *MessageContext) Store() *storage.Storage { return c.Storage }
 func (c *MessageContext) MemberPermissions() (int64, error) {
-	return channelPermissions(c.Session, c.UserID(), c.ChannelID())
+	return memberPermissions(c.API, c.Invoker)
 }
 
 // ReplyEphemeral has no ephemeral form here: a plain message command is
@@ -188,38 +178,25 @@ func (c *MessageContext) MemberPermissions() (int64, error) {
 // the method means the caller does not have to care which it got.
 func (c *MessageContext) CanReplyPrivately() bool { return false }
 func (c *MessageContext) ReplyEphemeral(msg string) error {
-	if c.Session == nil {
-		return nil
-	}
-	_, err := c.Session.ChannelMessageSend(c.ChannelID(), msg)
-	return err
+	return replyInChannel(c.API, c.Invoker.ChannelID, msg)
 }
 
 // --- MessageReactionContext ---
 
-func (c *MessageReactionContext) GuildID() string   { return c.Event.GuildID }
-func (c *MessageReactionContext) ChannelID() string { return c.Event.ChannelID }
-func (c *MessageReactionContext) UserID() string    { return c.Event.UserID }
+func (c *MessageReactionContext) GuildID() string   { return c.Invoker.GuildID }
+func (c *MessageReactionContext) ChannelID() string { return c.Invoker.ChannelID }
+func (c *MessageReactionContext) UserID() string    { return c.Invoker.UserID }
 
 // Username falls back to the user ID rather than a sentinel: a reaction does
 // not always carry the member, and an audit row naming an ID is worth more
-// than one naming nobody.
-func (c *MessageReactionContext) Username() string {
-	if c.Event.Member != nil && c.Event.Member.User != nil {
-		return c.Event.Member.User.Username
-	}
-	return c.Event.UserID
-}
+// than one naming nobody. The fallback is applied where the context is built.
+func (c *MessageReactionContext) Username() string        { return c.Invoker.Username }
 func (c *MessageReactionContext) AuditLogger() Logger     { return c.Logger }
 func (c *MessageReactionContext) Store() *storage.Storage { return c.Storage }
 func (c *MessageReactionContext) MemberPermissions() (int64, error) {
-	return channelPermissions(c.Session, c.UserID(), c.ChannelID())
+	return memberPermissions(c.API, c.Invoker)
 }
 func (c *MessageReactionContext) CanReplyPrivately() bool { return false }
 func (c *MessageReactionContext) ReplyEphemeral(msg string) error {
-	if c.Session == nil {
-		return nil
-	}
-	_, err := c.Session.ChannelMessageSend(c.ChannelID(), msg)
-	return err
+	return replyInChannel(c.API, c.Invoker.ChannelID, msg)
 }

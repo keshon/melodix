@@ -1,13 +1,10 @@
 package cmdadapter
 
-import "github.com/bwmarrin/discordgo"
-
 // SlashCommand is how a command declares itself to Discord, in terms a command
 // can write without importing the library that registers it.
 //
-// The translation is at the bottom of this file and the Adapter is where it
-// happens, so cmdsync keeps receiving exactly what it received before and only
-// the command side changes.
+// The Adapter forwards it and registration renders it, so a command never
+// names the library that will receive the declaration.
 type SlashCommand struct {
 	// Type defaults to a chat-input command, which is what every command here
 	// is. The context-menu kinds exist because the interface that carries them
@@ -70,78 +67,3 @@ const (
 	OptionInteger
 	OptionBoolean
 )
-
-// DiscordSlashCommand renders a declaration into the wire format. Exported
-// because cmdsync registers straight off the command rather than through the
-// Adapter, so both need the same translation.
-func DiscordSlashCommand(c *SlashCommand) *discordgo.ApplicationCommand {
-	if c == nil {
-		return nil
-	}
-	return &discordgo.ApplicationCommand{
-		Type:        discordCommandType(c.Type),
-		Name:        c.Name,
-		Description: c.Description,
-		Options:     discordOptions(c.Options),
-	}
-}
-
-func discordCommandType(t SlashCommandType) discordgo.ApplicationCommandType {
-	switch t {
-	case MessageMenuCommand:
-		return discordgo.MessageApplicationCommand
-	case UserMenuCommand:
-		return discordgo.UserApplicationCommand
-	default:
-		return discordgo.ChatApplicationCommand
-	}
-}
-
-func discordOptions(opts []SlashOption) []*discordgo.ApplicationCommandOption {
-	if len(opts) == 0 {
-		return nil
-	}
-	out := make([]*discordgo.ApplicationCommandOption, 0, len(opts))
-	for _, o := range opts {
-		out = append(out, &discordgo.ApplicationCommandOption{
-			Type:        discordOptionType(o.Type),
-			Name:        o.Name,
-			Description: o.Description,
-			Required:    o.Required,
-			Choices:     discordChoices(o.Choices),
-			Options:     discordOptions(o.Options),
-			MinValue:    o.MinValue,
-			MaxValue:    o.MaxValue,
-		})
-	}
-	return out
-}
-
-func discordOptionType(t SlashOptionType) discordgo.ApplicationCommandOptionType {
-	switch t {
-	case OptionSubCommand:
-		return discordgo.ApplicationCommandOptionSubCommand
-	case OptionSubCommandGroup:
-		return discordgo.ApplicationCommandOptionSubCommandGroup
-	case OptionInteger:
-		return discordgo.ApplicationCommandOptionInteger
-	case OptionBoolean:
-		return discordgo.ApplicationCommandOptionBoolean
-	default:
-		return discordgo.ApplicationCommandOptionString
-	}
-}
-
-func discordChoices(choices []SlashChoice) []*discordgo.ApplicationCommandOptionChoice {
-	if len(choices) == 0 {
-		return nil
-	}
-	out := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(choices))
-	for _, c := range choices {
-		out = append(out, &discordgo.ApplicationCommandOptionChoice{
-			Name:  c.Name,
-			Value: c.Value,
-		})
-	}
-	return out
-}

@@ -8,6 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/reply"
 
 	"github.com/rs/zerolog"
 )
@@ -141,7 +142,7 @@ func toApplicationCommand(c command.Command) *discordgo.ApplicationCommand {
 		if def := slash.SlashDefinition(); def != nil {
 			// A declaration that says nothing about its type is a chat-input
 			// command, which is what the zero value already means.
-			return cmdadapter.DiscordSlashCommand(def)
+			return reply.DiscordSlashCommand(def)
 		}
 	}
 
@@ -152,7 +153,7 @@ func toApplicationCommand(c command.Command) *discordgo.ApplicationCommand {
 			if def.Type == cmdadapter.ChatInputCommand {
 				def.Type = cmdadapter.MessageMenuCommand
 			}
-			return cmdadapter.DiscordSlashCommand(def)
+			return reply.DiscordSlashCommand(def)
 		}
 	}
 

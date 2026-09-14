@@ -142,10 +142,10 @@ func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildI
 	s.guildMusicStatusMu.RUnlock()
 
 	if hasMsg && msg.ChannelID != "" && msg.MessageID != "" {
-		if _, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, cmdadapter.DiscordEmbed(embed)); err != nil {
+		if _, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, reply.DiscordEmbed(embed)); err != nil {
 			s.log.Warn().Str("guild_id", guildID).Err(err).Msg("playback_failed_embed_edit_failed")
 			if notifyCh != "" {
-				if _, err2 := session.ChannelMessageSendEmbed(notifyCh, cmdadapter.DiscordEmbed(embed)); err2 != nil {
+				if _, err2 := session.ChannelMessageSendEmbed(notifyCh, reply.DiscordEmbed(embed)); err2 != nil {
 					s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err2).Msg("playback_failed_fallback_send_failed")
 				} else {
 					s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_after_edit_failed")
@@ -156,7 +156,7 @@ func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildI
 	}
 
 	if notifyCh != "" {
-		if _, err := session.ChannelMessageSendEmbed(notifyCh, cmdadapter.DiscordEmbed(embed)); err != nil {
+		if _, err := session.ChannelMessageSendEmbed(notifyCh, reply.DiscordEmbed(embed)); err != nil {
 			s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err).Msg("playback_failed_channel_send_failed")
 		} else {
 			s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_public_fallback")
@@ -329,7 +329,7 @@ func (s *Service) UpdatePlaybackStatus(from cmdadapter.Interaction, guildID stri
 		if session == nil {
 			return nil
 		}
-		_, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, cmdadapter.DiscordEmbed(embed))
+		_, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, reply.DiscordEmbed(embed))
 		return err
 	}
 

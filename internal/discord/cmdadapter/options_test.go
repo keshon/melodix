@@ -2,29 +2,22 @@ package cmdadapter
 
 import (
 	"testing"
-
-	"github.com/bwmarrin/discordgo"
 )
 
-func invocation(opts ...*discordgo.ApplicationCommandInteractionDataOption) *SlashInteractionContext {
-	return &SlashInteractionContext{Event: &discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{
-			Type: discordgo.InteractionApplicationCommand,
-			Data: discordgo.ApplicationCommandInteractionData{Options: opts},
-		},
-	}}
+func invocation(opts ...SlashArgument) *SlashInteractionContext {
+	return &SlashInteractionContext{Arguments: opts}
 }
 
-func opt(name string, t discordgo.ApplicationCommandOptionType, v any, sub ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.ApplicationCommandInteractionDataOption {
-	return &discordgo.ApplicationCommandInteractionDataOption{Name: name, Type: t, Value: v, Options: sub}
+func opt(name string, t SlashOptionType, v any, sub ...SlashArgument) SlashArgument {
+	return SlashArgument{Name: name, Type: t, Value: v, Options: sub}
 }
 
 // The commands used to loop over the raw options with a switch on the name.
 // Asking for one by name is the same question with less to get wrong.
 func TestStringOptionReadsArgumentsByName(t *testing.T) {
 	c := invocation(
-		opt("input", discordgo.ApplicationCommandOptionString, "never gonna give"),
-		opt("source", discordgo.ApplicationCommandOptionString, "youtube"),
+		opt("input", OptionString, "never gonna give"),
+		opt("source", OptionString, "youtube"),
 	)
 
 	if got := c.StringOption("input"); got != "never gonna give" {
@@ -39,7 +32,7 @@ func TestStringOptionReadsArgumentsByName(t *testing.T) {
 // caller here treats them that way. An optional argument must not need a
 // presence check before it can be read.
 func TestMissingOptionsReadAsZero(t *testing.T) {
-	c := invocation(opt("input", discordgo.ApplicationCommandOptionString, "x"))
+	c := invocation(opt("input", OptionString, "x"))
 
 	if got := c.StringOption("nothing"); got != "" {
 		t.Errorf("missing string = %q, want empty", got)
@@ -56,7 +49,7 @@ func TestMissingOptionsReadAsZero(t *testing.T) {
 // is the one that cares, and reading it as an int64 type assertion would
 // quietly give every page as zero.
 func TestIntOptionAcceptsWhatJSONActuallyDelivers(t *testing.T) {
-	c := invocation(opt("page", discordgo.ApplicationCommandOptionInteger, float64(7)))
+	c := invocation(opt("page", OptionInteger, float64(7)))
 
 	if got := c.IntOption("page"); got != 7 {
 		t.Fatalf("page = %d, want 7", got)
@@ -67,9 +60,9 @@ func TestIntOptionAcceptsWhatJSONActuallyDelivers(t *testing.T) {
 // argument. Routing walks it by name at each level.
 func TestNestedSubcommandsAreWalkable(t *testing.T) {
 	c := invocation(
-		opt("commands", discordgo.ApplicationCommandOptionSubCommandGroup, nil,
-			opt("enable", discordgo.ApplicationCommandOptionSubCommand, nil,
-				opt("group", discordgo.ApplicationCommandOptionString, "music"))),
+		opt("commands", OptionSubCommandGroup, nil,
+			opt("enable", OptionSubCommand, nil,
+				opt("group", OptionString, "music"))),
 	)
 
 	group, ok := c.FirstOption()
@@ -99,5 +92,22 @@ func TestEmptyInvocationAnswersEmpty(t *testing.T) {
 	}
 	if _, ok := (SlashArgument{}).First(); ok {
 		t.Error("found a nested option in an empty argument")
+	}
+}
+
+// The path is what an audit row names when a command is a tree of
+// subcommands: the leaf is what the caller actually ran.
+func TestSlashCommandPathNamesTheSubcommandRun(t *testing.T) {
+	args := []SlashArgument{
+		opt("announce", OptionSubCommandGroup, nil,
+			opt("channel-set", OptionSubCommand, nil,
+				opt("channel", OptionString, "123"))),
+	}
+
+	if got := SlashCommandPath("settings", args); got != "settings announce channel-set" {
+		t.Errorf("path = %q", got)
+	}
+	if got := SlashCommandPath("ping", nil); got != "ping" {
+		t.Errorf("bare command path = %q, want the command name", got)
 	}
 }

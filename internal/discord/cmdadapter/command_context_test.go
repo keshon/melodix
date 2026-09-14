@@ -4,57 +4,13 @@ import (
 	"io"
 	"testing"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
-
-func interaction(guildID, channelID string, member *discordgo.Member, user *discordgo.User) *discordgo.InteractionCreate {
-	return &discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{
-			GuildID:   guildID,
-			ChannelID: channelID,
-			Member:    member,
-			User:      user,
-		},
-	}
-}
-
-// A guild interaction carries Member, a direct message carries User, and
-// neither is guaranteed. Getting the order wrong means the audit log names the
-// wrong person, or nobody.
-func TestInteractionContextResolvesTheCaller(t *testing.T) {
-	member := &discordgo.Member{User: &discordgo.User{ID: "111", Username: "from-member"}}
-	dmUser := &discordgo.User{ID: "222", Username: "from-user"}
-
-	cases := []struct {
-		name     string
-		event    *discordgo.InteractionCreate
-		wantID   string
-		wantName string
-	}{
-		{"member wins", interaction("g", "c", member, dmUser), "111", "from-member"},
-		{"user when there is no member", interaction("", "c", nil, dmUser), "222", "from-user"},
-		{"sentinel when there is neither", interaction("g", "c", nil, nil), UnknownUserID, "Unknown"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			c := &SlashInteractionContext{Event: tc.event}
-			if got := c.UserID(); got != tc.wantID {
-				t.Errorf("UserID = %q, want %q", got, tc.wantID)
-			}
-			if got := c.Username(); got != tc.wantName {
-				t.Errorf("Username = %q, want %q", got, tc.wantName)
-			}
-		})
-	}
-}
 
 // Message commands are deliberately kept out of the audit log. Expressing that
 // as "no logger to reach" rather than a branch in the middleware means there
 // is no code path that could later be written to log them by accident.
 func TestMessageContextIsNotAudited(t *testing.T) {
-	c := &MessageContext{Event: &discordgo.MessageCreate{Message: &discordgo.Message{}}}
+	c := &MessageContext{}
 
 	if c.AuditLogger() != nil {
 		t.Fatal("a message command reached an audit logger")
@@ -65,38 +21,49 @@ func TestMessageContextIsNotAudited(t *testing.T) {
 // disabled to keep it out of a channel, so a public notice every time somebody
 // trips over it puts back the noise the admin was removing.
 func TestCanReplyPrivatelyOnlyWhereItIsTrue(t *testing.T) {
-	withResponder := &SlashInteractionContext{Event: interaction("g", "c", nil, nil), Responder: stubResponder{}}
+	withResponder := &SlashInteractionContext{Responder: stubResponder{}}
 	if !withResponder.CanReplyPrivately() {
 		t.Error("slash interaction with a responder cannot reply privately")
 	}
 
-	withoutResponder := &SlashInteractionContext{Event: interaction("g", "c", nil, nil)}
+	withoutResponder := &SlashInteractionContext{}
 	if withoutResponder.CanReplyPrivately() {
 		t.Error("slash interaction with no responder claims a private reply")
 	}
 
-	message := &MessageContext{Event: &discordgo.MessageCreate{Message: &discordgo.Message{}}}
+	message := &MessageContext{}
 	if message.CanReplyPrivately() {
 		t.Error("a plain message claims a private reply; Discord offers none")
 	}
 }
 
-// A reaction does not always carry the member, and an audit row naming an ID
-// is worth more than one naming nobody.
-func TestReactionContextFallsBackToTheUserID(t *testing.T) {
-	bare := &MessageReactionContext{Event: &discordgo.MessageReactionAdd{
-		MessageReaction: &discordgo.MessageReaction{UserID: "333"},
-	}}
-	if got := bare.Username(); got != "333" {
-		t.Errorf("Username = %q, want the user ID", got)
+// A caller nobody could identify has no permissions to resolve, and asking
+// anyway spends a request to be told so. The sentinel has to be recognised as
+// well as the empty string, or an unknown caller is looked up by the literal
+// name "unknown".
+func TestUnknownCallersAreNotLookedUp(t *testing.T) {
+	api := &countingAPI{}
+
+	for _, who := range []Invoker{
+		{UserID: "", ChannelID: "c"},
+		{UserID: UnknownUserID, ChannelID: "c"},
+	} {
+		c := &SlashInteractionContext{Invoker: who, API: api}
+		perms, err := c.MemberPermissions()
+		if err != nil || perms != 0 {
+			t.Errorf("caller %q: perms = %d, err = %v; want 0, nil", who.UserID, perms, err)
+		}
+	}
+	if api.permissionCalls != 0 {
+		t.Errorf("asked Discord about %d unidentifiable callers, want 0", api.permissionCalls)
 	}
 
-	named := &MessageReactionContext{Event: &discordgo.MessageReactionAdd{
-		MessageReaction: &discordgo.MessageReaction{UserID: "333"},
-		Member:          &discordgo.Member{User: &discordgo.User{ID: "333", Username: "reactor"}},
-	}}
-	if got := named.Username(); got != "reactor" {
-		t.Errorf("Username = %q, want the member's name", got)
+	known := &SlashInteractionContext{Invoker: Invoker{UserID: "111", ChannelID: "c"}, API: api}
+	if _, err := known.MemberPermissions(); err != nil {
+		t.Fatalf("known caller: %v", err)
+	}
+	if api.permissionCalls != 1 {
+		t.Errorf("permission calls for a known caller = %d, want 1", api.permissionCalls)
 	}
 }
 
@@ -113,50 +80,44 @@ func TestEveryContextIsACommandContext(t *testing.T) {
 	)
 }
 
+// Every interaction context has to satisfy Interaction, or the shared playback
+// helpers stop accepting one of the two ways a track gets queued.
+func TestEveryInteractionContextIsAnInteraction(t *testing.T) {
+	var (
+		_ Interaction = (*SlashInteractionContext)(nil)
+		_ Interaction = (*ComponentInteractionContext)(nil)
+		_ Interaction = (*MessageApplicationCommandContext)(nil)
+	)
+}
+
+type countingAPI struct {
+	permissionCalls int
+}
+
+func (a *countingAPI) MemberPermissions(string, string) (int64, error) {
+	a.permissionCalls++
+	return 0, nil
+}
+func (*countingAPI) CheckBotPermissions(string) bool               { return false }
+func (*countingAPI) CheckBotVoicePermissions(string) (bool, error) { return false, nil }
+func (*countingAPI) SendChannelMessage(string, string) error       { return nil }
+func (*countingAPI) SendChannelEmbed(string, *Embed) error         { return nil }
+func (*countingAPI) GuildInfo(string) (GuildInfo, error)           { return GuildInfo{}, nil }
+func (*countingAPI) Latency() time.Duration                        { return 0 }
+func (*countingAPI) EmbedColor() int                               { return 0 }
+
 type stubResponder struct{}
 
-func (stubResponder) RespondEmbedEphemeral(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
+func (stubResponder) AckDeferred(bool) error                               { return nil }
+func (stubResponder) RespondEmbed(*Embed, bool) error                      { return nil }
+func (stubResponder) RespondText(string, bool) error                       { return nil }
+func (stubResponder) RespondEmbedWithFile(*Embed, io.Reader, string) error { return nil }
+func (stubResponder) FollowupEmbed(*Embed, bool) error                     { return nil }
+func (stubResponder) FollowupEmbedWithComponents(*Embed, []ActionRow) error {
 	return nil
 }
-func (stubResponder) RespondEmbed(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
-	return nil
-}
-func (stubResponder) CheckBotPermissions(*discordgo.Session, string) bool { return false }
-func (stubResponder) CheckBotVoicePermissions(*discordgo.Session, string) (bool, error) {
-	return false, nil
-}
-func (stubResponder) EmbedColor() int { return 0 }
-func (stubResponder) AckDeferred(*discordgo.Session, *discordgo.InteractionCreate) error {
-	return nil
-}
-func (stubResponder) AckDeferredEphemeral(*discordgo.Session, *discordgo.InteractionCreate) error {
-	return nil
-}
-func (stubResponder) FollowupEmbed(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
-	return nil
-}
-func (stubResponder) FollowupEmbedEphemeral(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
-	return nil
-}
-func (stubResponder) EditResponse(*discordgo.Session, *discordgo.InteractionCreate, string) error {
-	return nil
-}
-func (stubResponder) FollowupEmbedEphemeralWithComponents(*discordgo.Session, *discordgo.InteractionCreate, *Embed, []ActionRow) error {
-	return nil
-}
-func (stubResponder) ReplaceComponentMessage(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
-	return nil
-}
-func (stubResponder) FollowupEmbedMessage(*discordgo.Session, *discordgo.InteractionCreate, *Embed) (string, string, error) {
+func (stubResponder) FollowupEmbedMessage(*Embed) (string, string, error) {
 	return "", "", nil
 }
-func (stubResponder) RespondEmbedEphemeralWithFile(*discordgo.Session, *discordgo.InteractionCreate, *Embed, io.Reader, string) error {
-	return nil
-}
-func (stubResponder) RespondEphemeralText(*discordgo.Session, *discordgo.InteractionCreate, string) error {
-	return nil
-}
-func (stubResponder) Latency(*discordgo.Session) time.Duration { return 0 }
-func (stubResponder) GuildInfo(*discordgo.Session, string) (GuildInfo, error) {
-	return GuildInfo{}, nil
-}
+func (stubResponder) EditResponseText(string) error { return nil }
+func (stubResponder) ReplaceMessage(*Embed) error   { return nil }

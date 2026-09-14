@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 type commandRunOptions struct {
@@ -46,31 +44,35 @@ func (b *Bot) runWithCommandContext(opts commandRunOptions, fn func(cmdCtx conte
 // command guard. kind is the dispatch kind ("slash" or "component"); name is
 // the resolved command name. Both end up as structured fields ("kind",
 // "command") on every emitted log event.
+//
+// It takes the responder the handler already built rather than the session and
+// the event, because every refusal it can emit is an ephemeral reply to that
+// one interaction — which is exactly what a responder is.
 func (b *Bot) runGuardedInteraction(
-	s *discordgo.Session,
-	i *discordgo.InteractionCreate,
+	r cmdadapter.Responder,
 	kind string,
 	name string,
 	fn func(cmdCtx context.Context) error,
 ) {
+	refuse := func(msg string) {
+		if r == nil {
+			return
+		}
+		_ = r.RespondEmbed(&cmdadapter.Embed{Description: msg}, true)
+	}
+
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
 			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_slot_busy")
-			_ = reply.RespondEmbedEphemeral(s, i, &cmdadapter.Embed{
-				Description: "Bot is busy right now. Please try again in a moment.",
-			})
+			refuse("Bot is busy right now. Please try again in a moment.")
 		},
 		onTimeout: func(err error) {
 			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_timeout")
-			_ = reply.RespondEmbedEphemeral(s, i, &cmdadapter.Embed{
-				Description: "Timed out running command.",
-			})
+			refuse("Timed out running command.")
 		},
 		onError: func(err error) {
 			b.log.Error().Str("kind", kind).Str("command", name).Err(err).Msg("command_run_error")
-			_ = reply.RespondEmbedEphemeral(s, i, &cmdadapter.Embed{
-				Description: fmt.Sprintf("Error running command: %v", err),
-			})
+			refuse(fmt.Sprintf("Error running command: %v", err))
 		},
 	}, fn)
 }

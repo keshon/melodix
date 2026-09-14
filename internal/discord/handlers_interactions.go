@@ -22,6 +22,31 @@ func (b *Bot) onInteractionCreate(s *discordgo.Session, i *discordgo.Interaction
 	}
 }
 
+// interactionInvoker reads the caller off an interaction, once, so nothing
+// downstream has to hold the interaction to ask again. A guild interaction
+// carries Member, a direct message carries User, and neither is guaranteed.
+func interactionInvoker(e *discordgo.InteractionCreate) cmdadapter.Invoker {
+	who := cmdadapter.Invoker{
+		UserID:   cmdadapter.UnknownUserID,
+		Username: cmdadapter.UnknownUsername,
+	}
+	if e == nil {
+		return who
+	}
+	who.GuildID = e.GuildID
+	who.ChannelID = e.ChannelID
+
+	u := e.User
+	if e.Member != nil && e.Member.User != nil {
+		u = e.Member.User
+	}
+	if u != nil {
+		who.UserID = u.ID
+		who.Username = u.Username
+	}
+	return who
+}
+
 func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	name := i.ApplicationCommandData().Name
 	c := command.DefaultRegistry.Get(name)
@@ -34,26 +59,28 @@ func (b *Bot) onApplicationCommand(s *discordgo.Session, i *discordgo.Interactio
 	logger := b.cmdLogger
 	b.mu.RUnlock()
 
+	responder := reply.NewResponder(s, i)
+	api := reply.NewSessionAPI(s)
+
 	var inv *command.Invocation
 	switch i.ApplicationCommandData().CommandType {
 	case discordgo.MessageApplicationCommand:
 		inv = &command.Invocation{Data: &cmdadapter.MessageApplicationCommandContext{
-			Session: s, Event: i, Storage: b.storage, Target: i.Message,
-			Config: b.cfg, Responder: reply.DefaultResponder, Logger: logger,
-			AppLog: b.log,
+			Invoker: interactionInvoker(i), Responder: responder, API: api,
+			Storage: b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
 		}}
 	case discordgo.ChatApplicationCommand:
 		inv = &command.Invocation{Data: &cmdadapter.SlashInteractionContext{
-			Session: s, Event: i, Storage: b.storage,
-			Config: b.cfg, Responder: reply.DefaultResponder, Logger: logger,
-			AppLog: b.log,
+			Invoker: interactionInvoker(i), Responder: responder, API: api,
+			Arguments: reply.SlashArguments(i.ApplicationCommandData().Options),
+			Storage:   b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
 			Syncer: b.cmdSyncer,
 		}}
 	default:
 		return
 	}
 
-	b.runGuardedInteraction(s, i, "slash", name, func(cmdCtx context.Context) error {
+	b.runGuardedInteraction(responder, "slash", name, func(cmdCtx context.Context) error {
 		return c.Run(cmdCtx, inv)
 	})
 }
@@ -84,12 +111,15 @@ func (b *Bot) onComponentInteraction(s *discordgo.Session, i *discordgo.Interact
 	logger := b.cmdLogger
 	b.mu.RUnlock()
 
-	b.runGuardedInteraction(s, i, "component", matched.Name(), func(cmdCtx context.Context) error {
+	responder := reply.NewResponder(s, i)
+
+	b.runGuardedInteraction(responder, "component", matched.Name(), func(cmdCtx context.Context) error {
 		_ = cmdCtx
 		return handler.Component(&cmdadapter.ComponentInteractionContext{
-			Session: s, Event: i, Storage: b.storage,
-			Config: b.cfg, Responder: reply.DefaultResponder, Logger: logger,
-			AppLog: b.log,
+			Invoker: interactionInvoker(i), Responder: responder,
+			API:         reply.NewSessionAPI(s),
+			ComponentID: customID,
+			Storage:     b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
 		})
 	})
 }

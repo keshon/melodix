@@ -26,23 +26,35 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
+	api := reply.NewSessionAPI(s)
+
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
 			b.log.Warn().Str("kind", "message").Err(err).Msg("command_slot_busy")
 		},
 	}, func(cmdCtx context.Context) error {
-		inv := &command.Invocation{Data: &cmdadapter.MessageContext{Session: s, Event: m, Storage: b.storage, Config: b.cfg}}
+		inv := &command.Invocation{Data: &cmdadapter.MessageContext{
+			Invoker: cmdadapter.Invoker{
+				GuildID:   m.GuildID,
+				ChannelID: m.ChannelID,
+				UserID:    authorID(m.Author),
+				Username:  authorName(m.Author),
+			},
+			API:     api,
+			Storage: b.storage,
+			Config:  b.cfg,
+		}}
 		for _, c := range command.DefaultRegistry.GetAll() {
 			if err := c.Run(cmdCtx, inv); err != nil {
 				if cmdCtx.Err() == context.DeadlineExceeded {
 					b.log.Warn().Str("kind", "message").Err(err).Msg("command_timeout")
-					_ = reply.MessageEmbed(s, m.ChannelID, &cmdadapter.Embed{
+					_ = api.SendChannelEmbed(m.ChannelID, &cmdadapter.Embed{
 						Description: "Timed out running command.",
 					})
 					continue
 				}
 				b.log.Error().Str("kind", "message").Err(err).Msg("command_run_error")
-				_ = reply.MessageEmbed(s, m.ChannelID, &cmdadapter.Embed{
+				_ = api.SendChannelEmbed(m.ChannelID, &cmdadapter.Embed{
 					Description: fmt.Sprintf("Error: %v", err),
 				})
 			}
@@ -57,13 +69,24 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 	logger := b.cmdLogger
 	b.mu.RUnlock()
 
+	api := reply.NewSessionAPI(s)
+
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
 			b.log.Warn().Str("kind", "reaction").Err(err).Msg("command_slot_busy")
 		},
 	}, func(cmdCtx context.Context) error {
 		inv := &command.Invocation{Data: &cmdadapter.MessageReactionContext{
-			Session: s, Event: r, Storage: b.storage, Config: b.cfg, Logger: logger,
+			Invoker: cmdadapter.Invoker{
+				GuildID:   r.GuildID,
+				ChannelID: r.ChannelID,
+				UserID:    r.UserID,
+				Username:  reactorName(r),
+			},
+			API:     api,
+			Storage: b.storage,
+			Config:  b.cfg,
+			Logger:  logger,
 		}}
 		for _, c := range command.DefaultRegistry.GetAll() {
 			if _, ok := command.Root(c).(cmdadapter.ReactionProvider); !ok {
@@ -75,11 +98,38 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 					continue
 				}
 				b.log.Error().Str("kind", "reaction").Err(err).Msg("command_run_error")
-				_ = reply.MessageEmbed(s, r.ChannelID, &cmdadapter.Embed{
+				_ = api.SendChannelEmbed(r.ChannelID, &cmdadapter.Embed{
 					Description: fmt.Sprintf("Error: %v", err),
 				})
 			}
 		}
 		return nil
 	})
+}
+
+// authorID and authorName read a message's author, which a webhook message
+// can arrive without. The fallbacks match what an interaction reports when it
+// carries no caller, so the audit log reads the same either way.
+func authorID(u *discordgo.User) string {
+	if u == nil {
+		return cmdadapter.UnknownUserID
+	}
+	return u.ID
+}
+
+func authorName(u *discordgo.User) string {
+	if u == nil {
+		return cmdadapter.UnknownUsername
+	}
+	return u.Username
+}
+
+// reactorName falls back to the user ID rather than a sentinel: a reaction
+// does not always carry the member, and an audit row naming an ID is worth
+// more than one naming nobody.
+func reactorName(r *discordgo.MessageReactionAdd) string {
+	if r.Member != nil && r.Member.User != nil {
+		return r.Member.User.Username
+	}
+	return r.UserID
 }
