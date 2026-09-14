@@ -62,21 +62,31 @@ func FormatQueueLine(pos int, title, url string, d time.Duration) string {
 }
 
 // trackLabel renders a track as a link with an optional duration chip, falling
-// back to the URL when there is no title and to a placeholder when there is
-// neither. Long titles get the same middle ellipsis as history rows.
+// back to the bare URL when there is no title and to a placeholder when there
+// is neither. Long titles get the same middle ellipsis as history rows.
 func trackLabel(title, url string, d time.Duration) string {
 	name := strings.TrimSpace(title)
-	if name == "" {
-		name = strings.TrimSpace(url)
-	}
-	if name == "" {
-		return "(no title)"
-	}
+	url = strings.TrimSpace(url)
 
 	var tail string
 	if d > 0 {
 		tail = " `" + formatQueueDuration(d) + "`"
 	}
+
+	if name == "" {
+		if url == "" {
+			return "(no title)"
+		}
+		// A bare URL, not a masked link labelled with itself. Discord does
+		// not render `[url](url)` -- it prints the markdown, so a queue of
+		// tracks whose titles are not known yet showed a wall of brackets
+		// and no working links.
+		//
+		// It is also not ellipsised: shortening a URL in the middle breaks
+		// the thing the row exists to offer.
+		return url + tail
+	}
+
 	build := func(tt string) string {
 		if url == "" {
 			return tt + tail
