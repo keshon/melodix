@@ -29,6 +29,7 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/disgosession"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/musicwire"
 	"github.com/keshon/melodix/internal/readme"
@@ -42,6 +43,7 @@ func main() {
 	// -readme regenerates README.md from the command registry as a dev step
 	// (run from the repo root); the bot never writes files at runtime.
 	genReadme := flag.Bool("readme", false, "regenerate README.md from the command registry and exit")
+	checkDisgo := flag.Bool("check-disgo", false, "connect with disgo, report what it sees, and exit without registering or sending anything")
 	flag.Parse()
 	if *genReadme {
 		log := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
@@ -68,6 +70,11 @@ func main() {
 
 	if cfg.DiscordToken == "" {
 		log.Fatal().Msg("config_missing_token")
+	}
+
+	if *checkDisgo {
+		runDisgoCheck(rootCtx, cfg, log)
+		return
 	}
 
 	store, err := storage.NewStorage(cfg.StoragePath, log)
@@ -149,4 +156,22 @@ func registerCommands(bot *discord.Bot, log zerolog.Logger) {
 	cmdadapter.Register(&queue.Queue{Bot: bot}, mw...)
 	cmdadapter.Register(&stop.Stop{Bot: bot}, mw...)
 	cmdadapter.Register(&history.History{Bot: bot}, mw...)
+}
+
+// runDisgoCheck connects with disgo and reports what it can see. It registers
+// nothing and sends nothing, which is the point: it is the only part of the
+// migration that can be judged without having ported anything onto it.
+func runDisgoCheck(ctx context.Context, cfg *config.Config, log zerolog.Logger) {
+	res, err := disgosession.Check(ctx, cfg.DiscordToken, log)
+	if err != nil {
+		log.Error().Err(err).Msg("disgo_check_failed")
+		os.Exit(1)
+	}
+	log.Info().
+		Str("username", res.Username).
+		Int("guilds", res.Guilds).
+		Dur("latency", res.Latency).
+		Int("existing_commands", res.Commands).
+		Str("commands_guild", res.CommandsGuild).
+		Msg("disgo_check_ok")
 }

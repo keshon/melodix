@@ -18,6 +18,18 @@ type Config struct {
 	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"false"`
 	VoiceReadyDelayMs     int      `env:"VOICE_READY_DELAY_MS" envDefault:"500"` // VoiceReadyDelayMs is the delay in ms after joining VC before sending opus (discordgo op 4 race). Default 500.
 
+	// DiscordBackend selects the library carrying the gateway, REST and
+	// interactions: "discordgo" (the vendored fork) or "disgo". It is read
+	// once at startup and cannot change while running, so rolling back means
+	// a restart. Scaffolding for the disgo migration; it goes when the fork
+	// does.
+	DiscordBackend string `env:"DISCORD_BACKEND" envDefault:"discordgo"`
+	// VoiceBackend selects the library carrying the audio path, independently
+	// of DiscordBackend: "discordgo" or "disgo". Unlike the gateway, both
+	// implementations are live in one process and chosen per guild, so this
+	// is a real comparison rather than a restart.
+	VoiceBackend string `env:"VOICE_BACKEND" envDefault:"discordgo"`
+
 	// CommandTimeout is a hard timebox for command execution.
 	CommandTimeout time.Duration `env:"COMMAND_TIMEOUT" envDefault:"30s"`
 	// CommandParallelism limits concurrently running command handlers.
