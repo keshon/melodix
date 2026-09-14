@@ -19,10 +19,9 @@ import (
 // NewBot creates a Bot. Register any bot-dependent commands before calling Run.
 func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *Bot {
 	b := &Bot{
-		cfg:       cfg,
-		storage:   storage,
-		log:       log,
-		slashCmds: make(map[string][]*discordgo.ApplicationCommand),
+		cfg:     cfg,
+		storage: storage,
+		log:     log,
 	}
 	// Voice service must outlive a single Discord session so playback/queues
 	// survive reconnects.

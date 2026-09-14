@@ -19,13 +19,12 @@ import (
 // Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired
 // in run.
 type Bot struct {
-	dg        *discordgo.Session
-	storage   *storage.Storage
-	slashCmds map[string][]*discordgo.ApplicationCommand
-	cfg       *config.Config
-	mu        sync.RWMutex
-	voice     *voice.Service
-	log       zerolog.Logger
+	dg      *discordgo.Session
+	storage *storage.Storage
+	cfg     *config.Config
+	mu      sync.RWMutex
+	voice   *voice.Service
+	log     zerolog.Logger
 
 	cmdSyncer *cmdsync.Syncer
 	cmdLogger *cmdlogger.Logger
