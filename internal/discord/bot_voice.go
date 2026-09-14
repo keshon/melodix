@@ -22,9 +22,10 @@ type VoiceAPI interface {
 	// Resolve resolves input to tracks using the bot's shared resolver.
 	ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error)
 
-	// UpdatePlaybackStatus creates or edits the guild's music status message so
-	// updates work beyond 15 min token expiry.
-	UpdatePlaybackStatus(from cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error
+	// AnnouncePlayback answers the interaction with embed and makes that
+	// message the guild's playback status message, so the asynchronous
+	// transitions can keep editing it past the token's expiry.
+	AnnouncePlayback(to cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error
 
 	// SetGuildMusicNotifyChannel stores the slash command text channel for async
 	// playback failure UI.
@@ -67,13 +68,13 @@ func (b *Bot) ResolveTracks(guildID, input, source, parser string) ([]sources.Tr
 	return b.voice.ResolveTracks(guildID, input, source, parser)
 }
 
-// UpdatePlaybackStatus creates or edits the guild's music status message
-// (delegates to voice service).
-func (b *Bot) UpdatePlaybackStatus(from cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error {
+// AnnouncePlayback answers the interaction and registers the reply as the
+// guild's playback status message (delegates to voice service).
+func (b *Bot) AnnouncePlayback(to cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error {
 	if b.voice == nil {
 		return nil
 	}
-	return b.voice.UpdatePlaybackStatus(from, guildID, embed)
+	return b.voice.AnnouncePlayback(to, guildID, embed)
 }
 
 // SetGuildMusicNotifyChannel records the text channel for public

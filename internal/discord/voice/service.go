@@ -231,11 +231,11 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 				s.log.Warn().Str("guild_id", guildID).Msg("now_playing_render_skipped_no_track")
 				continue
 			}
-			// UpdatePlaybackStatus is a silent no-op when no status message is
-			// registered and no interaction is available to create one, so check
-			// first — otherwise this traces a render that never happened.
+			// UpdatePlaybackStatus is a silent no-op when no status message
+			// is registered, so check first — otherwise this traces a render
+			// that never happened.
 			registered := s.hasStatusMessage(guildID)
-			if err := s.UpdatePlaybackStatus(nil, guildID, reply.NowPlayingEmbed(track)); err != nil {
+			if err := s.UpdatePlaybackStatus(guildID, reply.NowPlayingEmbed(track)); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 				continue
 			}
@@ -260,7 +260,7 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			if p.IsPlaying() || len(p.Queue()) > 0 {
 				continue
 			}
-			if err := s.UpdatePlaybackStatus(nil, guildID, reply.PlaybackFinishedEmbed()); err != nil {
+			if err := s.UpdatePlaybackStatus(guildID, reply.PlaybackFinishedEmbed()); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 			}
 		}
@@ -303,40 +303,25 @@ func (s *Service) hasStatusMessage(guildID string) bool {
 	return ok
 }
 
-// UpdatePlaybackStatus creates or edits the guild's music status message.
+// AnnouncePlayback answers the interaction with embed, and makes that message
+// the guild's playback status message.
 //
-// The interaction is optional and is only ever used to create the message: the
-// status is edited for as long as the track plays, which outlives the
-// interaction token, so editing goes through the session instead. A nil
-// interaction is the asynchronous path -- auto-advance, queue end -- where
-// there is nobody to reply to and the message must already exist.
-func (s *Service) UpdatePlaybackStatus(from cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error {
-	if from != nil && from.ChannelID() != "" {
-		s.guildMusicStatusMu.Lock()
-		if s.guildMusicNotifyChannel == nil {
-			s.guildMusicNotifyChannel = make(map[string]string)
-		}
-		s.guildMusicNotifyChannel[guildID] = from.ChannelID()
-		s.guildMusicStatusMu.Unlock()
-	}
-
-	s.guildMusicStatusMu.RLock()
-	msg, ok := s.guildMusicStatus[guildID]
-	s.guildMusicStatusMu.RUnlock()
-
-	if ok {
-		api := s.getAPI()
-		if api == nil {
-			return nil
-		}
-		return api.EditChannelEmbed(msg.ChannelID, msg.MessageID, embed)
-	}
-
-	if from == nil {
+// The caller always gets a reply. That is the whole difference from what this
+// used to be: one method took an optional interaction, and when a status
+// message already existed it edited that and dropped the interaction on the
+// floor -- so the person who ran the command got nothing, and the deferred
+// placeholder sat there with nothing to replace it.
+//
+// The reply doubles as the status message because the two want to be the same
+// thing at the moment playback starts: the caller is told what is playing, and
+// that is exactly what the asynchronous transitions later need to edit.
+func (s *Service) AnnouncePlayback(to cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error {
+	if to == nil {
 		return nil
 	}
+	s.rememberNotifyChannel(guildID, to.ChannelID())
 
-	channelID, messageID, err := from.AnswerEmbedMessage(embed)
+	channelID, messageID, err := to.AnswerEmbedMessage(embed)
 	if err != nil {
 		return err
 	}
@@ -348,6 +333,39 @@ func (s *Service) UpdatePlaybackStatus(from cmdadapter.Interaction, guildID stri
 	s.guildMusicStatus[guildID] = guildMusicStatus{ChannelID: channelID, MessageID: messageID}
 	s.guildMusicStatusMu.Unlock()
 	return nil
+}
+
+// UpdatePlaybackStatus edits the guild's playback status message.
+//
+// This is the asynchronous half -- auto-advance, queue end -- where there is
+// nobody to answer and the message must already exist. A guild with no status
+// message registered is a no-op rather than an error: playback can start from
+// a path that never announced one, and a missing message is not a failure.
+func (s *Service) UpdatePlaybackStatus(guildID string, embed *cmdadapter.Embed) error {
+	s.guildMusicStatusMu.RLock()
+	msg, ok := s.guildMusicStatus[guildID]
+	s.guildMusicStatusMu.RUnlock()
+	if !ok {
+		return nil
+	}
+
+	api := s.getAPI()
+	if api == nil {
+		return nil
+	}
+	return api.EditChannelEmbed(msg.ChannelID, msg.MessageID, embed)
+}
+
+func (s *Service) rememberNotifyChannel(guildID, channelID string) {
+	if channelID == "" {
+		return
+	}
+	s.guildMusicStatusMu.Lock()
+	if s.guildMusicNotifyChannel == nil {
+		s.guildMusicNotifyChannel = make(map[string]string)
+	}
+	s.guildMusicNotifyChannel[guildID] = channelID
+	s.guildMusicStatusMu.Unlock()
 }
 
 // StopAllPlayers stops playback and disconnects voice for all guilds. Call on

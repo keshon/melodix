@@ -66,31 +66,39 @@ func Join(bot discord.VoiceAPI, ctx cmdadapter.Interaction) (Target, bool) {
 	return Target{Player: p, ChannelID: voiceState.ChannelID, GuildID: guildID}, true
 }
 
-// StartAndRender starts playback when the player is idle, then renders the
-// outcome into the guild's music status message. added is how many tracks the
-// caller just queued, which is what the reply reports when something was
-// already playing.
+// StartAndRender starts playback when the player is idle, then answers the
+// caller with what happened. added is how many tracks the caller just queued,
+// which is what the answer reports when something was already playing.
 //
-// The outcome is known here, so it is rendered synchronously; asynchronous
-// transitions such as auto-advance and queue end belong to the voice service's
-// status watcher instead.
+// The caller is answered either way, and the two cases differ in what the
+// answer means rather than in whether there is one:
+//
+//   - Playback started here, so the answer is what is now playing, and it
+//     becomes the guild's status message for the asynchronous transitions --
+//     auto-advance, queue end -- to edit afterwards.
+//   - Something was already playing, so the answer is what happened to the
+//     caller's tracks. The status message is left alone: it is showing what
+//     is playing, which has not changed, and overwriting it with "added"
+//     would replace the answer to "what is on" with the answer to a question
+//     nobody asked twice.
 func StartAndRender(bot discord.VoiceAPI, ctx cmdadapter.Interaction, log zerolog.Logger, t Target, added int) {
-	started := false
-	if !t.Player.IsPlaying() {
-		if err := t.Player.PlayNext(t.ChannelID); err != nil {
-			renderStartError(ctx, err)
-			return
+	if t.Player.IsPlaying() {
+		if err := ctx.Respond(reply.TracksAddedEmbed(added)); err != nil {
+			log.Warn().Str("guild_id", t.GuildID).Err(err).Msg("queue_added_reply_failed")
 		}
-		started = true
+		return
+	}
+
+	if err := t.Player.PlayNext(t.ChannelID); err != nil {
+		renderStartError(ctx, err)
+		return
 	}
 
 	embed := reply.TracksAddedEmbed(added)
-	if started {
-		if track := t.Player.CurrentTrack(); track != nil {
-			embed = reply.NowPlayingEmbed(track)
-		}
+	if track := t.Player.CurrentTrack(); track != nil {
+		embed = reply.NowPlayingEmbed(track)
 	}
-	if err := bot.UpdatePlaybackStatus(ctx, t.GuildID, embed); err != nil {
+	if err := bot.AnnouncePlayback(ctx, t.GuildID, embed); err != nil {
 		log.Warn().Str("guild_id", t.GuildID).Err(err).Msg("guild_status_update_failed")
 	}
 }

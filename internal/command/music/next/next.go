@@ -97,7 +97,7 @@ func (c *Next) Run(ctx interface{}) error {
 	// The skip outcome is known here, so render it synchronously (async
 	// transitions are handled by the voice service's status watcher).
 	if track := player.CurrentTrack(); track != nil {
-		if uerr := c.Bot.UpdatePlaybackStatus(slashCtx, guildID, reply.NowPlayingEmbed(track)); uerr != nil {
+		if uerr := c.Bot.AnnouncePlayback(slashCtx, guildID, reply.NowPlayingEmbed(track)); uerr != nil {
 			slashCtx.AppLog.Warn().Str("guild_id", guildID).Err(uerr).Msg("guild_status_update_failed")
 		}
 	}
