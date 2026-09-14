@@ -1,6 +1,7 @@
 package reply
 
 import (
+	"fmt"
 	"io"
 	"time"
 
@@ -90,7 +91,10 @@ func NewSessionAPI(s *discordgo.Session) *API {
 	return &API{s: s}
 }
 
-var _ cmdadapter.SessionAPI = (*API)(nil)
+var (
+	_ cmdadapter.SessionAPI = (*API)(nil)
+	_ cmdadapter.BotAPI     = (*API)(nil)
+)
 
 func (a *API) MemberPermissions(userID, channelID string) (int64, error) {
 	if a.s == nil {
@@ -127,3 +131,27 @@ func (a *API) Latency() time.Duration {
 }
 
 func (a *API) EmbedColor() int { return EmbedColor }
+
+func (a *API) EditChannelEmbed(channelID, messageID string, embed *cmdadapter.Embed) error {
+	if a.s == nil {
+		return fmt.Errorf("no Discord session")
+	}
+	_, err := a.s.ChannelMessageEditEmbed(channelID, messageID, DiscordEmbed(embed))
+	return err
+}
+
+func (a *API) UserVoiceChannel(guildID, userID string) (string, error) {
+	if a.s == nil {
+		return "", fmt.Errorf("no Discord session")
+	}
+	guild, err := a.s.State.Guild(guildID)
+	if err != nil {
+		return "", fmt.Errorf("error retrieving guild: %w", err)
+	}
+	for _, vs := range guild.VoiceStates {
+		if vs.UserID == userID {
+			return vs.ChannelID, nil
+		}
+	}
+	return "", fmt.Errorf("user not in any voice channel")
+}

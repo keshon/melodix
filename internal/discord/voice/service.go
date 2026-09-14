@@ -5,26 +5,30 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
-	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/playbackerr"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
+	musicsink "github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/rs/zerolog"
 )
 
-// SessionGetter returns the current Discord session (used so providers stay
-// valid across reconnects).
-//
-// Kept in the parent package so call sites (e.g. bot wiring) keep using
-// voice.New(...) without importing the implementation subpackage.
-type SessionGetter = sink.SessionGetter
+// APIGetter returns the current connection's neutral surface, or nil when
+// there is no session. It is a function rather than a value so the service
+// survives reconnects: a restart replaces the session, and everything here
+// asks again rather than holding a handle that has gone stale.
+type APIGetter func() cmdadapter.BotAPI
+
+// SinkProviderFactory builds the audio path for one guild. It is supplied by
+// whichever backend is running, which is the whole of what VOICE_BACKEND
+// chooses -- the service itself does not know which library carries the
+// packets, and does not need to.
+type SinkProviderFactory func(guildID string) musicsink.Provider
 
 // UserVoiceState is where a user is connected, in the shape a caller needs to
 // join them: the channel, and who was asked about.
@@ -40,20 +44,15 @@ type UserVoiceState struct {
 // field, without the lock that guards it, while a session restart wrote that
 // field from another goroutine.
 func (s *Service) FindUserVoiceState(guildID, userID string) (*UserVoiceState, error) {
-	sess := s.getSession()
-	if sess == nil {
+	api := s.getAPI()
+	if api == nil {
 		return nil, fmt.Errorf("no Discord session")
 	}
-	guild, err := sess.State.Guild(guildID)
+	channelID, err := api.UserVoiceChannel(guildID, userID)
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving guild: %w", err)
+		return nil, err
 	}
-	for _, vs := range guild.VoiceStates {
-		if vs.UserID == userID {
-			return &UserVoiceState{ChannelID: vs.ChannelID, UserID: vs.UserID}, nil
-		}
-	}
-	return nil, fmt.Errorf("user not in any voice channel")
+	return &UserVoiceState{ChannelID: channelID, UserID: userID}, nil
 }
 
 type guildMusicStatus struct {
@@ -65,14 +64,15 @@ type guildMusicStatus struct {
 // resolver, and guild music status. It is pluggable: a bot without voice can
 // omit it.
 type Service struct {
-	getSession    SessionGetter
-	cfg           *config.Config
-	store         *storage.Storage
-	log           zerolog.Logger
-	mu            sync.RWMutex
-	players       map[string]*player.Player
-	sinkProviders map[string]*sink.DiscordSinkProvider
-	resolver      *resolve.Resolver
+	getAPI          APIGetter
+	newSinkProvider SinkProviderFactory
+	cfg             *config.Config
+	store           *storage.Storage
+	log             zerolog.Logger
+	mu              sync.RWMutex
+	players         map[string]*player.Player
+	sinkProviders   map[string]musicsink.Provider
+	resolver        *resolve.Resolver
 
 	guildMusicStatus map[string]guildMusicStatus
 	// guildMusicNotifyChannel is the text channel of the last music slash (/play,
@@ -82,15 +82,18 @@ type Service struct {
 	guildMusicStatusMu      sync.RWMutex
 }
 
-// New creates a voice service for the given session getter and config.
-func NewVoiceService(getSession SessionGetter, cfg *config.Config, store *storage.Storage, log zerolog.Logger) *Service {
+// NewVoiceService creates a voice service. getAPI reaches the current
+// connection and newSinkProvider builds a guild's audio path; between them
+// they are the entire contact with whichever library is running.
+func NewVoiceService(getAPI APIGetter, newSinkProvider SinkProviderFactory, cfg *config.Config, store *storage.Storage, log zerolog.Logger) *Service {
 	return &Service{
-		getSession:              getSession,
+		getAPI:                  getAPI,
+		newSinkProvider:         newSinkProvider,
 		cfg:                     cfg,
 		store:                   store,
 		log:                     log,
 		players:                 make(map[string]*player.Player),
-		sinkProviders:           make(map[string]*sink.DiscordSinkProvider),
+		sinkProviders:           make(map[string]musicsink.Provider),
 		guildMusicStatus:        make(map[string]guildMusicStatus),
 		guildMusicNotifyChannel: make(map[string]string),
 	}
@@ -112,8 +115,8 @@ func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parse
 
 // notifyPlaybackFailed is wired as player.Options.OnPlaybackFailed at player construction.
 func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err error) {
-	sess := s.getSession()
-	if sess == nil {
+	api := s.getAPI()
+	if api == nil {
 		return
 	}
 	detail := playbackerr.String(err.Error())
@@ -125,7 +128,7 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 	} else {
 		desc = detail
 	}
-	s.deliverPlaybackFailureEmbed(sess, guildID, &cmdadapter.Embed{
+	s.deliverPlaybackFailureEmbed(api, guildID, &cmdadapter.Embed{
 		Title:       "Playback failed",
 		Description: desc,
 		Color:       reply.EmbedColor,
@@ -135,17 +138,17 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 // deliverPlaybackFailureEmbed edits the stored "now playing" message when
 // possible; otherwise sends a public embed to the last known slash channel (see
 // SetGuildMusicNotifyChannel / UpdatePlaybackStatus).
-func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildID string, embed *cmdadapter.Embed) {
+func (s *Service) deliverPlaybackFailureEmbed(api cmdadapter.BotAPI, guildID string, embed *cmdadapter.Embed) {
 	s.guildMusicStatusMu.RLock()
 	msg, hasMsg := s.guildMusicStatus[guildID]
 	notifyCh := s.guildMusicNotifyChannel[guildID]
 	s.guildMusicStatusMu.RUnlock()
 
 	if hasMsg && msg.ChannelID != "" && msg.MessageID != "" {
-		if _, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, reply.DiscordEmbed(embed)); err != nil {
+		if err := api.EditChannelEmbed(msg.ChannelID, msg.MessageID, embed); err != nil {
 			s.log.Warn().Str("guild_id", guildID).Err(err).Msg("playback_failed_embed_edit_failed")
 			if notifyCh != "" {
-				if _, err2 := session.ChannelMessageSendEmbed(notifyCh, reply.DiscordEmbed(embed)); err2 != nil {
+				if err2 := api.SendChannelEmbed(notifyCh, embed); err2 != nil {
 					s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err2).Msg("playback_failed_fallback_send_failed")
 				} else {
 					s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_after_edit_failed")
@@ -156,7 +159,7 @@ func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildI
 	}
 
 	if notifyCh != "" {
-		if _, err := session.ChannelMessageSendEmbed(notifyCh, reply.DiscordEmbed(embed)); err != nil {
+		if err := api.SendChannelEmbed(notifyCh, embed); err != nil {
 			s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err).Msg("playback_failed_channel_send_failed")
 		} else {
 			s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_public_fallback")
@@ -174,7 +177,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	defer s.mu.Unlock()
 
 	if s.sinkProviders == nil {
-		s.sinkProviders = make(map[string]*sink.DiscordSinkProvider)
+		s.sinkProviders = make(map[string]musicsink.Provider)
 	}
 	if p, ok := s.players[guildID]; ok {
 		return p
@@ -184,8 +187,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	}
 	provider, ok := s.sinkProviders[guildID]
 	if !ok {
-		voiceDelay := time.Duration(s.cfg.VoiceReadyDelayMs) * time.Millisecond
-		provider = sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay, s.log)
+		provider = s.newSinkProvider(guildID)
 		s.sinkProviders[guildID] = provider
 	}
 	recoveryMode, ok := player.ParseTransportRecoveryMode(s.cfg.PlayerTransportRecoveryMode)
@@ -215,8 +217,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 // duplicate edit is invisible to users.
 func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 	for status := range p.PlayerStatus {
-		sess := s.getSession()
-		if sess == nil {
+		if s.getAPI() == nil {
 			// Silence here used to make a stale embed undiagnosable: the
 			// correction is computed and logged upstream, then nothing renders
 			// and the log says nothing about why.
@@ -325,12 +326,11 @@ func (s *Service) UpdatePlaybackStatus(from cmdadapter.Interaction, guildID stri
 	s.guildMusicStatusMu.RUnlock()
 
 	if ok {
-		session := s.getSession()
-		if session == nil {
+		api := s.getAPI()
+		if api == nil {
 			return nil
 		}
-		_, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, reply.DiscordEmbed(embed))
-		return err
+		return api.EditChannelEmbed(msg.ChannelID, msg.MessageID, embed)
 	}
 
 	if from == nil {
@@ -373,7 +373,7 @@ func (s *Service) StopAllPlayers() {
 // restarts.
 func (s *Service) InvalidateAllSinks() {
 	s.mu.RLock()
-	providers := make([]*sink.DiscordSinkProvider, 0, len(s.sinkProviders))
+	providers := make([]musicsink.Provider, 0, len(s.sinkProviders))
 	for _, p := range s.sinkProviders {
 		providers = append(providers, p)
 	}

@@ -86,6 +86,26 @@ type SessionAPI interface {
 	EmbedColor() int
 }
 
+// BotAPI is SessionAPI plus what the bot itself needs and no command does.
+//
+// The split is deliberate: commands get the smaller surface, so a command
+// cannot edit a message it did not post or go looking for who is in a voice
+// channel. The voice service needs both, because the guild's music status
+// message outlives the interaction that created it and has to be edited
+// through the connection instead.
+type BotAPI interface {
+	SessionAPI
+
+	// EditChannelEmbed replaces the embed on a message the bot posted
+	// earlier, named by where it landed rather than by an interaction token
+	// that has since expired.
+	EditChannelEmbed(channelID, messageID string, embed *Embed) error
+
+	// UserVoiceChannel is the voice channel a user is connected to, or an
+	// error if they are not in one.
+	UserVoiceChannel(guildID, userID string) (string, error)
+}
+
 // CommandSyncer registers a guild's slash commands with Discord.
 type CommandSyncer interface {
 	SyncGuildCommands(guildID string) error
