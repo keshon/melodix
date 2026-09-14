@@ -46,23 +46,20 @@ func (c *Help) Run(ctx interface{}) error {
 		return nil
 	}
 
-	session := context.Session
-	event := context.Event
-
-	if err := reply.RespondDeferredEphemeral(session, event); err != nil {
+	if err := context.DeferEphemeral(); err != nil {
 		context.AppLog.Error().Err(err).Msg("help_defer_failed")
 		return err
 	}
 
-	data := event.ApplicationCommandData()
-	if len(data.Options) == 0 {
-		return reply.FollowupEmbedEphemeral(session, event, &cmdadapter.Embed{
+	sub, ok := context.FirstOption()
+	if !ok {
+		return context.FollowupEphemeral(&cmdadapter.Embed{
 			Description: "No subcommand provided. Use `category`, `group`, or `flat`.",
 		})
 	}
 
 	var output string
-	switch data.Options[0].Name {
+	switch sub.Name {
 	case "group":
 		output = runHelpByGroup()
 	case "flat":
@@ -78,5 +75,5 @@ func (c *Help) Run(ctx interface{}) error {
 		Color:       reply.EmbedColor,
 	}
 
-	return reply.FollowupEmbedEphemeral(session, event, embed)
+	return context.FollowupEphemeral(embed)
 }

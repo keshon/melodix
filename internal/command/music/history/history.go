@@ -65,16 +65,13 @@ func (c *History) Run(ctx interface{}) error {
 	store := slashCtx.Storage
 
 	var view = "timeline"
-	var page int64 = 1
-	for _, opt := range e.ApplicationCommandData().Options {
-		switch opt.Name {
-		case "view":
-			if v := strings.TrimSpace(opt.StringValue()); v != "" {
-				view = v
-			}
-		case "page":
-			page = opt.IntValue()
-		}
+	if v := strings.TrimSpace(slashCtx.StringOption("view")); v != "" {
+		view = v
+	}
+	// Absent reads as zero, and the first page is one.
+	page := slashCtx.IntOption("page")
+	if page < 1 {
+		page = 1
 	}
 
 	if err := slashCtx.Defer(); err != nil {

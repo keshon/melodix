@@ -25,6 +25,10 @@ func (responder) RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCrea
 func (responder) CheckBotPermissions(s *discordgo.Session, channelID string) bool {
 	return perm.CheckBotPermissions(s, channelID)
 }
+func (responder) CheckBotVoicePermissions(s *discordgo.Session, channelID string) (bool, error) {
+	return perm.CheckBotVoicePermissions(s, channelID)
+}
+
 func (responder) EmbedColor() int { return EmbedColor }
 
 // DefaultResponder is injected into command contexts so commands never import

@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
 // RunCmdStatus reports enabled and disabled command groups.
-func RunCmdStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
-	guildID := e.GuildID
+func RunCmdStatus(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
+	guildID := ctx.Event.GuildID
 
 	disabledGroups, _ := storage.DisabledGroups(guildID)
 	disabledMap := make(map[string]bool)
@@ -38,11 +36,11 @@ func RunCmdStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage 
 
 	embed := &cmdadapter.Embed{
 		Title:       "Commands Status",
-		Description: "Commands are grouped (e.g., purge, core, translate). Use `/help category` to view or `/settings commands enable` / `/settings commands disable` to manage. Core group can't be disabled.",
+		Description: "Commands are grouped (ctx.Event.g., purge, core, translate). Use `/help category` to view or `/settings commands enable` / `/settings commands disable` to manage. Core group can't be disabled.",
 		Fields: []cmdadapter.EmbedField{
 			{Name: "Disabled", Value: strings.Join(disabled, ", "), Inline: false},
 			{Name: "Enabled", Value: strings.Join(enabled, ", "), Inline: false},
 		},
 	}
-	return reply.RespondEmbedEphemeral(s, e, embed)
+	return ctx.RespondEphemeral(embed)
 }

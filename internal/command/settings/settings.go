@@ -3,12 +3,9 @@ package settings
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
-
 	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/perm"
-	"github.com/keshon/melodix/internal/discord/reply"
 
 	"github.com/keshon/melodix/internal/storage"
 )
@@ -44,29 +41,25 @@ func (c *SettingsCommand) Run(ctx interface{}) error {
 		return nil
 	}
 
-	s := context.Session
-	e := context.Event
 	st := context.Storage
 
-	data := e.ApplicationCommandData()
-	if len(data.Options) == 0 {
+	group, ok := context.FirstOption()
+	if !ok {
 		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: "No settings group provided.",
 		})
 	}
 
-	group := data.Options[0]
-	if len(group.Options) == 0 {
+	sub, ok := group.First()
+	if !ok {
 		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: "No subcommand provided.",
 		})
 	}
 
-	sub := group.Options[0]
-
 	switch group.Name {
 	case "commands":
-		return runCommandsSettings(s, e, *st, context.Syncer, sub)
+		return runCommandsSettings(context, *st, context.Syncer, sub)
 	default:
 		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: fmt.Sprintf("Unknown settings group: %s", group.Name),
@@ -74,18 +67,18 @@ func (c *SettingsCommand) Run(ctx interface{}) error {
 	}
 }
 
-func runCommandsSettings(s *discordgo.Session, e *discordgo.InteractionCreate, st storage.Storage, syncer cmdadapter.CommandSyncer, sub *discordgo.ApplicationCommandInteractionDataOption) error {
+func runCommandsSettings(ctx *cmdadapter.SlashInteractionContext, st storage.Storage, syncer cmdadapter.CommandSyncer, sub cmdadapter.SlashArgument) error {
 	switch sub.Name {
 	case "log":
-		return commands.RunCmdLog(s, e, st)
+		return commands.RunCmdLog(ctx, st)
 	case "status":
-		return commands.RunCmdStatus(s, e, st)
+		return commands.RunCmdStatus(ctx, st)
 	case "enable":
-		return commands.RunCmdEnable(s, e, st, syncer, sub)
+		return commands.RunCmdEnable(ctx, st, syncer, sub)
 	case "disable":
-		return commands.RunCmdDisable(s, e, st, syncer, sub)
+		return commands.RunCmdDisable(ctx, st, syncer, sub)
 	default:
-		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+		return ctx.RespondEphemeral(&cmdadapter.Embed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

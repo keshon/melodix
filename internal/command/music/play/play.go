@@ -67,21 +67,12 @@ func (c *Play) Run(ctx interface{}) error {
 		return nil
 	}
 
-	s := slashCtx.Session
 	e := slashCtx.Event
 	store := slashCtx.Storage
 
-	var input, source, parser string
-	for _, opt := range e.ApplicationCommandData().Options {
-		switch opt.Name {
-		case "input":
-			input = opt.StringValue()
-		case "source":
-			source = opt.StringValue()
-		case "parser":
-			parser = opt.StringValue()
-		}
-	}
+	input := slashCtx.StringOption("input")
+	source := slashCtx.StringOption("source")
+	parser := slashCtx.StringOption("parser")
 
 	if input == "" {
 		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
@@ -109,7 +100,7 @@ func (c *Play) Run(ctx interface{}) error {
 	}
 
 	guildID := e.GuildID
-	target, ok := playback.Join(c.Bot, s, e)
+	target, ok := playback.Join(c.Bot, slashCtx)
 	if !ok {
 		return nil
 	}
@@ -146,7 +137,7 @@ func (c *Play) Run(ctx interface{}) error {
 			batch = append(batch, storage.TrackInfoFromMusicPlayback(mp))
 		}
 		if err := p.EnqueueTrackInfos(batch); err != nil {
-			playback.QueueError(s, e, err)
+			playback.QueueError(slashCtx, err)
 			return nil
 		}
 		added = len(batch)
@@ -165,7 +156,7 @@ func (c *Play) Run(ctx interface{}) error {
 			batch = append(batch, tracks...)
 		}
 		if err := p.EnqueueTrackInfos(batch); err != nil {
-			playback.QueueError(s, e, err)
+			playback.QueueError(slashCtx, err)
 			return nil
 		}
 		added = len(batch)
@@ -180,12 +171,12 @@ func (c *Play) Run(ctx interface{}) error {
 			return nil
 		}
 		if err := p.EnqueueTrackInfos(tracks); err != nil {
-			playback.QueueError(s, e, err)
+			playback.QueueError(slashCtx, err)
 			return nil
 		}
 		added = len(tracks)
 	}
 
-	playback.StartAndRender(c.Bot, s, e, slashCtx.AppLog, target, added)
+	playback.StartAndRender(c.Bot, slashCtx, slashCtx.AppLog, target, added)
 	return nil
 }

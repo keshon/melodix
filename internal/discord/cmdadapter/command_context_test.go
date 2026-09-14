@@ -120,7 +120,10 @@ func (stubResponder) RespondEmbed(*discordgo.Session, *discordgo.InteractionCrea
 	return nil
 }
 func (stubResponder) CheckBotPermissions(*discordgo.Session, string) bool { return false }
-func (stubResponder) EmbedColor() int                                     { return 0 }
+func (stubResponder) CheckBotVoicePermissions(*discordgo.Session, string) (bool, error) {
+	return false, nil
+}
+func (stubResponder) EmbedColor() int { return 0 }
 func (stubResponder) AckDeferred(*discordgo.Session, *discordgo.InteractionCreate) error {
 	return nil
 }

@@ -102,15 +102,8 @@ func (c *Search) Run(ctx interface{}) error {
 	s := slashCtx.Session
 	e := slashCtx.Event
 
-	var query, wanted string
-	for _, opt := range e.ApplicationCommandData().Options {
-		switch opt.Name {
-		case "query":
-			query = strings.TrimSpace(opt.StringValue())
-		case "source":
-			wanted = opt.StringValue()
-		}
-	}
+	query := strings.TrimSpace(slashCtx.StringOption("query"))
+	wanted := slashCtx.StringOption("source")
 	searcher, tag, err := c.pick(wanted)
 	if err != nil {
 		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
@@ -206,7 +199,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 		return fmt.Errorf("failed to acknowledge selection: %w", err)
 	}
 
-	target, ok := playback.Join(c.Bot, s, e)
+	target, ok := playback.Join(c.Bot, compCtx)
 	if !ok {
 		return nil
 	}
@@ -229,11 +222,11 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 		return nil
 	}
 	if err := target.Player.EnqueueTrackInfos(tracks); err != nil {
-		playback.QueueError(s, e, err)
+		playback.QueueError(compCtx, err)
 		return nil
 	}
 
-	playback.StartAndRender(c.Bot, s, e, compCtx.AppLog, target, len(tracks))
+	playback.StartAndRender(c.Bot, compCtx, compCtx.AppLog, target, len(tracks))
 	return nil
 }
 

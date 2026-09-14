@@ -3,24 +3,23 @@ package commands
 import (
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
 // RunCmdLog shows recent command usage for the guild.
-func RunCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
-	guildID := e.GuildID
+func RunCmdLog(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
+	guildID := ctx.Event.GuildID
 
 	records, err := storage.CommandHistory(guildID)
 	if err != nil {
-		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+		return ctx.RespondEphemeral(&cmdadapter.Embed{
 			Description: "Failed to fetch command logs: " + err.Error(),
 		})
 	}
 	if len(records) == 0 {
-		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+		return ctx.RespondEphemeral(&cmdadapter.Embed{
 			Description: "No command logs found.",
 		})
 	}
@@ -41,5 +40,5 @@ func RunCmdLog(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 	}
 
 	msg := codeLeftBlockWrapper + "\n" + builder.String() + codeRightBlockWrapper
-	return reply.RespondEphemeral(s, e, msg)
+	return reply.RespondEphemeral(ctx.Session, ctx.Event, msg)
 }

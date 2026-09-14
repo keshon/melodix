@@ -9,6 +9,7 @@ type Responder interface {
 	RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
 	RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
 	CheckBotPermissions(s *discordgo.Session, channelID string) bool
+	CheckBotVoicePermissions(s *discordgo.Session, channelID string) (bool, error)
 	EmbedColor() int
 
 	// The rest of what a command does with an interaction. These were plain

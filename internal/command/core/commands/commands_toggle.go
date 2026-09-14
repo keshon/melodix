@@ -3,33 +3,31 @@ package commands
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
 // RunCmdEnable enables a command group for the guild.
-func RunCmdEnable(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub *discordgo.ApplicationCommandInteractionDataOption) error {
+func RunCmdEnable(ctx *cmdadapter.SlashInteractionContext, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub cmdadapter.SlashArgument) error {
 	group := subOptionString(sub, "group")
-	return runCmdSetGroupState(s, e, stor, syncer, group, true)
+	return runCmdSetGroupState(ctx, stor, syncer, group, true)
 }
 
 // RunCmdDisable disables a command group for the guild.
-func RunCmdDisable(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub *discordgo.ApplicationCommandInteractionDataOption) error {
+func RunCmdDisable(ctx *cmdadapter.SlashInteractionContext, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub cmdadapter.SlashArgument) error {
 	group := subOptionString(sub, "group")
-	return runCmdSetGroupState(s, e, stor, syncer, group, false)
+	return runCmdSetGroupState(ctx, stor, syncer, group, false)
 }
 
-func runCmdSetGroupState(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, group string, enabled bool) error {
+func runCmdSetGroupState(ctx *cmdadapter.SlashInteractionContext, stor storage.Storage, syncer cmdadapter.CommandSyncer, group string, enabled bool) error {
 	if group == "" {
-		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+		return ctx.RespondEphemeral(&cmdadapter.Embed{
 			Description: "Missing required group option.",
 		})
 	}
 
 	if group == "core" && !enabled {
-		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+		return ctx.RespondEphemeral(&cmdadapter.Embed{
 			Description: "You can't disable the `core` group. It's the backbone of the discord.",
 		})
 	}
@@ -40,29 +38,29 @@ func runCmdSetGroupState(s *discordgo.Session, e *discordgo.InteractionCreate, s
 	}
 
 	if enabled {
-		err = stor.EnableGroup(e.GuildID, group)
+		err = stor.EnableGroup(ctx.Event.GuildID, group)
 		if err != nil {
 			embed.Description = "Failed to enable the group."
-			return reply.RespondEmbedEphemeral(s, e, embed)
+			return ctx.RespondEphemeral(embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` enabled.", group)
 	} else {
-		err = stor.DisableGroup(e.GuildID, group)
+		err = stor.DisableGroup(ctx.Event.GuildID, group)
 		if err != nil {
 			embed.Description = "Failed to disable the group."
-			return reply.RespondEmbedEphemeral(s, e, embed)
+			return ctx.RespondEphemeral(embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` disabled.", group)
 	}
 
 	if syncer != nil {
-		_ = syncer.SyncGuildCommands(e.GuildID)
+		_ = syncer.SyncGuildCommands(ctx.Event.GuildID)
 	}
 
-	return reply.RespondEmbedEphemeral(s, e, embed)
+	return ctx.RespondEphemeral(embed)
 }
 
-func subOptionString(sub *discordgo.ApplicationCommandInteractionDataOption, name string) string {
+func subOptionString(sub cmdadapter.SlashArgument, name string) string {
 	for _, opt := range sub.Options {
 		if opt.Name == name {
 			return opt.StringValue()

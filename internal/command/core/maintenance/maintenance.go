@@ -47,26 +47,22 @@ func (c *Maintenance) Run(ctx interface{}) error {
 		return nil
 	}
 
-	s := context.Session
-	e := context.Event
 	storage := context.Storage
 
-	options := e.ApplicationCommandData().Options
-
-	if len(options) == 0 {
+	sub, ok := context.FirstOption()
+	if !ok {
 		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: "No subcommand provided.",
 		})
 	}
 
-	sub := options[0]
 	switch sub.Name {
 	case "ping":
-		return runPing(s, e)
+		return runPing(context)
 	case "export-data":
-		return runExportData(s, e, *storage)
+		return runExportData(context, *storage)
 	case "status":
-		return runStatus(s, e, *storage)
+		return runStatus(context, *storage)
 	default:
 		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),

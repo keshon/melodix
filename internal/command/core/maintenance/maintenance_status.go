@@ -3,18 +3,17 @@ package maintenance
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
-func runStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage storage.Storage) error {
-	guild, err := s.State.Guild(e.GuildID)
+func runStatus(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
+	guild, err := ctx.Session.State.Guild(ctx.Event.GuildID)
 	if err != nil || guild == nil {
-		guild, err = s.Guild(e.GuildID)
+		guild, err = ctx.Session.Guild(ctx.Event.GuildID)
 		if err != nil {
-			return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+			return ctx.RespondEphemeral(&cmdadapter.Embed{
 				Description: fmt.Sprintf("Failed to fetch guild: %v", err),
 				Color:       reply.EmbedColor,
 			})
@@ -39,7 +38,7 @@ func runStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage sto
 		channelCount,
 	)
 
-	return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+	return ctx.RespondEphemeral(&cmdadapter.Embed{
 		Title:       "📊 Guild Status",
 		Description: desc,
 		Color:       reply.EmbedColor,

@@ -3,15 +3,14 @@ package maintenance
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
-func runPing(s *discordgo.Session, e *discordgo.InteractionCreate) error {
+func runPing(ctx *cmdadapter.SlashInteractionContext) error {
 
-	latency := s.HeartbeatLatency().Milliseconds()
-	return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+	latency := ctx.Session.HeartbeatLatency().Milliseconds()
+	return ctx.RespondEphemeral(&cmdadapter.Embed{
 		Title:       "Pong! 🏓",
 		Description: fmt.Sprintf("Latency: %dms", latency),
 		Color:       reply.EmbedColor,

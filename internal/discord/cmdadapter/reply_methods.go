@@ -146,3 +146,64 @@ func (c *MessageApplicationCommandContext) FollowupEphemeral(e *Embed) error {
 func (c *MessageApplicationCommandContext) EditResponseText(content string) error {
 	return editResponse(c.Responder, c.Session, c.Event, content)
 }
+
+// Interaction is what a shared helper needs from an invocation, whichever kind
+// of interaction it arrived as.
+//
+// Slash commands and component callbacks run the same playback code, and that
+// code should not have to know which one it is holding. Every interaction
+// context satisfies this.
+type Interaction interface {
+	GuildID() string
+	ChannelID() string
+	UserID() string
+
+	Defer() error
+	DeferEphemeral() error
+	Respond(embed *Embed) error
+	RespondEphemeral(embed *Embed) error
+	Followup(embed *Embed) error
+	FollowupEphemeral(embed *Embed) error
+	EditResponseText(content string) error
+
+	// CanJoinVoice reports whether the bot may connect and speak in a channel.
+	CanJoinVoice(channelID string) (bool, error)
+
+	// Raw is the escape hatch, and the measure of what is left to do: it
+	// exists for the calls that still take a session and an interaction --
+	// VoiceAPI.UpdatePlaybackStatus is the last one. Callers destructure it,
+	// so they still do not name the types. When that signature is neutral
+	// too, this method goes.
+	Raw() (*discordgo.Session, *discordgo.InteractionCreate)
+}
+
+func canJoinVoice(r Responder, s *discordgo.Session, channelID string) (bool, error) {
+	if r == nil {
+		return false, nil
+	}
+	return r.CheckBotVoicePermissions(s, channelID)
+}
+
+func (c *SlashInteractionContext) CanJoinVoice(channelID string) (bool, error) {
+	return canJoinVoice(c.Responder, c.Session, channelID)
+}
+
+func (c *SlashInteractionContext) Raw() (*discordgo.Session, *discordgo.InteractionCreate) {
+	return c.Session, c.Event
+}
+
+func (c *ComponentInteractionContext) CanJoinVoice(channelID string) (bool, error) {
+	return canJoinVoice(c.Responder, c.Session, channelID)
+}
+
+func (c *ComponentInteractionContext) Raw() (*discordgo.Session, *discordgo.InteractionCreate) {
+	return c.Session, c.Event
+}
+
+func (c *MessageApplicationCommandContext) CanJoinVoice(channelID string) (bool, error) {
+	return canJoinVoice(c.Responder, c.Session, channelID)
+}
+
+func (c *MessageApplicationCommandContext) Raw() (*discordgo.Session, *discordgo.InteractionCreate) {
+	return c.Session, c.Event
+}
