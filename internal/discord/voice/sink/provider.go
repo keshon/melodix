@@ -13,12 +13,10 @@ import (
 	musicsink "github.com/keshon/melodix/pkg/music/sink"
 )
 
-// DisgoSinkProvider is DiscordSinkProvider's opposite number: the same
-// contract, one guild, backed by disgo's voice stack and dave-go's E2EE
-// instead of the vendored fork's. Which one a guild gets is chosen at startup,
-// so a single build can be pointed at either and the difference attributed to
-// the library rather than to the build.
-type DisgoSinkProvider struct {
+// Provider is one guild's audio path: join a voice channel, hand back a sink
+// that forwards the track's Opus packets, and leave again. E2EE comes from
+// dave-go, which is pure Go -- see DaveRegistry for why that matters.
+type Provider struct {
 	manager         voice.Manager
 	dave            *DaveRegistry
 	guildID         snowflake.ID
@@ -30,19 +28,19 @@ type DisgoSinkProvider struct {
 	currentChannelID string
 }
 
-// NewDisgoSinkProvider creates a sink provider for one guild, sharing the
+// NewProvider creates a sink provider for one guild, sharing the
 // manager and the DAVE registry with every other guild's provider.
-func NewDisgoSinkProvider(
+func NewProvider(
 	manager voice.Manager,
 	dave *DaveRegistry,
 	guildID snowflake.ID,
 	voiceReadyDelay time.Duration,
 	log zerolog.Logger,
-) *DisgoSinkProvider {
+) *Provider {
 	if voiceReadyDelay <= 0 {
 		voiceReadyDelay = 500 * time.Millisecond
 	}
-	return &DisgoSinkProvider{
+	return &Provider{
 		manager:         manager,
 		dave:            dave,
 		guildID:         guildID,
@@ -51,11 +49,11 @@ func NewDisgoSinkProvider(
 	}
 }
 
-var _ musicsink.Provider = (*DisgoSinkProvider)(nil)
+var _ musicsink.Provider = (*Provider)(nil)
 
 // Sink joins the voice channel (or reuses the existing connection) and returns
 // an AudioSink. target must be non-empty.
-func (p *DisgoSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
+func (p *Provider) Sink(target string) (musicsink.AudioSink, error) {
 	if target == "" {
 		return nil, fmt.Errorf("voice channel ID is required")
 	}
@@ -68,7 +66,7 @@ func (p *DisgoSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 	defer p.mu.Unlock()
 
 	if p.conn != nil && p.currentChannelID == target {
-		return &DisgoSink{conn: p.conn, log: p.log}, nil
+		return &Sink{conn: p.conn, log: p.log}, nil
 	}
 	if p.conn != nil {
 		p.releaseLocked()
@@ -92,7 +90,7 @@ func (p *DisgoSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 		return nil, err
 	}
 
-	return &DisgoSink{conn: conn, log: p.log}, nil
+	return &Sink{conn: conn, log: p.log}, nil
 }
 
 // awaitEncryption blocks until the connection may send, which on a channel
@@ -110,7 +108,7 @@ func (p *DisgoSinkProvider) Sink(target string) (musicsink.AudioSink, error) {
 // arrives, and before that ShouldHoldFrames cannot distinguish "no encryption
 // here" from "not asked yet". It is a delay, not a synchronisation -- if this
 // ever reports a channel ready that was not, that race is where to look.
-func (p *DisgoSinkProvider) awaitEncryption() error {
+func (p *Provider) awaitEncryption() error {
 	time.Sleep(p.voiceReadyDelay)
 
 	dave := p.dave.Session(p.guildID)
@@ -141,7 +139,7 @@ func (p *DisgoSinkProvider) awaitEncryption() error {
 }
 
 // ReleaseSink disconnects from the voice channel for the given target.
-func (p *DisgoSinkProvider) ReleaseSink(target string) {
+func (p *Provider) ReleaseSink(target string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.conn == nil {
@@ -155,7 +153,7 @@ func (p *DisgoSinkProvider) ReleaseSink(target string) {
 
 // InvalidateSink drops the connection without matching a target, so the next
 // Sink rejoins.
-func (p *DisgoSinkProvider) InvalidateSink() {
+func (p *Provider) InvalidateSink() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.conn == nil {
@@ -164,7 +162,7 @@ func (p *DisgoSinkProvider) InvalidateSink() {
 	p.releaseLocked()
 }
 
-func (p *DisgoSinkProvider) releaseLocked() {
+func (p *Provider) releaseLocked() {
 	ctx, cancel := context.WithTimeout(context.Background(), voiceCloseTimeout)
 	defer cancel()
 	p.conn.Close(ctx)
@@ -177,7 +175,7 @@ func (p *DisgoSinkProvider) releaseLocked() {
 // Conn per channel is deliberate: the fork's reuse of one connection across
 // channels kept the previous channel's state, which was one of the five bugs
 // that made this migration worth doing.
-func (p *DisgoSinkProvider) removeConn() {
+func (p *Provider) removeConn() {
 	p.manager.RemoveConn(p.guildID)
 	if err := p.dave.Forget(p.guildID); err != nil {
 		p.log.Warn().Str("guild_id", p.guildID.String()).Err(err).Msg("dave_session_close_failed")

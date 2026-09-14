@@ -9,18 +9,18 @@ import (
 	"github.com/keshon/command"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/disgolog"
-	"github.com/keshon/melodix/internal/discord/disgoreply"
-	"github.com/keshon/melodix/internal/discord/disgosync"
+	"github.com/keshon/melodix/internal/discord/cmdlogger"
+	"github.com/keshon/melodix/internal/discord/cmdsync"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
 
-// disgoInvoker reads the caller off an interaction, once, so nothing
+// interactionInvoker reads the caller off an interaction, once, so nothing
 // downstream has to hold the event to ask again.
 //
 // A guild interaction carries Member, a direct message carries User, and
 // neither is guaranteed. Getting the order wrong means the audit log names the
 // wrong person, or nobody.
-func disgoInvoker(i discord.Interaction) cmdadapter.Invoker {
+func interactionInvoker(i discord.Interaction) cmdadapter.Invoker {
 	who := cmdadapter.Invoker{
 		UserID:   cmdadapter.UnknownUserID,
 		Username: cmdadapter.UnknownUsername,
@@ -43,8 +43,8 @@ func disgoInvoker(i discord.Interaction) cmdadapter.Invoker {
 	return who
 }
 
-// onDisgoReady fires on every successful connect/reconnect.
-func (b *Bot) onDisgoReady(e *events.Ready, syncer *disgosync.Syncer) {
+// onReady fires on every successful connect/reconnect.
+func (b *Bot) onReady(e *events.Ready, syncer *cmdsync.Syncer) {
 	for _, g := range e.Guilds {
 		guildID := g.ID.String()
 		if b.isGuildBlacklisted(guildID) {
@@ -63,8 +63,8 @@ func (b *Bot) onDisgoReady(e *events.Ready, syncer *disgosync.Syncer) {
 	b.log.Info().Str("username", e.User.Username).Msg("discord_ready")
 }
 
-// onDisgoGuildJoin fires when the bot joins a new guild.
-func (b *Bot) onDisgoGuildJoin(e *events.GuildJoin, syncer *disgosync.Syncer) {
+// onGuildJoin fires when the bot joins a new guild.
+func (b *Bot) onGuildJoin(e *events.GuildJoin, syncer *cmdsync.Syncer) {
 	guildID := e.Guild.ID.String()
 	b.log.Info().Str("guild_id", guildID).Str("guild_name", e.Guild.Name).Msg("guild_added")
 
@@ -82,11 +82,11 @@ func (b *Bot) onDisgoGuildJoin(e *events.GuildJoin, syncer *disgosync.Syncer) {
 	}
 }
 
-// onDisgoApplicationCommand dispatches slash and context-menu commands.
-func (b *Bot) onDisgoApplicationCommand(
+// onApplicationCommand dispatches slash and context-menu commands.
+func (b *Bot) onApplicationCommand(
 	e *events.ApplicationCommandInteractionCreate,
-	syncer *disgosync.Syncer,
-	logger *disgolog.Logger,
+	syncer *cmdsync.Syncer,
+	logger *cmdlogger.Logger,
 ) {
 	name := e.Data.CommandName()
 	c := command.DefaultRegistry.Get(name)
@@ -95,16 +95,16 @@ func (b *Bot) onDisgoApplicationCommand(
 		return
 	}
 
-	responder := disgoreply.NewCommandResponder(e)
-	api := disgoreply.NewSessionAPI(e.Client())
-	who := disgoInvoker(e)
+	responder := reply.NewCommandResponder(e)
+	api := reply.NewSessionAPI(e.Client())
+	who := interactionInvoker(e)
 
 	var inv *command.Invocation
 	switch data := e.Data.(type) {
 	case discord.SlashCommandInteractionData:
 		inv = &command.Invocation{Data: &cmdadapter.SlashInteractionContext{
 			Invoker: who, Responder: responder, API: api,
-			Arguments: disgoreply.SlashArguments(data),
+			Arguments: reply.SlashArguments(data),
 			Storage:   b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
 			Syncer: syncer,
 		}}
@@ -122,8 +122,8 @@ func (b *Bot) onDisgoApplicationCommand(
 	})
 }
 
-// onDisgoComponent dispatches a click on a message component.
-func (b *Bot) onDisgoComponent(e *events.ComponentInteractionCreate, logger *disgolog.Logger) {
+// onComponentInteraction dispatches a click on a message component.
+func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, logger *cmdlogger.Logger) {
 	customID := e.Data.CustomID()
 	b.log.Debug().Str("custom_id", customID).Msg("component_interaction")
 
@@ -145,22 +145,22 @@ func (b *Bot) onDisgoComponent(e *events.ComponentInteractionCreate, logger *dis
 		return
 	}
 
-	responder := disgoreply.NewComponentResponder(e)
+	responder := reply.NewComponentResponder(e)
 
 	b.runGuardedInteraction(responder, "component", matched.Name(), func(cmdCtx context.Context) error {
 		_ = cmdCtx
 		return handler.Component(&cmdadapter.ComponentInteractionContext{
-			Invoker:     disgoInvoker(e),
+			Invoker:     interactionInvoker(e),
 			Responder:   responder,
-			API:         disgoreply.NewSessionAPI(e.Client()),
+			API:         reply.NewSessionAPI(e.Client()),
 			ComponentID: customID,
 			Storage:     b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
 		})
 	})
 }
 
-// onDisgoMessage handles @mention messages directed at the bot.
-func (b *Bot) onDisgoMessage(e *events.MessageCreate) {
+// onMessageCreate handles @mention messages directed at the bot.
+func (b *Bot) onMessageCreate(e *events.MessageCreate) {
 	self, ok := e.Client().Caches.SelfUser()
 	if !ok || e.Message.Author.ID == self.ID {
 		return
@@ -176,7 +176,7 @@ func (b *Bot) onDisgoMessage(e *events.MessageCreate) {
 		return
 	}
 
-	api := disgoreply.NewSessionAPI(e.Client())
+	api := reply.NewSessionAPI(e.Client())
 	who := cmdadapter.Invoker{
 		ChannelID: e.ChannelID.String(),
 		UserID:    e.Message.Author.ID.String(),

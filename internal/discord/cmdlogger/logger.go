@@ -1,6 +1,6 @@
-// Package disgolog records command invocations to storage, resolving channel
-// and guild names through disgo. It is the disgo sibling of cmdlogger.
-package disgolog
+// Package cmdlogger records command invocations to storage, resolving channel
+// and guild names from the connection.
+package cmdlogger
 
 import (
 	"github.com/disgoorg/disgo/bot"

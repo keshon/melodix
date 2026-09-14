@@ -1,4 +1,4 @@
-package disgosync
+package cmdsync
 
 import (
 	"crypto/sha1"
@@ -87,9 +87,9 @@ func normalizeChoices(choices []cmdadapter.SlashChoice) []map[string]any {
 	return out
 }
 
-// fromDisgo converts a command Discord reported back into the neutral
+// fromWire converts a command Discord reported back into the neutral
 // declaration, so it can be fingerprinted against what the registry declares.
-func fromDisgo(c discord.ApplicationCommand) *cmdadapter.SlashCommand {
+func fromWire(c discord.ApplicationCommand) *cmdadapter.SlashCommand {
 	if c == nil {
 		return nil
 	}
@@ -104,35 +104,35 @@ func fromDisgo(c discord.ApplicationCommand) *cmdadapter.SlashCommand {
 	}
 	if slash, ok := c.(discord.SlashCommand); ok {
 		out.Description = slash.Description
-		out.Options = optionsFromDisgo(slash.Options)
+		out.Options = optionsFromWire(slash.Options)
 	}
 	return out
 }
 
-func optionsFromDisgo(opts []discord.ApplicationCommandOption) []cmdadapter.SlashOption {
+func optionsFromWire(opts []discord.ApplicationCommandOption) []cmdadapter.SlashOption {
 	if len(opts) == 0 {
 		return nil
 	}
 	out := make([]cmdadapter.SlashOption, 0, len(opts))
 	for _, o := range opts {
-		out = append(out, optionFromDisgo(o))
+		out = append(out, optionFromWire(o))
 	}
 	return out
 }
 
-func optionFromDisgo(o discord.ApplicationCommandOption) cmdadapter.SlashOption {
+func optionFromWire(o discord.ApplicationCommandOption) cmdadapter.SlashOption {
 	switch v := o.(type) {
 	case discord.ApplicationCommandOptionSubCommand:
 		return cmdadapter.SlashOption{
 			Type: cmdadapter.OptionSubCommand, Name: v.Name,
-			Description: v.Description, Options: optionsFromDisgo(v.Options),
+			Description: v.Description, Options: optionsFromWire(v.Options),
 		}
 	case discord.ApplicationCommandOptionSubCommandGroup:
 		subs := make([]cmdadapter.SlashOption, 0, len(v.Options))
 		for _, sub := range v.Options {
 			subs = append(subs, cmdadapter.SlashOption{
 				Type: cmdadapter.OptionSubCommand, Name: sub.Name,
-				Description: sub.Description, Options: optionsFromDisgo(sub.Options),
+				Description: sub.Description, Options: optionsFromWire(sub.Options),
 			})
 		}
 		return cmdadapter.SlashOption{

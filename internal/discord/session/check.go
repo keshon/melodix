@@ -1,4 +1,4 @@
-package disgosession
+package session
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package disgoreply
+package reply
 
 import (
 	"fmt"

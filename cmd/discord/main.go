@@ -29,7 +29,7 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/disgosession"
+	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/middleware"
 	"github.com/keshon/melodix/internal/musicwire"
 	"github.com/keshon/melodix/internal/readme"
@@ -162,7 +162,7 @@ func registerCommands(bot *discord.Bot, log zerolog.Logger) {
 // nothing and sends nothing, which is the point: it is the only part of the
 // migration that can be judged without having ported anything onto it.
 func runDisgoCheck(ctx context.Context, cfg *config.Config, log zerolog.Logger) {
-	res, err := disgosession.Check(ctx, cfg.DiscordToken, log)
+	res, err := session.Check(ctx, cfg.DiscordToken, log)
 	if err != nil {
 		log.Error().Err(err).Msg("disgo_check_failed")
 		os.Exit(1)

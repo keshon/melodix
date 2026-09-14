@@ -12,38 +12,38 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/disgolog"
-	"github.com/keshon/melodix/internal/discord/disgoreply"
-	"github.com/keshon/melodix/internal/discord/disgosession"
-	"github.com/keshon/melodix/internal/discord/disgosync"
+	"github.com/keshon/melodix/internal/discord/cmdlogger"
+	"github.com/keshon/melodix/internal/discord/cmdsync"
 	"github.com/keshon/melodix/internal/discord/execguard"
+	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/discord/watchdog"
 	musicsink "github.com/keshon/melodix/pkg/music/sink"
 )
 
-// disgoConn is the live disgo connection.
-type disgoConn struct {
+// clientConn is the live disgo connection.
+type clientConn struct {
 	client     *bot.Client
 	dave       *sink.DaveRegistry
 	voiceDelay time.Duration
 	log        zerolog.Logger
 }
 
-var _ conn = disgoConn{}
+var _ conn = clientConn{}
 
-func (c disgoConn) API() cmdadapter.BotAPI {
-	return disgoreply.NewSessionAPI(c.client)
+func (c clientConn) API() cmdadapter.BotAPI {
+	return reply.NewSessionAPI(c.client)
 }
 
 // NewSinkProvider builds the audio path on disgo's voice manager.
-func (c disgoConn) NewSinkProvider(guildID string) musicsink.Provider {
+func (c clientConn) NewSinkProvider(guildID string) musicsink.Provider {
 	gid, err := snowflake.Parse(guildID)
 	if err != nil {
 		c.log.Error().Str("guild_id", guildID).Err(err).Msg("voice_guild_id_invalid")
 		return deadSinkProvider{}
 	}
-	return sink.NewDisgoSinkProvider(c.client.VoiceManager, c.dave, gid, c.voiceDelay, c.log)
+	return sink.NewProvider(c.client.VoiceManager, c.dave, gid, c.voiceDelay, c.log)
 }
 
 // RunSession opens one Discord session and blocks until ctx is cancelled or
@@ -57,33 +57,33 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	// and wiring. The syncer and logger need the client, which does not exist
 	// yet, so they are filled in once it does.
 	var (
-		syncer *disgosync.Syncer
-		logger *disgolog.Logger
+		syncer *cmdsync.Syncer
+		logger *cmdlogger.Logger
 	)
 
 	dave := sink.NewDaveRegistry()
 	tracker := watchdog.NewTracker()
 
-	session, err := disgosession.New(disgosession.Options{
+	session, err := session.New(session.Options{
 		Token:            b.cfg.DiscordToken,
 		Log:              b.log,
-		VoiceManagerOpts: dave.ManagerOptions(disgosession.SlogLogger(b.log)),
+		VoiceManagerOpts: dave.ManagerOptions(session.SlogLogger(b.log)),
 		Listeners: []bot.EventListener{
 			bot.NewListenerFunc(func(_ *events.Raw) { tracker.MarkWSNow() }),
 			bot.NewListenerFunc(func(e *events.Ready) {
 				tracker.MarkReadyNow()
-				b.onDisgoReady(e, syncer)
+				b.onReady(e, syncer)
 			}),
 			bot.NewListenerFunc(func(e *events.GuildJoin) {
-				b.onDisgoGuildJoin(e, syncer)
+				b.onGuildJoin(e, syncer)
 			}),
 			bot.NewListenerFunc(func(e *events.ApplicationCommandInteractionCreate) {
-				b.onDisgoApplicationCommand(e, syncer, logger)
+				b.onApplicationCommand(e, syncer, logger)
 			}),
 			bot.NewListenerFunc(func(e *events.ComponentInteractionCreate) {
-				b.onDisgoComponent(e, logger)
+				b.onComponentInteraction(e, logger)
 			}),
-			bot.NewListenerFunc(b.onDisgoMessage),
+			bot.NewListenerFunc(b.onMessageCreate),
 		},
 	})
 	if err != nil {
@@ -91,10 +91,10 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	}
 
 	client := session.Client()
-	syncer = disgosync.NewSyncer(client, command.DefaultRegistry, b.log)
-	logger = disgolog.NewLogger(client, b.storage, b.log)
+	syncer = cmdsync.NewSyncer(client, command.DefaultRegistry, b.log)
+	logger = cmdlogger.NewLogger(client, b.storage, b.log)
 
-	b.setConn(disgoConn{
+	b.setConn(clientConn{
 		client:     client,
 		dave:       dave,
 		voiceDelay: time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond,
@@ -152,7 +152,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 // wedge and nothing to time out reading.
 func (b *Bot) startHealthWatcher(
 	ctx context.Context,
-	session *disgosession.Session,
+	session *session.Session,
 	tracker *watchdog.Tracker,
 	notifyUnhealthy func(),
 ) {

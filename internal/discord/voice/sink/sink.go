@@ -10,22 +10,20 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// DisgoSink forwards a track's Opus packets to a disgo voice connection. It is
-// the disgo half of the comparison DiscordSink is the discordgo half of, and
-// deliberately keeps the same warm-up and dead-air handling so the only
-// difference under test is the library underneath.
+// Sink forwards a track's Opus packets to a voice connection.
 //
-// The direction of control is inverted from DiscordSink's: disgo's audio
-// sender owns the 20ms clock and pulls frames, where discordgo is pushed
-// packets over a channel. Stream therefore hands the reader to a provider and
-// blocks on its result rather than running the loop itself.
-type DisgoSink struct {
+// The audio sender owns the 20ms clock and pulls frames rather than being
+// pushed packets over a channel, so Stream hands the reader to a frame
+// provider and blocks on its result rather than running the loop itself. The
+// vendored fork this replaced worked the other way round, which is why the
+// warm-up and dead-air handling lives in the provider here.
+type Sink struct {
 	conn voice.Conn
 	log  zerolog.Logger
 }
 
-func (d *DisgoSink) Stream(r opus.Reader, stop <-chan struct{}) error {
-	provider := &disgoFrameProvider{r: r, stop: stop, done: make(chan error, 1)}
+func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
+	provider := &frameProvider{r: r, stop: stop, done: make(chan error, 1)}
 
 	d.conn.SetOpusFrameProvider(provider)
 	// Dropping the provider releases the reader with it. The sender goroutine
@@ -41,7 +39,7 @@ func (d *DisgoSink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	}
 }
 
-// disgoFrameProvider feeds an opus.Reader to disgo's audio sender and reports
+// frameProvider feeds an opus.Reader to disgo's audio sender and reports
 // how the track ended back to Stream.
 //
 // Every exit returns io.EOF rather than the real error. disgo's sender logs
@@ -49,7 +47,7 @@ func (d *DisgoSink) Stream(r opus.Reader, stop <-chan struct{}) error {
 // reported once per 20ms for as long as the connection lived; io.EOF is the
 // one value it reads as "nothing to send", after which it sends its silence
 // frames and stops speaking. The real error goes to Stream over done instead.
-type disgoFrameProvider struct {
+type frameProvider struct {
 	r    opus.Reader
 	stop <-chan struct{}
 
@@ -58,7 +56,7 @@ type disgoFrameProvider struct {
 	primed bool
 }
 
-func (p *disgoFrameProvider) ProvideOpusFrame() ([]byte, error) {
+func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 	if stopped(p.stop) {
 		p.finish(stream.ErrPlaybackStopped)
 		return nil, io.EOF
@@ -87,7 +85,7 @@ func (p *disgoFrameProvider) ProvideOpusFrame() ([]byte, error) {
 // prime drains the leading packets and returns the first audible one, or nil
 // if the track is silent for longer than maxSilenceFrames. Same budget and
 // same reasoning as streamToDiscord; see the constants' comments there.
-func (p *disgoFrameProvider) prime() ([]byte, error) {
+func (p *frameProvider) prime() ([]byte, error) {
 	for i := 0; i < warmUpFrames; i++ {
 		if _, err := p.r.ReadPacket(); err != nil {
 			return nil, err
@@ -109,10 +107,10 @@ func (p *disgoFrameProvider) prime() ([]byte, error) {
 // away under a running track. That is the transport failing rather than the
 // track ending, so it is reported as such and the player's recovery decides
 // what to do. A Close after the track already ended is absorbed by once.
-func (p *disgoFrameProvider) Close() {
+func (p *frameProvider) Close() {
 	p.finish(stream.ErrVoiceTransport)
 }
 
-func (p *disgoFrameProvider) finish(err error) {
+func (p *frameProvider) finish(err error) {
 	p.once.Do(func() { p.done <- err })
 }

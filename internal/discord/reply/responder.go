@@ -1,4 +1,4 @@
-package disgoreply
+package reply
 
 import (
 	"io"
@@ -12,7 +12,6 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 // respondable is what both interaction events can do. Keeping it as an
@@ -215,7 +214,7 @@ var (
 	_ cmdadapter.BotAPI     = (*API)(nil)
 )
 
-func (a *API) EmbedColor() int { return reply.EmbedColor }
+func (a *API) EmbedColor() int { return EmbedColor }
 
 func (a *API) Latency() time.Duration {
 	if a.client == nil || a.client.Gateway == nil {

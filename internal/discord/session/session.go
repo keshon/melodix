@@ -1,10 +1,9 @@
-// Package disgosession opens and holds a disgo gateway connection.
+// Package session opens and holds a gateway connection.
 //
-// It is the disgo half of what internal/discord does with discordgo: build a
-// client, connect, log, and report when the connection stops being worth
-// keeping. Nothing above it names disgo -- commands reach Discord through
-// cmdadapter's neutral types, and this package supplies the implementations.
-package disgosession
+// Build a client, connect, log, and record what a watchdog needs to judge the
+// connection. Nothing above it names a Discord library: commands reach Discord
+// through cmdadapter's neutral types, and reply supplies the implementations.
+package session
 
 import (
 	"context"

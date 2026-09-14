@@ -1,9 +1,8 @@
-// Package disgosync registers a guild's slash commands through disgo.
+// Package cmdsync registers a guild's slash commands.
 //
-// It is the disgo sibling of internal/discord/cmdsync and answers the same
-// question the same way: compare what the registry declares against what the
-// guild already has, then create, update and delete the difference.
-package disgosync
+// It compares what the registry declares against what the guild already has,
+// then creates, updates and deletes the difference.
+package cmdsync
 
 import (
 	"fmt"
@@ -17,7 +16,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/disgoreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 // rateLimitDelay spaces out writes. Registration happens once per guild at
@@ -76,7 +75,7 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 			id:          c.ID(),
 			name:        c.Name(),
 			commandType: c.Type(),
-			fingerprint: fingerprint(fromDisgo(c)),
+			fingerprint: fingerprint(fromWire(c)),
 		}
 	}
 	desiredByKey := make(map[string]*cmdadapter.SlashCommand, len(desired))
@@ -95,7 +94,7 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 				unchanged++
 				continue
 			}
-			update := disgoreply.SlashCommandUpdate(want)
+			update := reply.SlashCommandUpdate(want)
 			if update == nil {
 				continue
 			}
@@ -109,7 +108,7 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 			continue
 		}
 
-		create := disgoreply.SlashCommandCreate(want)
+		create := reply.SlashCommandCreate(want)
 		if create == nil {
 			continue
 		}

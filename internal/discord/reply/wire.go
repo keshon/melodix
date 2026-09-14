@@ -1,12 +1,14 @@
-// Package disgoreply is the disgo half of what reply is for discordgo: it
-// renders cmdadapter's neutral types into disgo's wire types, and implements
-// the reply surface a command works with.
+// Package reply puts things on the wire.
 //
-// It is a sibling of internal/discord/reply, not a layer over it. The two do
-// not share code and are not meant to: the whole point of the seam is that a
-// backend is one package implementing two interfaces, so deleting a backend is
-// deleting a package.
-package disgoreply
+// It renders cmdadapter's neutral types into Discord's, implements the reply
+// surface a command works with, and owns the embeds the bot composes for
+// itself. Nothing above it names a Discord library; this is the one package
+// that does, alongside the session and the audio path.
+//
+// That split is what the migration off the vendored discordgo fork was for:
+// swapping the library was one package's problem rather than the whole tree's,
+// and if it ever happens again it will be this package and its two siblings.
+package reply
 
 import (
 	"encoding/json"

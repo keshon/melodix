@@ -1,4 +1,4 @@
-package disgosync
+package cmdsync
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/disgoreply"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 func minValue(f float64) *float64 { return &f }
@@ -53,7 +53,7 @@ func historyCommand() *cmdadapter.SlashCommand {
 func roundTrip(t *testing.T, decl *cmdadapter.SlashCommand) *cmdadapter.SlashCommand {
 	t.Helper()
 
-	raw, err := json.Marshal(disgoreply.SlashCommandCreate(decl))
+	raw, err := json.Marshal(reply.SlashCommandCreate(decl))
 	if err != nil {
 		t.Fatalf("marshalling the create form: %v", err)
 	}
@@ -61,7 +61,7 @@ func roundTrip(t *testing.T, decl *cmdadapter.SlashCommand) *cmdadapter.SlashCom
 	if err := json.Unmarshal(raw, &fetched); err != nil {
 		t.Fatalf("unmarshalling as a fetched command: %v", err)
 	}
-	return fromDisgo(fetched.ApplicationCommand)
+	return fromWire(fetched.ApplicationCommand)
 }
 
 // The sync compares what a command declares against what Discord reports. If
