@@ -13,32 +13,9 @@ import (
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/rs/zerolog"
 )
-
-// RecommendedBotPermissions is the bitmask for the minimal permissions the bot
-// needs. Used in the OAuth2 invite URL so the generated README shows the
-// correct link. Combines: View Channel, Send Messages, Embed Links, Read
-// Message History, Manage Messages.
-var RecommendedBotPermissions = discordgo.PermissionManageRoles |
-	discordgo.PermissionViewChannel |
-	discordgo.PermissionSendMessages |
-	discordgo.PermissionEmbedLinks |
-	discordgo.PermissionAttachFiles |
-	discordgo.PermissionReadMessageHistory |
-	discordgo.PermissionManageMessages |
-	discordgo.PermissionUseApplicationCommands
-
-// RecommendedBotPermissionsList is a human-readable list of these permissions
-// for the README.
-var RecommendedBotPermissionsList = []string{
-	"View Channel",
-	"Send Messages",
-	"Embed Links",
-	"Read Message History",
-	"Manage Messages",
-}
 
 // plainCategory drops the icon a category name carries, for the README.
 //
@@ -144,22 +121,14 @@ func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, lo
 		return err
 	}
 
-	permListBuf := new(bytes.Buffer)
-	for i, name := range RecommendedBotPermissionsList {
-		if i > 0 {
-			permListBuf.WriteString(", ")
-		}
-		permListBuf.WriteString(name)
-	}
-
 	data := struct {
 		CommandSections    string
 		BotPermissions     int64
 		BotPermissionsList string
 	}{
 		CommandSections:    buf.String(),
-		BotPermissions:     int64(RecommendedBotPermissions),
-		BotPermissionsList: permListBuf.String(),
+		BotPermissions:     perm.RecommendedBotMask(),
+		BotPermissionsList: strings.Join(perm.RecommendedBotNames(), ", "),
 	}
 
 	f, err := os.Create(outPath)
