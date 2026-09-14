@@ -87,14 +87,23 @@ Translation happens in exactly two places. `Adapter` renders a declaration for
 functions take the declaration and shadow it back to the wire type on their
 first line, so their bodies never changed.
 
-### The one escape hatch
+### The escape hatch is gone
 
-`cmdadapter.Interaction.Raw()` returns the session and the interaction, and
-exists for `VoiceAPI.UpdatePlaybackStatus` alone: the guild's status message
-outlives the interaction token, so the voice service needs the interaction
-itself. Callers destructure it and so still do not name the types. Neutralising
-that signature removes the method, and is the obvious first thing to do in
-phase 2.
+There was one, `cmdadapter.Interaction.Raw`, and it existed for a single
+caller. `UpdatePlaybackStatus` took a session and an interaction because the
+guild's music status message is created from an interaction and then edited for
+as long as the track plays -- past the token's expiry, so editing cannot go
+through the interaction at all.
+
+It needed two capabilities rather than the raw pair. Creating is
+`Interaction.FollowupEmbedMessage`, which posts a followup and reports where it
+landed. Editing is the session, and the voice service already held a
+`SessionGetter` for exactly that -- the asynchronous paths were calling it a few
+lines away and passing the result back in. The signature is
+`UpdatePlaybackStatus(from, guildID, embed)` now, where a nil interaction is the
+asynchronous case.
+
+Nothing outside `internal/discord` names discordgo, by any route.
 
 ## Fork-only APIs that need an answer first
 
@@ -132,47 +141,103 @@ not have our `Cond`, but the rule still governs anything we write around it.
 driven by the discordgo gateway, with dave-go behind it, cross-compiling
 cgo-free. Read it before rewriting that part.
 
-## Plan
+## Where to pick this up
 
-**Phase 1 — stop the leak. Done.** Commands, middleware and readme talk to
-melodix's own types. It was worth doing on its own merits and it turned phase 2
-from a 53-file change into a one-package change.
+Everything is on `disgo-migration`, pushed, eight commits on top of `main`.
+`main` is green and shippable; this branch has never broken the build or the
+tests, and `go test ./...` and `go vet ./internal/... ./cmd/...` are clean at
+every commit.
 
-It also found three bugs on the way, which is the usual argument for moving
-code carefully rather than quickly: the invite link asked for eight permissions
-while the README promised five; a reaction with no member was audited under its
-user ID in the username column; and two scripted replacements went wrong in
-ways only the compiler caught -- `*discordgo.MessageEmbed` is a prefix of
-`*discordgo.MessageEmbedField`, and a transform ran on a file inside the
-package it was importing.
+One thing that does **not** travel: `dave-godave-seam-unsquashed` is a local-only
+branch on the machine this was written on, holding the fourteen-commit history
+of the DAVE work before it was squashed into `main`. Push it if that history is
+worth keeping; otherwise it disappears with the machine, and the squashed
+commit says everything that matters.
 
-**Phase 2 — swap the implementation.** With the surface contained, rewrite
-`internal/discord` against disgo: session bootstrap, handlers as typed events,
-embeds, interactions, command registration.
+## Phase 2, and why it is not phase 1 again
 
-**Phase 3 — voice.** Behind `VOICE_BACKEND`, the pattern the spike established,
-so both stacks can run in one build and be compared on a live channel rather
-than across two. Fold in the spike's `disgo_bridge.go`.
+Phase 1 sliced cleanly because each package could be freed on its own and the
+build stayed green between slices. **Phase 2 cannot be sliced that way.** The
+session type threads through `cmdadapter`'s context structs, into `reply`'s wire
+calls, into the root handlers; swapping any one of them alone does not compile.
+It is closer to atomic than incremental, and planning it as a series of small
+green steps will not survive contact.
 
-**Phase 4 — delete the fork.** `pkg/discordgo-fork-dev` and the `replace`
-directive go. This is the point of the whole exercise.
+The surface, measured on this branch:
 
-Phases 1 and 2 are ordinary refactoring. Phase 3 is the one that needs live
-testing, and the checklist for that is in `docs/dave-todo.md` — the same
-scenarios that flushed out the five bugs above: join, play, second account
-joins, one leaves, bot left alone, rejoin. Watch `sender_count` track the room.
+| | refs | what it is |
+| --- | --- | --- |
+| `cmdadapter` | 173 | the context structs and the four converters |
+| `reply` | 103 | every call that puts something on the wire |
+| `perm` | 66 | mostly the permission-name table |
+| root files | 60 | session bootstrap, handlers, the Bot type |
+| `voice` | 19 | the status message and the sink |
+| `cmdsync` | 10 | command registration |
+| `cmdlogger` | 2 | |
+
+### Suggested order
+
+1. **Add disgo and stand up a second bootstrap** that connects, logs, and
+   registers nothing. Worth doing first because it is the only part of phase 2
+   that can be verified on its own: does it connect with the real token, and
+   does it see events? Everything after this is a rewrite that only a live run
+   can check.
+2. **Port `cmdadapter`, `reply` and the root handlers together.** They cannot be
+   separated. This is the large one and it is where the risk is: handlers become
+   typed events under disgo's `events/` package rather than `AddHandler` with a
+   func signature, and the context structs change what they hold.
+3. **`cmdsync`, `perm`, `cmdlogger` and `voice` follow mechanically** once the
+   session type has changed under them.
+4. **Cut `cmd/discord` over behind a flag**, keeping the discordgo path until a
+   live run confirms the disgo one -- the same discipline `DAVE_BACKEND` used,
+   and for the same reason: a rewrite of this size is not something to make the
+   default on the strength of a compile.
+5. **Delete `pkg/discordgo-fork-dev` and the `replace` directive.** That is the
+   point of the whole exercise.
+
+### The open decision
+
+Whether to do step 1 at all, or go straight at step 2. Step 1 costs a little
+time and buys the only independent verification available in the whole phase.
+It was put to the repo's owner and not yet answered.
+
+## What this work taught, worth not relearning
+
+- **Never call into a `godave.Session` while holding the connection's lock.** A
+  session holds its own mutex while answering the protocol through
+  `godave.Callbacks`, so a lock held across that question deadlocks both. It
+  cost a day, it is a property of the interface rather than of either library,
+  and it will apply to disgo's voice stack too. See `docs/dave-todo.md`.
+- **Scripted refactors fail in two specific ways here.** `*discordgo.MessageEmbed`
+  is a prefix of `*discordgo.MessageEmbedField`, so a plain string replacement
+  silently rewrites the wrong type; and a transform run over a whole tree will
+  happily add a package's own import to a file inside it. Both were compile
+  errors rather than silent behaviour changes, which is the only reason they
+  were cheap.
+- **Files in this repo have mixed line endings.** Anything that edits Go source
+  by string matching has to normalise CRLF first and write back what it found,
+  or every match fails and `gofmt` rewrites the whole file.
+- **Check the branch before measuring.** A survey of `internal/discord` was run
+  on `main` by mistake and disagreed with the recorded figure by 178
+  references. Both numbers were right; only one of them was on this branch.
+- `go test ./...` inside `pkg/discordgo-fork-dev` needs `-vet=off`: three
+  pre-existing non-constant-format-string failures in `restapi.go` predate all
+  of this.
+- `internal/conventions` enforces 80-column comments and will fail the build on
+  a long one. It catches them at `go test ./...`, not at `gofmt`.
 
 ## Open questions
 
-- Whether `internal/discord` is the right seam or whether phase 1 should push
-  further, to a `Bot` interface that neither library appears behind. The
-  cheaper answer is probably the right one; decide when phase 1 is underway.
-- Whether disgo's slash-command registration and `keshon/command` registry get
-  along, or whether `cmdsync` needs rethinking.
-- disgo v0.19.6 offers no route from a `Conn` to its DAVE session —
-  `Conn.DAVE()` exists only on the unreleased branch — so the session has to be
+- Whether `internal/discord` is the right seam or whether a `Bot` interface
+  should sit above it, with neither library appearing in the signature. The
+  cheaper answer is probably the right one; phase 1 already moved everything
+  behind `cmdadapter`, which may be enough.
+- Whether disgo's slash-command registration and the `keshon/command` registry
+  get along, or whether `cmdsync` needs rethinking.
+- disgo v0.19.6 offers no route from a `Conn` to its DAVE session --
+  `Conn.DAVE()` exists only on the unreleased branch -- so the session has to be
   caught from dave-go's create hook, which constrains how connections may be
-  created. The spike does this and the comment there explains it.
+  created. `voice-disgo-spike` does this and the comment there explains it.
 - disgo is one more third-party dependency with its own bus factor. It is far
-  more active than upstream discordgo, which is the whole point, but it is not
-  a guarantee.
+  more active than upstream discordgo, which is the whole point, but it is not a
+  guarantee.
