@@ -23,7 +23,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	dg.LogLevel = discordgo.LogInformational
+	dg.LogLevel = discordgoLogLevel(b.cfg.LogLevel)
 
 	b.mu.Lock()
 	b.dg = dg
