@@ -6,7 +6,7 @@ import (
 )
 
 func (b *Bot) wireSessionHandlers(dg *discordgo.Session, tracker *watchdog.Tracker) {
-	b.configureIntents()
+	b.configureIntents(dg)
 	dg.AddHandler(func(s *discordgo.Session, e *discordgo.Event) {
 		_ = s
 		_ = e

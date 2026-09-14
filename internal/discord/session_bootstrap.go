@@ -50,8 +50,11 @@ func (b *Bot) stopAllPlayers() {
 	b.log.Info().Msg("players_all_stopped")
 }
 
-func (b *Bot) configureIntents() {
-	b.dg.Identify.Intents = discordgo.IntentsAll
+// configureIntents takes the session rather than reading b.dg, which the
+// caller already holds: b.dg is guarded by b.mu and reading it unlocked here
+// only worked because this happens to run on the goroutine that wrote it.
+func (b *Bot) configureIntents(dg *discordgo.Session) {
+	dg.Identify.Intents = discordgo.IntentsAll
 }
 
 // IsSessionUnhealthyError reports whether an error means we should fast-restart

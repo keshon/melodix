@@ -26,6 +26,36 @@ import (
 // voice.New(...) without importing the implementation subpackage.
 type SessionGetter = sink.SessionGetter
 
+// UserVoiceState is where a user is connected, in the shape a caller needs to
+// join them: the channel, and who was asked about.
+type UserVoiceState struct {
+	ChannelID string
+	UserID    string
+}
+
+// FindUserVoiceState reports the voice channel a user is in.
+//
+// It reads the session through getSession like every other method here, which
+// is the point: the Bot used to answer this one itself off its own session
+// field, without the lock that guards it, while a session restart wrote that
+// field from another goroutine.
+func (s *Service) FindUserVoiceState(guildID, userID string) (*UserVoiceState, error) {
+	sess := s.getSession()
+	if sess == nil {
+		return nil, fmt.Errorf("no Discord session")
+	}
+	guild, err := sess.State.Guild(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving guild: %w", err)
+	}
+	for _, vs := range guild.VoiceStates {
+		if vs.UserID == userID {
+			return &UserVoiceState{ChannelID: vs.ChannelID, UserID: vs.UserID}, nil
+		}
+	}
+	return nil, fmt.Errorf("user not in any voice channel")
+}
+
 type guildMusicStatus struct {
 	ChannelID string
 	MessageID string
