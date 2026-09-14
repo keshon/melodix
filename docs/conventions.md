@@ -93,6 +93,16 @@ every tool that took the other road.
 **[practice]** The playback entity is `parsers.Track`; whatever the resolver
 produces is `sources.TrackInfo`. Please don't add a third track-shaped type.
 
+**[practice]** Scripted edits over Go source fail in specific ways here, and
+all of them are cheap only because they happened to be compile errors. One
+type name can be a prefix of another (`MessageEmbed` of `MessageEmbedField`),
+so a plain string replacement rewrites the wrong one; a transform run over a
+whole tree will add a package's own import to a file inside it; and a
+replacement aimed at code will reach inside a string literal, which is the one
+that produces no error at all — `/commands status` shipped telling users
+commands are grouped "(ctx.Event.g., purge, core, translate)". Read what a
+scripted edit touched, especially where it touched text.
+
 **[practice]** Package names are single lowercase words describing what the
 package does (`reply`, `perm`, `watchdog`). A package that just wraps one
 dependency can be named after it (`kkdai`, in the `goja` style) — that's being
@@ -285,6 +295,21 @@ entry-point test that does not need the network — see below for why both.
 **[enforced: race]** `go test -race ./...` is the bar to clear; the race
 detector isn't optional for anything that touches `Player`. CI runs it on
 every push.
+
+**[practice]** A green build proves only what is tested, and a type assertion
+proves nothing at all until it runs. The disgo migration changed an interface
+and left one implementation behind; the assertion between them stopped
+matching and every command silently resolved to no slash definition for six
+commits, which would have deleted every guild's commands on the next sync.
+Where a type switch or an assertion carries load, a compile-time
+`var _ Iface = (*T)(nil)` costs one line and turns the next drift into a build
+failure. Where behaviour depends on the assertion matching, test that it does.
+
+**[practice]** A check that has never failed has not been shown to work.
+Make a new test fail against the bug it is for before leaving it passing, and
+the same for any rule added to `internal/conventions` — a tag in the document
+plus a check that cannot fire buys the full appearance of enforcement with
+nothing behind it.
 
 **[practice]** Prefer fakes over mocks: swap the registry via
 `stream.SetRegistry`, stub `sink.Provider`, and use httptest for HTTP clients.
