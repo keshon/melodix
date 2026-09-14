@@ -53,27 +53,48 @@ message Discord had moved on from, and nothing would ever have said so.
 
 ## The surface
 
-98 distinct discordgo symbols, 489 references, 53 files.
+**Phase 1 is done.** Everything outside `internal/discord` holds zero
+references to discordgo: 243 between them at the start, none now.
 
-| Package | refs | files | what it is |
-| --- | --- | --- | --- |
-| `internal/discord` | 246 | 29 | the adapter layer — where this *should* be |
-| `internal/command` | 171 | 18 | commands reaching past the adapter |
-| `internal/middleware` | 64 | 3 | permissions and logging |
-| `internal/readme` | 8 | 1 | command documentation generation |
+| Package | at the start | now |
+| --- | --- | --- |
+| `internal/command` | 171 | 0 |
+| `internal/middleware` | 64 | 0 |
+| `internal/readme` | 8 | 0 |
+| `pkg/music`, `cmd` | 0 | 0 |
+| `internal/discord` | 246 | 424 |
 
-The heaviest types, in order: `MessageEmbed` (107), `Session` (76),
-`InteractionCreate` (44), `ApplicationCommand` (33), the interaction response
-family (~30), `VoiceConnection` (8).
+The adapter's count went up, which is the point: the dependency moved inward
+rather than away. What used to be spread across 53 files is now in one package,
+and phase 2 replaces it there.
 
-So this is really three jobs — embeds, slash commands and interactions, and the
-session — and one of them is most of it.
+What carries the seam, all in `internal/discord/cmdadapter`:
 
-The disgo equivalents exist and are close in shape: `discord.Embed`,
-`discord.SlashCommandCreate`, `discord.ApplicationCommandInteraction`,
-`discord.InteractionResponse`. Handlers are typed events under `events/` rather
-than `AddHandler` with a func signature, which is a mechanical but
-across-the-board change.
+| Type | What it replaced |
+| --- | --- |
+| `CommandContext` | five type switches over `.Session` and `.Event` |
+| `Embed`, `EmbedField` | `discordgo.MessageEmbed` and its nested structs |
+| `SlashCommand`, `SlashOption`, `SlashChoice` | `discordgo.ApplicationCommand` |
+| `SlashArgument` | `ApplicationCommandData().Options` loops |
+| `Button`, `ActionRow` | `discordgo.Button`, `ActionsRow` |
+| `Interaction` | helpers taking `(s, e)` |
+
+`perm` owns the permission constants: `perm.Administrator`, `perm.Name(bit)`,
+`perm.RecommendedBotMask()`.
+
+Translation happens in exactly two places. `Adapter` renders a declaration for
+`cmdsync`, and `reply` renders everything that goes on the wire -- its
+functions take the declaration and shadow it back to the wire type on their
+first line, so their bodies never changed.
+
+### The one escape hatch
+
+`cmdadapter.Interaction.Raw()` returns the session and the interaction, and
+exists for `VoiceAPI.UpdatePlaybackStatus` alone: the guild's status message
+outlives the interaction token, so the voice service needs the interaction
+itself. Callers destructure it and so still do not name the types. Neutralising
+that signature removes the method, and is the obvious first thing to do in
+phase 2.
 
 ## Fork-only APIs that need an answer first
 
@@ -113,14 +134,17 @@ cgo-free. Read it before rewriting that part.
 
 ## Plan
 
-**Phase 1 — stop the leak.** Move the 243 references outside `internal/discord`
-(commands, middleware, readme) behind melodix's own types. `cmdadapter` and
-`reply` already exist for this; they just do not cover everything. No command
-should import discordgo.
+**Phase 1 — stop the leak. Done.** Commands, middleware and readme talk to
+melodix's own types. It was worth doing on its own merits and it turned phase 2
+from a 53-file change into a one-package change.
 
-This is worth doing on its own merits and can be verified against the current
-library, one package at a time, with `main` shippable throughout. It also turns
-phase 2 from a 53-file change into a one-package change.
+It also found three bugs on the way, which is the usual argument for moving
+code carefully rather than quickly: the invite link asked for eight permissions
+while the README promised five; a reaction with no member was audited under its
+user ID in the username column; and two scripted replacements went wrong in
+ways only the compiler caught -- `*discordgo.MessageEmbed` is a prefix of
+`*discordgo.MessageEmbedField`, and a transform ran on a file inside the
+package it was importing.
 
 **Phase 2 — swap the implementation.** With the surface contained, rewrite
 `internal/discord` against disgo: session bootstrap, handlers as typed events,
