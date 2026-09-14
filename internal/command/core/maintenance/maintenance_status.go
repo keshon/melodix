@@ -9,20 +9,13 @@ import (
 )
 
 func runStatus(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
-	guild, err := ctx.Session.State.Guild(ctx.Event.GuildID)
-	if err != nil || guild == nil {
-		guild, err = ctx.Session.Guild(ctx.Event.GuildID)
-		if err != nil {
-			return ctx.RespondEphemeral(&cmdadapter.Embed{
-				Description: fmt.Sprintf("Failed to fetch guild: %v", err),
-				Color:       reply.EmbedColor,
-			})
-		}
+	guild, err := ctx.Guild()
+	if err != nil {
+		return ctx.RespondEphemeral(&cmdadapter.Embed{
+			Description: fmt.Sprintf("Failed to fetch guild: %v", err),
+			Color:       reply.EmbedColor,
+		})
 	}
-
-	memberCount := len(guild.Members)
-	roleCount := len(guild.Roles)
-	channelCount := len(guild.Channels)
 
 	desc := fmt.Sprintf(
 		"**Guild name: %s**\n"+
@@ -33,9 +26,9 @@ func runStatus(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage)
 			"- Channels: %d\n",
 		guild.Name,
 		guild.ID,
-		memberCount,
-		roleCount,
-		channelCount,
+		guild.Members,
+		guild.Roles,
+		guild.Channels,
 	)
 
 	return ctx.RespondEphemeral(&cmdadapter.Embed{

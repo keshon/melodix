@@ -61,7 +61,6 @@ func (c *History) Run(ctx interface{}) error {
 		return nil
 	}
 
-	e := slashCtx.Event
 	store := slashCtx.Storage
 
 	var view = "timeline"
@@ -78,7 +77,7 @@ func (c *History) Run(ctx interface{}) error {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	guildID := e.GuildID
+	guildID := slashCtx.GuildID()
 	if c.Bot.GetOrCreatePlayer(guildID) == nil {
 		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",

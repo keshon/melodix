@@ -9,7 +9,7 @@ import (
 
 func runPing(ctx *cmdadapter.SlashInteractionContext) error {
 
-	latency := ctx.Session.HeartbeatLatency().Milliseconds()
+	latency := ctx.Latency().Milliseconds()
 	return ctx.RespondEphemeral(&cmdadapter.Embed{
 		Title:       "Pong! 🏓",
 		Description: fmt.Sprintf("Latency: %dms", latency),

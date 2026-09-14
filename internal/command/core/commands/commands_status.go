@@ -10,7 +10,7 @@ import (
 
 // RunCmdStatus reports enabled and disabled command groups.
 func RunCmdStatus(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
-	guildID := ctx.Event.GuildID
+	guildID := ctx.GuildID()
 
 	disabledGroups, _ := storage.DisabledGroups(guildID)
 	disabledMap := make(map[string]bool)

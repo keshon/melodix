@@ -1,6 +1,11 @@
 package cmdadapter
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"io"
+	"time"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 // The reply surface a command works with.
 //
@@ -233,4 +238,41 @@ func (c *ComponentInteractionContext) ReplaceMessage(embed *Embed) error {
 		return nil
 	}
 	return c.Responder.ReplaceComponentMessage(c.Session, c.Event, embed)
+}
+
+// RespondEphemeralWithFile answers the caller with an embed and an attachment
+// only they can see. The reader is consumed during the call, so the caller
+// keeps ownership of closing it.
+func (c *SlashInteractionContext) RespondEphemeralWithFile(embed *Embed, r io.Reader, fileName string) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.RespondEmbedEphemeralWithFile(c.Session, c.Event, embed, r, fileName)
+}
+
+// RespondEphemeralText answers the caller with plain content. See the
+// Responder method for why this is not the same as an embed carrying the
+// same string.
+func (c *SlashInteractionContext) RespondEphemeralText(content string) error {
+	if c.Responder == nil {
+		return nil
+	}
+	return c.Responder.RespondEphemeralText(c.Session, c.Event, content)
+}
+
+// Latency is the round trip to Discord's gateway, which is what a ping
+// command reports.
+func (c *SlashInteractionContext) Latency() time.Duration {
+	if c.Responder == nil {
+		return 0
+	}
+	return c.Responder.Latency(c.Session)
+}
+
+// Guild describes the guild this command was invoked in.
+func (c *SlashInteractionContext) Guild() (GuildInfo, error) {
+	if c.Responder == nil {
+		return GuildInfo{}, nil
+	}
+	return c.Responder.GuildInfo(c.Session, c.GuildID())
 }

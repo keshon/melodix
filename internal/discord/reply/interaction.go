@@ -2,7 +2,9 @@ package reply
 
 import (
 	"fmt"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -63,6 +65,25 @@ func (responder) ReplaceComponentMessage(s *discordgo.Session, e *discordgo.Inte
 
 func (responder) FollowupEmbedMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *cmdadapter.Embed) (string, string, error) {
 	return FollowupEmbedMessage(s, e, embed)
+}
+
+func (responder) RespondEmbedEphemeralWithFile(s *discordgo.Session, e *discordgo.InteractionCreate, embed *cmdadapter.Embed, r io.Reader, fileName string) error {
+	return RespondEmbedEphemeralWithFile(s, e, embed, r, fileName)
+}
+
+func (responder) RespondEphemeralText(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error {
+	return RespondEphemeral(s, e, content)
+}
+
+func (responder) Latency(s *discordgo.Session) time.Duration {
+	if s == nil {
+		return 0
+	}
+	return s.HeartbeatLatency()
+}
+
+func (responder) GuildInfo(s *discordgo.Session, guildID string) (cmdadapter.GuildInfo, error) {
+	return GuildInfo(s, guildID)
 }
 
 var DefaultResponder cmdadapter.Responder = responder{}
@@ -172,7 +193,7 @@ func RespondEmbedEphemeralWithFile(
 	s *discordgo.Session,
 	i *discordgo.InteractionCreate,
 	src *cmdadapter.Embed,
-	fileReader interface{ Read([]byte) (int, error) },
+	fileReader io.Reader,
 	fileName string,
 ) error {
 	embed := cmdadapter.DiscordEmbed(src)

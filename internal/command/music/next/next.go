@@ -7,7 +7,6 @@ import (
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/keshon/melodix/internal/discord/reply"
 	musicplayer "github.com/keshon/melodix/pkg/music/player"
 )
@@ -35,17 +34,13 @@ func (c *Next) Run(ctx interface{}) error {
 		return nil
 	}
 
-	s := slashCtx.Session
-	e := slashCtx.Event
-
-	guildID := e.GuildID
-	member := e.Member
+	guildID := slashCtx.GuildID()
 
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to defer response: %w", err)
 	}
 
-	voiceState, err := c.Bot.FindUserVoiceState(guildID, member.User.ID)
+	voiceState, err := c.Bot.FindUserVoiceState(guildID, slashCtx.UserID())
 	if err != nil {
 		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Voice Channel Error",
@@ -54,7 +49,7 @@ func (c *Next) Run(ctx interface{}) error {
 		return nil
 	}
 
-	permOK, err := perm.CheckBotVoicePermissions(s, voiceState.ChannelID)
+	permOK, err := slashCtx.CanJoinVoice(voiceState.ChannelID)
 	if err != nil || !permOK {
 		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Voice Error",
@@ -63,7 +58,7 @@ func (c *Next) Run(ctx interface{}) error {
 		return nil
 	}
 
-	c.Bot.SetGuildMusicNotifyChannel(guildID, e.ChannelID)
+	c.Bot.SetGuildMusicNotifyChannel(guildID, slashCtx.ChannelID())
 
 	player := c.Bot.GetOrCreatePlayer(guildID)
 	if player == nil {

@@ -33,13 +33,11 @@ func (c *Queue) Run(ctx interface{}) error {
 		return nil
 	}
 
-	e := slashCtx.Event
-
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	p := c.Bot.GetOrCreatePlayer(e.GuildID)
+	p := c.Bot.GetOrCreatePlayer(slashCtx.GuildID())
 	if p == nil {
 		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",

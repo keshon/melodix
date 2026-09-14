@@ -11,7 +11,7 @@ import (
 )
 
 func runExportData(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
-	guildID := ctx.Event.GuildID
+	guildID := ctx.GuildID()
 	record, err := storage.ExportGuild(guildID)
 	if err != nil {
 		return ctx.RespondEphemeral(&cmdadapter.Embed{
@@ -35,5 +35,5 @@ func runExportData(ctx *cmdadapter.SlashInteractionContext, storage storage.Stor
 	}
 
 	fileName := fmt.Sprintf("%s_database_dump.json", guildID)
-	return reply.RespondEmbedEphemeralWithFile(ctx.Session, ctx.Event, embed, bytes.NewReader(jsonBytes), fileName)
+	return ctx.RespondEphemeralWithFile(embed, bytes.NewReader(jsonBytes), fileName)
 }

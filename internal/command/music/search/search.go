@@ -97,9 +97,6 @@ func (c *Search) Run(ctx interface{}) error {
 	if !ok {
 		return nil
 	}
-	s := slashCtx.Session
-	e := slashCtx.Event
-
 	query := strings.TrimSpace(slashCtx.StringOption("query"))
 	wanted := slashCtx.StringOption("source")
 	searcher, tag, err := c.pick(wanted)
@@ -124,7 +121,7 @@ func (c *Search) Run(ctx interface{}) error {
 
 	hits, err := searcher.Search(query, resultCount)
 	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🔎 Search",
 			Description: fmt.Sprintf("Nothing found for %q.", query),
 			Color:       reply.EmbedColor,
@@ -150,7 +147,7 @@ func (c *Search) Run(ctx interface{}) error {
 		})
 	}
 	if len(buttons) == 0 {
-		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🔎 Search",
 			Description: fmt.Sprintf("Nothing playable found for %q.", query),
 			Color:       reply.EmbedColor,
@@ -169,16 +166,13 @@ func (c *Search) Run(ctx interface{}) error {
 
 // Component handles a click on one of the chooser's buttons.
 func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) error {
-	s := compCtx.Session
-	e := compCtx.Event
-
 	source, payload, ok := parseButtonID(compCtx.CustomID())
 	if !ok {
 		return nil
 	}
 	if !knownSource(source) {
 		// A chooser from a future version, or a hand-crafted id.
-		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
+		return compCtx.RespondEphemeral(&cmdadapter.Embed{
 			Title:       "🔎 Search",
 			Description: "This result is from a version of the bot that is no longer running. Run `/search` again.",
 			Color:       reply.EmbedColor,
@@ -202,7 +196,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	url, err := c.trackURL(source, payload)
 	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
+		compCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Could not look that track up again: %v", err),
 		})
@@ -211,7 +205,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	tracks, err := c.Bot.ResolveTracks(target.GuildID, url, "", "")
 	if err != nil || len(tracks) == 0 {
-		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
+		compCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Failed to resolve track: %v", err),
 		})

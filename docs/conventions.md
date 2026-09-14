@@ -56,6 +56,12 @@ the proof it holds — same engine, no Discord in sight. Anything
 Discord-specific belongs in `internal/`. Checked by
 `TestLibraryStaysDiscordFree`.
 
+**[enforced: adapter-boundary]** Only `internal/discord` names a Discord
+client library. Everything else — commands, middleware, readme generation,
+`cmd` — reaches Discord through `cmdadapter`'s neutral types, so swapping the
+library is one package's problem rather than the whole tree's. Checked by
+`TestDiscordStaysBehindTheAdapter`.
+
 **[practice]** Go stays minimal here. No frameworks, no speculative
 abstraction — an interface only exists if it has two real implementations or a
 real test seam behind it. Everything else stays concrete.

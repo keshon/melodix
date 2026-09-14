@@ -4,13 +4,12 @@ import (
 	"strings"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
 
 // RunCmdLog shows recent command usage for the guild.
 func RunCmdLog(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
-	guildID := ctx.Event.GuildID
+	guildID := ctx.GuildID()
 
 	records, err := storage.CommandHistory(guildID)
 	if err != nil {
@@ -40,5 +39,5 @@ func RunCmdLog(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage)
 	}
 
 	msg := codeLeftBlockWrapper + "\n" + builder.String() + codeRightBlockWrapper
-	return reply.RespondEphemeral(ctx.Session, ctx.Event, msg)
+	return ctx.RespondEphemeralText(msg)
 }

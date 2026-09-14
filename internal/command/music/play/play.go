@@ -67,7 +67,6 @@ func (c *Play) Run(ctx interface{}) error {
 		return nil
 	}
 
-	e := slashCtx.Event
 	store := slashCtx.Storage
 
 	input := slashCtx.StringOption("input")
@@ -99,7 +98,7 @@ func (c *Play) Run(ctx interface{}) error {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	guildID := e.GuildID
+	guildID := slashCtx.GuildID()
 	target, ok := playback.Join(c.Bot, slashCtx)
 	if !ok {
 		return nil

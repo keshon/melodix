@@ -38,14 +38,14 @@ func runCmdSetGroupState(ctx *cmdadapter.SlashInteractionContext, stor storage.S
 	}
 
 	if enabled {
-		err = stor.EnableGroup(ctx.Event.GuildID, group)
+		err = stor.EnableGroup(ctx.GuildID(), group)
 		if err != nil {
 			embed.Description = "Failed to enable the group."
 			return ctx.RespondEphemeral(embed)
 		}
 		embed.Description = fmt.Sprintf("Command/group `%s` enabled.", group)
 	} else {
-		err = stor.DisableGroup(ctx.Event.GuildID, group)
+		err = stor.DisableGroup(ctx.GuildID(), group)
 		if err != nil {
 			embed.Description = "Failed to disable the group."
 			return ctx.RespondEphemeral(embed)
@@ -54,7 +54,7 @@ func runCmdSetGroupState(ctx *cmdadapter.SlashInteractionContext, stor storage.S
 	}
 
 	if syncer != nil {
-		_ = syncer.SyncGuildCommands(ctx.Event.GuildID)
+		_ = syncer.SyncGuildCommands(ctx.GuildID())
 	}
 
 	return ctx.RespondEphemeral(embed)

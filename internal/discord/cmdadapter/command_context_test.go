@@ -1,7 +1,9 @@
 package cmdadapter
 
 import (
+	"io"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -147,4 +149,14 @@ func (stubResponder) ReplaceComponentMessage(*discordgo.Session, *discordgo.Inte
 }
 func (stubResponder) FollowupEmbedMessage(*discordgo.Session, *discordgo.InteractionCreate, *Embed) (string, string, error) {
 	return "", "", nil
+}
+func (stubResponder) RespondEmbedEphemeralWithFile(*discordgo.Session, *discordgo.InteractionCreate, *Embed, io.Reader, string) error {
+	return nil
+}
+func (stubResponder) RespondEphemeralText(*discordgo.Session, *discordgo.InteractionCreate, string) error {
+	return nil
+}
+func (stubResponder) Latency(*discordgo.Session) time.Duration { return 0 }
+func (stubResponder) GuildInfo(*discordgo.Session, string) (GuildInfo, error) {
+	return GuildInfo{}, nil
 }

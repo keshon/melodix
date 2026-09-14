@@ -54,11 +54,20 @@ var project = struct {
 	// bannedLibraryImports are packages the library surface must never import,
 	// checked by TestLibraryStaysDiscordFree.
 	bannedLibraryImports []string
+	// discordAdapterPrefix is the one package allowed to name a Discord
+	// client library, checked by TestDiscordStaysBehindTheAdapter.
+	discordAdapterPrefix string
+	// discordLibraries are the client libraries that must not appear outside
+	// discordAdapterPrefix. Matched as substrings of the import path, so a
+	// library's subpackages are covered by naming it once.
+	discordLibraries []string
 }{
 	docPath:              []string{"docs", "conventions.md"},
 	libraryPrefix:        "pkg/music/",
 	skipDirs:             []string{"pkg/discordgo-fork-dev", ".git"},
 	bannedLibraryImports: []string{"discordgo", "melodix/internal"},
+	discordAdapterPrefix: "internal/discord/",
+	discordLibraries:     []string{"bwmarrin/discordgo", "disgoorg/disgo"},
 }
 
 // maxCommentCols is the wrap width docs/conventions.md states for comments. A
@@ -112,7 +121,7 @@ func rules() []rule {
 
 // ownedElsewhere are rules this package tags in the document but checks in a
 // test of its own rather than through rules().
-var ownedElsewhere = []string{"frozen-identifiers", "discord-free"}
+var ownedElsewhere = []string{"frozen-identifiers", "discord-free", "adapter-boundary"}
 
 // checkedByOtherTools are tags in the document whose enforcement lives outside
 // this package. Each names the file that must prove the tool actually runs:
@@ -553,6 +562,48 @@ func TestLibraryStaysDiscordFree(t *testing.T) {
 					t.Errorf("%s imports %q — %s must stay Discord-free (the CLI is "+
 						"the proof it holds); Discord code belongs in internal/",
 						f.path, path, project.libraryPrefix)
+				}
+			}
+		}
+	}
+}
+
+// TestDiscordStaysBehindTheAdapter holds the boundary the disgo migration is
+// being done behind: one package names the client library, and everything
+// above it speaks cmdadapter's neutral types. It carries no baseline for the
+// same reason as the check above — a single import outside the adapter undoes
+// the property, so there is nothing to ratchet toward.
+//
+// This catches an import, which is the cheap half. The expensive half is a
+// context struct handing out a library value through a field, which no import
+// check can see: phase 1 of the migration reported zero references while two
+// dozen call sites still reached through `.Session` and `.Event`. The answer
+// to that is structural — the neutral contexts hold no library value to hand
+// out — and this check guards the door once that work is done rather than
+// standing in for it.
+func TestDiscordStaysBehindTheAdapter(t *testing.T) {
+	root := repoRoot(t)
+	fset := token.NewFileSet()
+	for _, f := range collectGoFiles(t, root) {
+		if strings.HasPrefix(f.path, project.discordAdapterPrefix) {
+			continue
+		}
+		file, err := parser.ParseFile(fset, filepath.Join(root, filepath.FromSlash(f.path)),
+			nil, parser.ImportsOnly)
+		if err != nil {
+			t.Errorf("parse %s: %v", f.path, err)
+			continue
+		}
+		for _, imp := range file.Imports {
+			path, err := strconv.Unquote(imp.Path.Value)
+			if err != nil {
+				continue
+			}
+			for _, lib := range project.discordLibraries {
+				if strings.Contains(path, lib) {
+					t.Errorf("%s imports %q — only %s may name a Discord client "+
+						"library; reach it through cmdadapter's neutral types",
+						f.path, path, project.discordAdapterPrefix)
 				}
 			}
 		}

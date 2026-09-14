@@ -32,9 +32,6 @@ func (c *About) Run(ctx interface{}) error {
 		return nil
 	}
 
-	session := context.Session
-	event := context.Event
-
 	info := buildinfo.Get()
 
 	fields := []cmdadapter.EmbedField{
@@ -66,10 +63,8 @@ func (c *About) Run(ctx interface{}) error {
 		defer f.Close()
 		imageName := filepath.Base(imagePath)
 		embed.ImageURL = "attachment://" + imageName
-		return reply.RespondEmbedEphemeralWithFile(session, event, embed, f, imageName)
+		return context.RespondEphemeralWithFile(embed, f, imageName)
 	}
 
-	reply.RespondEmbedEphemeral(session, event, embed)
-
-	return nil
+	return context.RespondEphemeral(embed)
 }

@@ -1,6 +1,11 @@
 package cmdadapter
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"io"
+	"time"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 // Responder abstracts interaction replies so commands never import the discord
 // package directly (avoids import cycles); reply.DefaultResponder implements
@@ -24,6 +29,19 @@ type Responder interface {
 	FollowupEmbedEphemeralWithComponents(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, rows []ActionRow) error
 	ReplaceComponentMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
 	FollowupEmbedMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) (string, string, error)
+	RespondEmbedEphemeralWithFile(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, r io.Reader, fileName string) error
+
+	// RespondEphemeralText answers with plain content rather than an embed.
+	// The difference is not cosmetic: content is capped at 2000 characters
+	// where an embed description takes 4096, and a caller that has sized its
+	// output to one limit must not silently be given the other.
+	RespondEphemeralText(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error
+
+	// Session-scoped answers, which need no interaction. They sit here rather
+	// than on a second interface because the contexts already carry a
+	// Responder and a command asks them of the context either way.
+	Latency(s *discordgo.Session) time.Duration
+	GuildInfo(s *discordgo.Session, guildID string) (GuildInfo, error)
 }
 
 // Logger persists command invocations (implemented by cmdlogger).
