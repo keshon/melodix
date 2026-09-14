@@ -6,11 +6,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// sessionCloseTimeout bounds the teardown of one session. disgo's Close walks
-// the voice manager, the gateway and the REST rate limiter in turn, each
-// waiting on the last, and the usual reason a session is being closed early is
-// that one of them has stopped answering.
+// sessionCloseTimeout is the outer bound: how long teardown may take before
+// it is abandoned and the process moves on regardless.
 const sessionCloseTimeout = 15 * time.Second
+
+// gatewayCloseBudget is what the library's own Close is given, and it is
+// deliberately much shorter than the abandon above.
+//
+// disgo's Close walks the voice manager, then the gateway, then REST, each
+// waiting on the last. The last two close by taking their rate limiter's lock
+// with this context -- and a bucket holds that lock while it sleeps out a
+// rate-limit window. Hand that a generous budget and shutdown sits there
+// waiting for a reset that only matters to requests nobody is going to make,
+// because the process is leaving.
+//
+// Three seconds is far more than a voice disconnect and a websocket close
+// frame need, and far less than a rate-limit window. If a disconnect ever
+// looks like it was cut short, this is the number that cut it.
+const gatewayCloseBudget = 3 * time.Second
 
 // playersStopTimeout bounds stopping playback across every guild. Each player
 // leaves its voice channel, which is a round trip, and they are stopped one

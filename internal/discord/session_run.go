@@ -125,7 +125,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		// reason a session is being closed early is that one of them has
 		// stopped answering.
 		closeWithin("session_close", sessionCloseTimeout, b.log, func() {
-			closeCtx, cancelClose := context.WithTimeout(context.Background(), sessionCloseTimeout)
+			closeCtx, cancelClose := context.WithTimeout(context.Background(), gatewayCloseBudget)
 			defer cancelClose()
 			session.Close(closeCtx)
 		})

@@ -37,14 +37,9 @@ type Responder struct {
 	appID snowflake.ID
 	token string
 
-	// deferred and answered track what became of the original response, so
-	// ResolveDeferred can tell a placeholder that is still owed an answer
-	// from one that has already been replaced. A command runs on one
-	// goroutine, but the mutex is cheap and the alternative is a rule about
-	// which goroutine may reply.
-	mu       sync.Mutex
-	deferred bool
-	answered bool
+	// response decides whether the deferred placeholder is still owed
+	// something. See responseState.
+	response responseState
 }
 
 var _ cmdadapter.Responder = (*Responder)(nil)
@@ -101,33 +96,66 @@ func (r *Responder) AckDeferred(ephemeral bool) error {
 	return err
 }
 
-func (r *Responder) markDeferred() {
-	r.mu.Lock()
-	r.deferred = true
-	r.mu.Unlock()
-}
+func (r *Responder) markDeferred() { r.response.deferredNow() }
+func (r *Responder) markAnswered() { r.response.answeredNow() }
 
-func (r *Responder) markAnswered() {
-	r.mu.Lock()
-	r.answered = true
-	r.mu.Unlock()
-}
-
-// ResolveDeferred removes a placeholder nothing replaced. See
-// cmdadapter.Responder for why commands can legitimately leave one.
+// ResolveDeferred removes a placeholder that nothing answered -- no reply, no
+// edit, no followup. See responseState for what counts as answered.
 func (r *Responder) ResolveDeferred() error {
-	r.mu.Lock()
-	pending := r.deferred && !r.answered
-	if pending {
-		// Whatever happens next, this placeholder is dealt with once.
-		r.answered = true
-	}
-	r.mu.Unlock()
-
-	if !pending {
+	if !r.response.takePending() {
 		return nil
 	}
 	return r.event.Client().Rest.DeleteInteractionResponse(r.appID, r.token)
+}
+
+// responseState tracks what became of an interaction's original response.
+//
+// Deferring posts a visible placeholder, and the question at the end of a
+// command is whether the caller ever saw anything in its place. Three routes
+// count as answering, and getting the set wrong breaks something either way:
+//
+//   - Replacing or editing the original response. Obvious.
+//   - Posting a followup. Less obvious and the one that matters: Discord
+//     stops showing the placeholder once a followup lands, which is why
+//     /queue and a first /play always looked right. Treating a followup as
+//     "not answered" and deleting the original takes an *ephemeral* followup
+//     down with it, because the interaction response is what carries it --
+//     the reply blinks in and vanishes.
+//
+// What is left is the one path that answers with none of the three: /play
+// editing the guild's music status message, a channel message it owns. That
+// placeholder really is orphaned, and it is the only one to remove.
+//
+// A command runs on one goroutine, but the mutex is cheap and the alternative
+// is a rule about which goroutine may reply.
+type responseState struct {
+	mu       sync.Mutex
+	deferred bool
+	answered bool
+}
+
+func (s *responseState) deferredNow() {
+	s.mu.Lock()
+	s.deferred = true
+	s.mu.Unlock()
+}
+
+func (s *responseState) answeredNow() {
+	s.mu.Lock()
+	s.answered = true
+	s.mu.Unlock()
+}
+
+// takePending reports whether a placeholder is owed an answer, and claims it:
+// a second call returns false, so the delete cannot be issued twice.
+func (s *responseState) takePending() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.deferred || s.answered {
+		return false
+	}
+	s.answered = true
+	return true
 }
 
 func (r *Responder) RespondEmbed(embed *cmdadapter.Embed, ephemeral bool) error {
@@ -247,7 +275,13 @@ func (r *Responder) ReplaceMessage(embed *cmdadapter.Embed) error {
 }
 
 func (r *Responder) followup(create discord.MessageCreate) (*discord.Message, error) {
-	return r.event.Client().Rest.CreateFollowupMessage(r.appID, r.token, create)
+	msg, err := r.event.Client().Rest.CreateFollowupMessage(r.appID, r.token, create)
+	if err == nil {
+		// The caller saw a reply, so the placeholder is spent. Deleting the
+		// original response now would take an ephemeral followup with it.
+		r.markAnswered()
+	}
+	return msg, err
 }
 
 func (r *Responder) editResponse(update discord.MessageUpdate) error {
