@@ -336,7 +336,7 @@ func (s *Service) UpdatePlaybackStatus(from cmdadapter.Interaction, guildID stri
 		return nil
 	}
 
-	channelID, messageID, err := from.FollowupEmbedMessage(embed)
+	channelID, messageID, err := from.AnswerEmbedMessage(embed)
 	if err != nil {
 		return err
 	}

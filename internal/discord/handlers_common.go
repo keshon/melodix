@@ -61,6 +61,22 @@ func (b *Bot) runGuardedInteraction(
 		_ = r.RespondEmbed(&cmdadapter.Embed{Description: msg}, true)
 	}
 
+	// A command that answered through a followup, or by editing a message it
+	// owns, leaves the deferred placeholder with nothing to replace it. That
+	// is a legitimate way to answer -- /play reports into the guild's music
+	// status message -- so the placeholder is cleared here rather than each
+	// command being asked to remember. A normally answered interaction makes
+	// this a no-op.
+	defer func() {
+		if r == nil {
+			return
+		}
+		if err := r.ResolveDeferred(); err != nil {
+			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).
+				Msg("deferred_placeholder_unresolved")
+		}
+	}()
+
 	b.runWithCommandContext(commandRunOptions{
 		onBusy: func(err error) {
 			b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_slot_busy")

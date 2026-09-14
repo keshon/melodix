@@ -116,8 +116,9 @@ func (stubResponder) FollowupEmbed(*Embed, bool) error                     { ret
 func (stubResponder) FollowupEmbedWithComponents(*Embed, []ActionRow) error {
 	return nil
 }
-func (stubResponder) FollowupEmbedMessage(*Embed) (string, string, error) {
+func (stubResponder) AnswerEmbedMessage(*Embed) (string, string, error) {
 	return "", "", nil
 }
 func (stubResponder) EditResponseText(string) error { return nil }
 func (stubResponder) ReplaceMessage(*Embed) error   { return nil }
+func (stubResponder) ResolveDeferred() error        { return nil }

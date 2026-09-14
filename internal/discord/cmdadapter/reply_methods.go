@@ -45,11 +45,11 @@ func editResponse(r Responder, content string) error {
 	return r.EditResponseText(content)
 }
 
-func followupEmbedMessage(r Responder, embed *Embed) (string, string, error) {
+func answerEmbedMessage(r Responder, embed *Embed) (string, string, error) {
 	if r == nil {
 		return "", "", nil
 	}
-	return r.FollowupEmbedMessage(embed)
+	return r.AnswerEmbedMessage(embed)
 }
 
 func canJoinVoice(api SessionAPI, channelID string) (bool, error) {
@@ -144,8 +144,8 @@ func (c *SlashInteractionContext) CanJoinVoice(channelID string) (bool, error) {
 	return canJoinVoice(c.API, channelID)
 }
 
-func (c *SlashInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
-	return followupEmbedMessage(c.Responder, embed)
+func (c *SlashInteractionContext) AnswerEmbedMessage(embed *Embed) (string, string, error) {
+	return answerEmbedMessage(c.Responder, embed)
 }
 
 // --- ComponentInteractionContext ---
@@ -182,8 +182,8 @@ func (c *ComponentInteractionContext) CanJoinVoice(channelID string) (bool, erro
 	return canJoinVoice(c.API, channelID)
 }
 
-func (c *ComponentInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
-	return followupEmbedMessage(c.Responder, embed)
+func (c *ComponentInteractionContext) AnswerEmbedMessage(embed *Embed) (string, string, error) {
+	return answerEmbedMessage(c.Responder, embed)
 }
 
 // ReplaceMessage answers a component interaction by rewriting the message it
@@ -230,8 +230,8 @@ func (c *MessageApplicationCommandContext) CanJoinVoice(channelID string) (bool,
 	return canJoinVoice(c.API, channelID)
 }
 
-func (c *MessageApplicationCommandContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
-	return followupEmbedMessage(c.Responder, embed)
+func (c *MessageApplicationCommandContext) AnswerEmbedMessage(embed *Embed) (string, string, error) {
+	return answerEmbedMessage(c.Responder, embed)
 }
 
 // Interaction is what a shared helper needs from an invocation, whichever kind
@@ -256,9 +256,9 @@ type Interaction interface {
 	// CanJoinVoice reports whether the bot may connect and speak in a channel.
 	CanJoinVoice(channelID string) (bool, error)
 
-	// FollowupEmbedMessage posts a followup and reports where it landed, so a
-	// caller that means to edit it later can find it again. The guild's music
-	// status message works this way: created from an interaction, edited for
-	// as long as the track plays, which is well past the token's expiry.
-	FollowupEmbedMessage(embed *Embed) (channelID, messageID string, err error)
+	// AnswerEmbedMessage makes the embed the interaction's own answer and
+	// reports where it landed, so a caller that means to edit it later can
+	// find it again. See Responder for why it answers rather than following
+	// up.
+	AnswerEmbedMessage(embed *Embed) (channelID, messageID string, err error)
 }

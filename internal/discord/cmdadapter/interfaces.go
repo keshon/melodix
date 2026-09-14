@@ -36,11 +36,19 @@ type Responder interface {
 	// buttons of a chooser they asked for.
 	FollowupEmbedWithComponents(embed *Embed, rows []ActionRow) error
 
-	// FollowupEmbedMessage posts a followup and reports where it landed, so a
-	// caller that means to edit it later can find it again. The guild's music
-	// status message works this way: created from an interaction, edited for
-	// as long as the track plays, which is well past the token's expiry.
-	FollowupEmbedMessage(embed *Embed) (channelID, messageID string, err error)
+	// AnswerEmbedMessage makes the embed the interaction's own answer and
+	// reports where it landed, so a caller that means to edit it later can
+	// find it again.
+	//
+	// The guild's music status message works this way: created from the
+	// interaction that started playback, then edited for as long as the track
+	// plays -- well past the token's expiry, so the later edits go through
+	// the channel rather than the interaction.
+	//
+	// It answers rather than posting a followup on purpose. A followup leaves
+	// the deferred placeholder spinning beside the message it just created,
+	// which is two messages for one reply and one of them says nothing.
+	AnswerEmbedMessage(embed *Embed) (channelID, messageID string, err error)
 
 	// EditResponseText replaces the original reply with plain text, which is
 	// the fallback when an embed could not be delivered.
@@ -50,6 +58,20 @@ type Responder interface {
 	// it came from, which is how a chooser is consumed: the buttons go away
 	// with the same click that acts on them, so nothing can be pressed twice.
 	ReplaceMessage(embed *Embed) error
+
+	// ResolveDeferred removes the "thinking" placeholder when an interaction
+	// was deferred and then answered some other way.
+	//
+	// Deferring posts a visible placeholder, and only editing the original
+	// response replaces it -- a followup adds a message beside it and leaves
+	// it spinning, and so does editing a message the command owns. Several
+	// commands answer exactly that way on purpose: /play reports into the
+	// guild's music status message rather than replying, so its placeholder
+	// had nothing to resolve it and sat there until Discord gave up on it.
+	//
+	// Calling this when the interaction was answered normally does nothing,
+	// so the dispatcher can call it unconditionally.
+	ResolveDeferred() error
 }
 
 // SessionAPI is what a command asks of the connection rather than of one

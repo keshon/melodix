@@ -3,6 +3,7 @@ package reply
 import (
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/disgoorg/disgo/bot"
@@ -35,6 +36,15 @@ type Responder struct {
 	// go through REST rather than through the event.
 	appID snowflake.ID
 	token string
+
+	// deferred and answered track what became of the original response, so
+	// ResolveDeferred can tell a placeholder that is still owed an answer
+	// from one that has already been replaced. A command runs on one
+	// goroutine, but the mutex is cheap and the alternative is a rule about
+	// which goroutine may reply.
+	mu       sync.Mutex
+	deferred bool
+	answered bool
 }
 
 var _ cmdadapter.Responder = (*Responder)(nil)
@@ -82,9 +92,42 @@ func alreadyAcknowledged(err error) bool {
 func (r *Responder) AckDeferred(ephemeral bool) error {
 	err := r.event.DeferCreateMessage(ephemeral)
 	if alreadyAcknowledged(err) {
+		r.markDeferred()
 		return nil
 	}
+	if err == nil {
+		r.markDeferred()
+	}
 	return err
+}
+
+func (r *Responder) markDeferred() {
+	r.mu.Lock()
+	r.deferred = true
+	r.mu.Unlock()
+}
+
+func (r *Responder) markAnswered() {
+	r.mu.Lock()
+	r.answered = true
+	r.mu.Unlock()
+}
+
+// ResolveDeferred removes a placeholder nothing replaced. See
+// cmdadapter.Responder for why commands can legitimately leave one.
+func (r *Responder) ResolveDeferred() error {
+	r.mu.Lock()
+	pending := r.deferred && !r.answered
+	if pending {
+		// Whatever happens next, this placeholder is dealt with once.
+		r.answered = true
+	}
+	r.mu.Unlock()
+
+	if !pending {
+		return nil
+	}
+	return r.event.Client().Rest.DeleteInteractionResponse(r.appID, r.token)
 }
 
 func (r *Responder) RespondEmbed(embed *cmdadapter.Embed, ephemeral bool) error {
@@ -93,6 +136,7 @@ func (r *Responder) RespondEmbed(embed *cmdadapter.Embed, ephemeral bool) error 
 		Flags:  ephemeralFlags(ephemeral),
 	})
 	if err == nil {
+		r.markAnswered()
 		return nil
 	}
 	if alreadyAcknowledged(err) {
@@ -112,6 +156,7 @@ func (r *Responder) RespondText(content string, ephemeral bool) error {
 		Flags:   ephemeralFlags(ephemeral),
 	})
 	if err == nil {
+		r.markAnswered()
 		return nil
 	}
 	if alreadyAcknowledged(err) {
@@ -134,6 +179,10 @@ func (r *Responder) RespondEmbedWithFile(embed *cmdadapter.Embed, src io.Reader,
 		Files:  []*discord.File{discord.NewFile(fileName, "", src)},
 	}
 	err := r.event.CreateMessage(create)
+	if err == nil {
+		r.markAnswered()
+		return nil
+	}
 	if alreadyAcknowledged(err) {
 		_, ferr := r.followup(create)
 		return ferr
@@ -158,11 +207,15 @@ func (r *Responder) FollowupEmbedWithComponents(embed *cmdadapter.Embed, rows []
 	return err
 }
 
-func (r *Responder) FollowupEmbedMessage(embed *cmdadapter.Embed) (string, string, error) {
-	msg, err := r.followup(discord.MessageCreate{Embeds: Embeds(embed)})
+// AnswerEmbedMessage replaces the deferred placeholder with the embed, rather
+// than posting a followup beside it. See cmdadapter.Responder.
+func (r *Responder) AnswerEmbedMessage(embed *cmdadapter.Embed) (string, string, error) {
+	msg, err := r.event.Client().Rest.UpdateInteractionResponse(r.appID, r.token,
+		discord.MessageUpdate{Embeds: &[]discord.Embed{Embed(embed)}})
 	if err != nil {
 		return "", "", err
 	}
+	r.markAnswered()
 	if msg == nil {
 		return "", "", nil
 	}
@@ -183,10 +236,14 @@ func (r *Responder) ReplaceMessage(embed *cmdadapter.Embed) error {
 		// answer rather than silently doing nothing.
 		return r.RespondEmbed(embed, false)
 	}
-	return r.component.UpdateMessage(discord.MessageUpdate{
+	err := r.component.UpdateMessage(discord.MessageUpdate{
 		Embeds:     &[]discord.Embed{Embed(embed)},
 		Components: &[]discord.LayoutComponent{},
 	})
+	if err == nil {
+		r.markAnswered()
+	}
+	return err
 }
 
 func (r *Responder) followup(create discord.MessageCreate) (*discord.Message, error) {
@@ -195,6 +252,9 @@ func (r *Responder) followup(create discord.MessageCreate) (*discord.Message, er
 
 func (r *Responder) editResponse(update discord.MessageUpdate) error {
 	_, err := r.event.Client().Rest.UpdateInteractionResponse(r.appID, r.token, update)
+	if err == nil {
+		r.markAnswered()
+	}
 	return err
 }
 
