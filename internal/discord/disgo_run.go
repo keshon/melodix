@@ -18,10 +18,11 @@ import (
 	"github.com/keshon/melodix/internal/discord/disgosync"
 	"github.com/keshon/melodix/internal/discord/execguard"
 	"github.com/keshon/melodix/internal/discord/voice/sink"
+	"github.com/keshon/melodix/internal/discord/watchdog"
 	musicsink "github.com/keshon/melodix/pkg/music/sink"
 )
 
-// disgoConn is disgo's connection.
+// disgoConn is the live disgo connection.
 type disgoConn struct {
 	client     *bot.Client
 	dave       *sink.DaveRegistry
@@ -36,12 +37,6 @@ func (c disgoConn) API() cmdadapter.BotAPI {
 }
 
 // NewSinkProvider builds the audio path on disgo's voice manager.
-//
-// VOICE_BACKEND does not get a vote here. It chooses between two audio paths
-// that both run on discordgo's gateway, which is what the spike proved is
-// possible; running the fork's voice stack on a disgo gateway is the mirror
-// image and nothing has ever needed it. A disgo gateway therefore always
-// carries disgo's voice.
 func (c disgoConn) NewSinkProvider(guildID string) musicsink.Provider {
 	gid, err := snowflake.Parse(guildID)
 	if err != nil {
@@ -51,16 +46,10 @@ func (c disgoConn) NewSinkProvider(guildID string) musicsink.Provider {
 	return sink.NewDisgoSinkProvider(c.client.VoiceManager, c.dave, gid, c.voiceDelay, c.log)
 }
 
-// runDisgoSession opens one session on disgo and blocks until ctx is
-// cancelled or the session is judged unhealthy.
-//
-// It is the same shape as the discordgo one -- open, wire, watch, block --
-// with two differences worth naming. Handlers are typed events rather than a
-// function whose signature decides what it receives, so a handler that takes
-// the wrong event is a compile error rather than one that never fires. And
-// the heartbeat is an event, so the watchdog reads a timestamp instead of
-// taking a lock the library holds across gateway reads.
-func (b *Bot) runDisgoSession(ctx context.Context) error {
+// RunSession opens one Discord session and blocks until ctx is cancelled or
+// the session is judged unhealthy (transient gateway reconnects do not exit
+// this function).
+func (b *Bot) RunSession(ctx context.Context) error {
 	disconnected := make(chan struct{})
 	notifyUnhealthy := b.makeSessionUnhealthyNotifier(disconnected)
 
@@ -73,13 +62,16 @@ func (b *Bot) runDisgoSession(ctx context.Context) error {
 	)
 
 	dave := sink.NewDaveRegistry()
+	tracker := watchdog.NewTracker()
 
 	session, err := disgosession.New(disgosession.Options{
 		Token:            b.cfg.DiscordToken,
 		Log:              b.log,
 		VoiceManagerOpts: dave.ManagerOptions(disgosession.SlogLogger(b.log)),
 		Listeners: []bot.EventListener{
+			bot.NewListenerFunc(func(_ *events.Raw) { tracker.MarkWSNow() }),
 			bot.NewListenerFunc(func(e *events.Ready) {
+				tracker.MarkReadyNow()
 				b.onDisgoReady(e, syncer)
 			}),
 			bot.NewListenerFunc(func(e *events.GuildJoin) {
@@ -139,7 +131,7 @@ func (b *Bot) runDisgoSession(ctx context.Context) error {
 		})
 	}()
 
-	b.startDisgoHealthWatcher(sessionCtx, session, notifyUnhealthy)
+	b.startHealthWatcher(sessionCtx, session, tracker, notifyUnhealthy)
 
 	select {
 	case <-ctx.Done():
@@ -151,65 +143,45 @@ func (b *Bot) runDisgoSession(ctx context.Context) error {
 	}
 }
 
-// startDisgoHealthWatcher watches for a gateway that has stopped talking.
+// startHealthWatcher watches for a gateway that has stopped talking.
 //
-// It is one watcher rather than the fork's two. The second one existed to
-// notice a session whose lock would never come free, which is a discordgo
-// pathology: it holds the session write lock across gateway reads that carry
-// no deadline, so a black-holed socket parks every reader behind it. disgo
-// records the heartbeat as an event, so there is no lock to wedge and nothing
-// to time out reading -- see disgosession.LastHeartbeatAck.
-func (b *Bot) startDisgoHealthWatcher(
+// One watcher, not two. The fork needed a second to notice a session whose
+// lock would never come free -- it held the session write lock across gateway
+// reads that carried no deadline, so a black-holed socket parked every reader
+// behind it. disgo records the heartbeat as an event, so there is no lock to
+// wedge and nothing to time out reading.
+func (b *Bot) startHealthWatcher(
 	ctx context.Context,
 	session *disgosession.Session,
+	tracker *watchdog.Tracker,
 	notifyUnhealthy func(),
 ) {
-	timeout := b.cfg.WSSilenceTimeout
-	if timeout <= 0 {
-		timeout = 2 * time.Minute
-	}
-
-	go func() {
-		// The settle delay matches the fork's: a session that has just
-		// connected has no traffic yet, and restarting it for that would be a
-		// loop rather than a recovery.
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(15 * time.Second):
-		}
-
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				last, ok := session.LastEvent()
-				if !ok {
-					// Connected and nothing has arrived at all. Raw events are
-					// on, so this really is silence rather than a filter.
-					b.log.Warn().Msg("gateway_no_traffic_since_connect")
-					notifyUnhealthy()
-					return
-				}
-				since := time.Since(last)
-				if since <= timeout {
-					continue
-				}
-
-				ev := b.log.Warn().
-					Dur("since_last_ws", since).
-					Dur("timeout", timeout)
-				if ack, acked := session.LastHeartbeatAck(); acked {
-					ev = ev.Dur("since_last_heartbeat_ack", time.Since(ack))
-				}
-				ev.Msg("gateway_silent")
-				notifyUnhealthy()
-				return
-			}
-		}
-	}()
+	go watchdog.NewWSSilence(
+		tracker,
+		b.cfg.WSSilenceTimeout,
+		session.Latency,
+		func(meta watchdog.WSSilenceMeta) {
+			b.log.Warn().
+				Dur("since_last_ws", meta.SinceLastWS).
+				Dur("since_last_heartbeat_ack", meta.SinceLastHeartbeatAck).
+				Dur("heartbeat_latency", meta.HeartbeatLatency).
+				Dur("timeout", meta.Timeout).
+				Msg("gateway_silent")
+			notifyUnhealthy()
+		},
+		watchdog.WSSilenceOptions{
+			SettleDelay: 15 * time.Second,
+			Tick:        10 * time.Second,
+			// The watchdog reads a false here as "the ACK could not be read
+			// at all", which for the fork meant a mutex nobody would release
+			// and was treated as terminal. disgo records the ACK as an event,
+			// so the read cannot fail and this is always true. A session that
+			// has not been ACKed yet reports the zero time, which the watchdog
+			// already handles by deciding on gateway silence alone.
+			LastHeartbeatAck: func() (time.Time, bool) {
+				ack, _ := session.LastHeartbeatAck()
+				return ack, true
+			},
+		},
+	).Run(ctx)
 }

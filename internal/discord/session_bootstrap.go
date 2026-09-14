@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/voice"
@@ -26,10 +25,10 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 		log:     log,
 	}
 	// Voice service must outlive a single Discord session so playback/queues
-	// survive reconnects. It is handed two functions rather than a session:
-	// one that reaches the current connection through the lock that guards it,
-	// and one that builds a guild's audio path. Between them they are the
-	// service's entire contact with the library underneath.
+	// survive reconnects. It is handed two functions rather than a connection:
+	// one that reaches the live one, and one that builds a guild's audio path.
+	// Between them they are the service's entire contact with the library
+	// underneath.
 	b.voice = voice.NewVoiceService(b.sessionAPI, b.newSinkProvider, cfg, storage, log)
 	b.sessionCtx.Store(&sessionCtxHolder{ctx: context.Background()})
 	b.cmdGuard.Store(&cmdGuardHolder{g: disabledGuard})
@@ -48,13 +47,6 @@ func (b *Bot) stopAllPlayers() {
 		b.voice.StopAllPlayers()
 	}
 	b.log.Info().Msg("players_all_stopped")
-}
-
-// configureIntents takes the session rather than reading b.dg, which the
-// caller already holds: b.dg is guarded by b.mu and reading it unlocked here
-// only worked because this happens to run on the goroutine that wrote it.
-func (b *Bot) configureIntents(dg *discordgo.Session) {
-	dg.Identify.Intents = discordgo.IntentsAll
 }
 
 // IsSessionUnhealthyError reports whether an error means we should fast-restart

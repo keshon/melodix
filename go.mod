@@ -3,8 +3,10 @@ module github.com/keshon/melodix
 go 1.26.0
 
 require (
-	github.com/bwmarrin/discordgo v0.29.0
 	github.com/caarlos0/env/v11 v11.4.1
+	github.com/disgoorg/disgo v0.19.6
+	github.com/disgoorg/godave v0.2.0
+	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/ebitengine/oto/v3 v3.4.1
 	github.com/godeps/opus v1.0.3
 	github.com/joho/godotenv v1.5.1
@@ -19,11 +21,8 @@ require (
 
 require (
 	github.com/bitly/go-simplejson v0.5.1 // indirect
-	github.com/disgoorg/disgo v0.19.6 // indirect
-	github.com/disgoorg/godave v0.2.0 // indirect
 	github.com/disgoorg/json/v2 v2.0.0 // indirect
 	github.com/disgoorg/omit v1.0.0 // indirect
-	github.com/disgoorg/snowflake/v2 v2.0.3 // indirect
 	github.com/dlclark/regexp2/v2 v2.7.1 // indirect
 	github.com/dop251/goja v0.0.0-20260806115107-493f22071ef6 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
@@ -41,5 +40,3 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 )
-
-replace github.com/bwmarrin/discordgo => ./pkg/discordgo-fork-dev

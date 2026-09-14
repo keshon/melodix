@@ -10,6 +10,11 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
+// EmbedColor is the bot's colour, used by every embed that does not choose
+// one of its own. It describes the bot rather than the library that renders
+// it, which is why it lives here rather than with the wire types.
+const EmbedColor = 0xb01e66
+
 // Music status embeds shared by the slash handlers (synchronous updates) and
 // the voice service's per-player status watcher (async updates: auto-advance,
 // queue end). They live here because voice.Service cannot import

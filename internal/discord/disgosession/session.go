@@ -37,9 +37,6 @@ type Session struct {
 	// every reader. disgo delivers the ack as an event, so it is recorded
 	// here on arrival and read without contending with anything.
 	lastHeartbeatAck time.Time
-	// lastEvent is when any gateway traffic last arrived, which is what the
-	// silence watchdog actually measures.
-	lastEvent time.Time
 }
 
 // Options configure a session.
@@ -57,10 +54,10 @@ type Options struct {
 
 // New builds a disgo client without connecting.
 //
-// Raw events are enabled because the silence watchdog measures "anything at
-// all arrived", not "an event we handle arrived" -- a gateway delivering only
-// events this bot ignores is still alive, and treating that as silence is how
-// a healthy session gets restarted.
+// Raw events are enabled for the caller's silence watchdog, which measures
+// "anything at all arrived" rather than "an event we handle arrived" -- a
+// gateway delivering only events this bot ignores is still alive, and treating
+// that as silence is how a healthy session gets restarted.
 func New(opts Options) (*Session, error) {
 	s := &Session{log: opts.Log.With().Str("component", "disgo").Logger()}
 
@@ -69,7 +66,6 @@ func New(opts Options) (*Session, error) {
 	}))
 
 	listeners := []bot.EventListener{
-		bot.NewListenerFunc(s.onRaw),
 		bot.NewListenerFunc(s.onHeartbeatAck),
 	}
 	listeners = append(listeners, opts.Listeners...)
@@ -127,13 +123,6 @@ func (s *Session) LastHeartbeatAck() (time.Time, bool) {
 	return s.lastHeartbeatAck, !s.lastHeartbeatAck.IsZero()
 }
 
-// LastEvent reports when gateway traffic last arrived.
-func (s *Session) LastEvent() (time.Time, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.lastEvent, !s.lastEvent.IsZero()
-}
-
 // Latency is the round trip to the gateway.
 func (s *Session) Latency() time.Duration {
 	if s.client == nil || s.client.Gateway == nil {
@@ -142,17 +131,10 @@ func (s *Session) Latency() time.Duration {
 	return s.client.Gateway.Latency()
 }
 
-func (s *Session) onRaw(_ *events.Raw) {
-	s.mu.Lock()
-	s.lastEvent = time.Now()
-	s.mu.Unlock()
-}
-
 func (s *Session) onHeartbeatAck(_ *events.HeartbeatAck) {
 	now := time.Now()
 	s.mu.Lock()
 	s.lastHeartbeatAck = now
-	s.lastEvent = now
 	s.mu.Unlock()
 }
 

@@ -12,12 +12,8 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
-
-// EmbedColor is the default colour for an embed that did not choose one. It is
-// the same value the discordgo backend uses, because it is the bot's colour
-// rather than the library's.
-const EmbedColor = 0xb01e66
 
 // respondable is what both interaction events can do. Keeping it as an
 // interface rather than two Responder types means the six reply methods are
@@ -219,7 +215,7 @@ var (
 	_ cmdadapter.BotAPI     = (*API)(nil)
 )
 
-func (a *API) EmbedColor() int { return EmbedColor }
+func (a *API) EmbedColor() int { return reply.EmbedColor }
 
 func (a *API) Latency() time.Duration {
 	if a.client == nil || a.client.Gateway == nil {

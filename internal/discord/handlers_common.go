@@ -76,3 +76,17 @@ func (b *Bot) runGuardedInteraction(
 		},
 	}, fn)
 }
+
+// matchesComponentID reports whether a component customID belongs to a command.
+// CustomIDs follow the convention "commandName", "commandName:...", or
+// "commandName_...".
+func matchesComponentID(customID, commandName string) bool {
+	if customID == commandName {
+		return true
+	}
+	if len(customID) > len(commandName) {
+		sep := customID[len(commandName)]
+		return (sep == ':' || sep == '_') && customID[:len(commandName)] == commandName
+	}
+	return false
+}

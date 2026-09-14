@@ -65,9 +65,9 @@ var project = struct {
 	docPath:              []string{"docs", "conventions.md"},
 	libraryPrefix:        "pkg/music/",
 	skipDirs:             []string{"pkg/discordgo-fork-dev", ".git"},
-	bannedLibraryImports: []string{"discordgo", "melodix/internal"},
+	bannedLibraryImports: []string{"discordgo", "disgo", "melodix/internal"},
 	discordAdapterPrefix: "internal/discord/",
-	discordLibraries:     []string{"bwmarrin/discordgo", "disgoorg/disgo"},
+	discordLibraries:     []string{"disgoorg/disgo", "bwmarrin/discordgo"},
 }
 
 // maxCommentCols is the wrap width docs/conventions.md states for comments. A

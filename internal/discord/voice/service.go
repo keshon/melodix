@@ -25,9 +25,8 @@ import (
 type APIGetter func() cmdadapter.BotAPI
 
 // SinkProviderFactory builds the audio path for one guild. It is supplied by
-// whichever backend is running, which is the whole of what VOICE_BACKEND
-// chooses -- the service itself does not know which library carries the
-// packets, and does not need to.
+// whatever is holding the connection -- the service itself does not know which
+// library carries the packets, and does not need to.
 type SinkProviderFactory func(guildID string) musicsink.Provider
 
 // UserVoiceState is where a user is connected, in the shape a caller needs to

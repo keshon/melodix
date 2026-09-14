@@ -6,6 +6,18 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// sessionCloseTimeout bounds the teardown of one session. disgo's Close walks
+// the voice manager, the gateway and the REST rate limiter in turn, each
+// waiting on the last, and the usual reason a session is being closed early is
+// that one of them has stopped answering.
+const sessionCloseTimeout = 15 * time.Second
+
+// playersStopTimeout bounds stopping playback across every guild. Each player
+// leaves its voice channel, which is a round trip, and they are stopped one
+// after another -- so a server that has stopped answering costs this once
+// rather than once per guild.
+const playersStopTimeout = 10 * time.Second
+
 // closeWithin runs a teardown step, gives up waiting for it after timeout, and
 // records how long it actually took.
 //
