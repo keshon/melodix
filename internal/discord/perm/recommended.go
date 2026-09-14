@@ -1,6 +1,6 @@
 package perm
 
-import "github.com/bwmarrin/discordgo"
+import "github.com/disgoorg/disgo/discord"
 
 // recommendedBot is what the bot asks for in its invite link, in the order the
 // README lists them.
@@ -11,14 +11,14 @@ import "github.com/bwmarrin/discordgo"
 // README to decide what they were granting was told wrong. Deriving both from
 // here means the next permission added shows up in both places or neither.
 var recommendedBot = []int64{
-	discordgo.PermissionViewChannel,
-	discordgo.PermissionSendMessages,
-	discordgo.PermissionEmbedLinks,
-	discordgo.PermissionAttachFiles,
-	discordgo.PermissionReadMessageHistory,
-	discordgo.PermissionManageMessages,
-	discordgo.PermissionManageRoles,
-	discordgo.PermissionUseApplicationCommands,
+	int64(discord.PermissionViewChannel),
+	int64(discord.PermissionSendMessages),
+	int64(discord.PermissionEmbedLinks),
+	int64(discord.PermissionAttachFiles),
+	int64(discord.PermissionReadMessageHistory),
+	int64(discord.PermissionManageMessages),
+	int64(discord.PermissionManageRoles),
+	int64(discord.PermissionUseApplicationCommands),
 }
 
 // RecommendedBotMask is the permissions bitmask for the OAuth2 invite URL.
