@@ -4,14 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"time"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/discord/voice"
-	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
@@ -67,30 +63,23 @@ func IsSessionUnhealthyError(err error) bool {
 	return errors.Is(err, ErrSessionUnhealthy)
 }
 
-// sessionAPI reaches the current session through the lock that guards it, in
-// the neutral shape the voice service speaks. A nil return means there is no
-// session right now, which is a normal state between restarts.
+// sessionAPI is the neutral surface over the live connection, or nil when
+// there is none -- which is a normal state between restarts.
 func (b *Bot) sessionAPI() cmdadapter.BotAPI {
-	b.mu.RLock()
-	dg := b.dg
-	b.mu.RUnlock()
-	if dg == nil {
+	c := b.currentConn()
+	if c == nil {
 		return nil
 	}
-	return reply.NewSessionAPI(dg)
+	return c.API()
 }
 
-// newSinkProvider builds the audio path for one guild. This is the discordgo
-// one; VOICE_BACKEND chooses which of these the service is given.
+// newSinkProvider builds the audio path for one guild on the live connection.
+// A guild that asks between sessions gets a provider that cannot join, which
+// is the same answer it got from a nil session before.
 func (b *Bot) newSinkProvider(guildID string) musicsink.Provider {
-	delay := time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond
-	return sink.NewDiscordSinkProvider(b.session, guildID, delay, b.log)
-}
-
-// session is the raw session the discordgo sink provider needs; it joins voice
-// channels through the library directly rather than through the neutral API.
-func (b *Bot) session() *discordgo.Session {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.dg
+	c := b.currentConn()
+	if c == nil {
+		return deadSinkProvider{}
+	}
+	return c.NewSinkProvider(guildID)
 }

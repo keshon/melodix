@@ -31,6 +31,7 @@ type Bot struct {
 
 	sessionCtx atomic.Value // *sessionCtxHolder
 	cmdGuard   atomic.Value // *cmdGuardHolder
+	conn       atomic.Value // *connHolder
 }
 
 type sessionCtxHolder struct {

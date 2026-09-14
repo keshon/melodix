@@ -16,10 +16,30 @@ import (
 	"github.com/keshon/melodix/internal/discord/watchdog"
 )
 
-// RunSession opens one Discord session and blocks until ctx is cancelled or the
-// API probe decides the session is unhealthy (transient gateway reconnects do
-// not exit this function).
+// RunSession opens one Discord session and blocks until ctx is cancelled or
+// the session is judged unhealthy (transient gateway reconnects do not exit
+// this function).
+//
+// Which library carries it is DISCORD_BACKEND, read once here. It cannot
+// change while running, so rolling back is a restart -- which is the same act
+// as redeploying the previous binary, and the reason this is scaffolding
+// rather than a feature.
 func (b *Bot) RunSession(ctx context.Context) error {
+	backend, ok := ParseBackend(b.cfg.DiscordBackend)
+	if !ok {
+		b.log.Warn().Str("value", b.cfg.DiscordBackend).
+			Str("using", string(backend)).Msg("discord_backend_unknown")
+	}
+	b.log.Info().Str("backend", string(backend)).Msg("discord_backend_selected")
+
+	if backend == BackendDisgo {
+		return b.runDisgoSession(ctx)
+	}
+	return b.runDiscordgoSession(ctx)
+}
+
+// runDiscordgoSession opens one session on the vendored fork.
+func (b *Bot) runDiscordgoSession(ctx context.Context) error {
 	dg, err := discordgo.New("Bot " + b.cfg.DiscordToken)
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
@@ -41,6 +61,13 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	b.cmdSyncer = cmdsync.NewSyncer(dg, command.DefaultRegistry, b.log)
 	attachDiscordgoLogger(b.log)
 	b.mu.Unlock()
+
+	b.setConn(discordgoConn{
+		dg:         dg,
+		voiceDelay: time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond,
+		log:        b.log,
+	})
+	defer b.clearConn()
 
 	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(b.cfg.CommandTimeout, b.cfg.CommandParallelism)})
 
