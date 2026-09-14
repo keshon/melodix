@@ -64,7 +64,7 @@ var project = struct {
 }{
 	docPath:              []string{"docs", "conventions.md"},
 	libraryPrefix:        "pkg/music/",
-	skipDirs:             []string{"pkg/discordgo-fork-dev", ".git"},
+	skipDirs:             []string{".git"},
 	bannedLibraryImports: []string{"discordgo", "disgo", "melodix/internal"},
 	discordAdapterPrefix: "internal/discord/",
 	discordLibraries:     []string{"disgoorg/disgo", "bwmarrin/discordgo"},

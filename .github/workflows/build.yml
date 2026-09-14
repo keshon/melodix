@@ -33,17 +33,6 @@ jobs:
                   CGO_ENABLED: 1
               run: go test -race ./...
 
-            # pkg/discordgo-fork-dev is its own module, so the run above walks
-            # straight past it. Only the tests written here are selected: the
-            # vendored suite reaches the real Discord API, and vet trips on
-            # upstream code we would rather not diverge from over a format
-            # string.
-            - name: Test (vendored discordgo, our patches only)
-              working-directory: pkg/discordgo-fork-dev
-              env:
-                  CGO_ENABLED: 1
-              run: go test -race -vet=off -run 'TestVoiceHandshake|TestWaitForDAVEReady|TestHeartbeatLatency' ./...
-
     lint:
         name: Lint
         runs-on: ubuntu-latest

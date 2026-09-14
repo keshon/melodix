@@ -18,8 +18,8 @@ it. What remains is under [What is left](#what-is-left).
 `dave-godave-seam` is one commit on top of `main`, squashed. It carries, in
 order of how the work happened:
 
-- `LOG_LEVEL` reaching discordgo, and named close codes — the diagnostics
-  without which none of the findings below were readable.
+- `LOG_LEVEL` reaching the Discord library, and named close codes — the
+  diagnostics without which none of the findings below were readable.
 - Holding frames rather than sending them unencrypted, in both of the ways an
   epoch dies.
 - `godave.Callbacks` over the connection's senders, receivers keyed by user,
@@ -38,7 +38,7 @@ need no separate merge.
 
 Four links, all now closed.
 
-**1. The implementation could not commit.** `pkg/discordgo-fork-dev/mls/` is a
+**1. The implementation could not commit.** The fork's `mls/` package was a
 joiner: it generates a key package, processes a Welcome, derives an exporter
 secret. It holds no ratchet tree state, so it cannot produce a commit. The
 proposals opcode (27) was received and dropped; an announced commit (29) was
@@ -157,12 +157,16 @@ in these logs.
 
 **Option A: put a `godave.Session` behind the fork.** Taken.
 
-The seam is the **interface**, not dave-go. `pkg/discordgo-fork-dev` depends on
+The seam is the **interface**, not dave-go. The voice stack depends on
 `github.com/disgoorg/godave` — two files, no transitive dependencies, no cgo —
 and melodix chooses the implementation at the composition root. `godave.Session`
-turned out to be the fork's opcode dispatch method for method, and `Ready()` is
-documented upstream as exactly the frame hold that `cc2ab4b` had arrived at
-independently.
+turned out to be the vendored fork's opcode dispatch method for method, and
+`Ready()` is documented upstream as exactly the frame hold that `cc2ab4b` had
+arrived at independently.
+
+That the interface was the seam is why the disgo migration did not touch any
+of this: `godave.SessionCreateFunc` is the type both libraries accepted, so
+dave-go crossed over as the same value. The fork is gone; this is not.
 
 The abstraction is not ours: disgo defined it, disgo consumes it, and dave-go
 asserts conformance at compile time. Changing crypto vendors later is a
@@ -237,7 +241,7 @@ choosing a different implementation is still a constructor change in melodix.
 - `daveRecoveryTimeout` on the spike branch is set to 5s against dave-go's 15s
   default, and has never been observed firing. The current branch does not set
   it at all and uses the library default.
-- The fork has three pre-existing `go vet` failures in `restapi.go` and
-  `restapi_test.go` (non-constant format strings) which make `go test ./...`
-  fail to build inside `pkg/discordgo-fork-dev`. Unrelated; use `-vet=off`
-  there. Melodix's own conventions checks skip the directory.
+- The vendored fork had three pre-existing `go vet` failures in `restapi.go`
+  and `restapi_test.go` that needed `-vet=off` to test inside it. It has since
+  been deleted, along with the CI step and the conventions skip that existed
+  for it.

@@ -118,9 +118,9 @@ serves under restrictions, and live streams stop after twenty-odd seconds;
 where a runtime is found, `pkg/music/parsers/ytdlp/runtime.go` selects the
 embedded web client on every invocation. Where none is found it passes no
 flags at all, because asking for that client without a runtime fails outright
-rather than degrading. `bwmarrin/discordgo`
-is replaced with a vendored fork at `pkg/discordgo-fork-dev` (panic fixes,
-stream handling).
+rather than degrading. Discord is `disgoorg/disgo`, and end-to-end voice
+encryption is `thomas-vilte/dave-go` — a pure-Go MLS implementation, which is
+what lets the release workflow cross-compile six targets with `CGO_ENABLED=0`.
 
 ---
 
@@ -379,22 +379,25 @@ There are three distinct failure classes here, each with its own mechanism:
    then reopens media at the current position without touching the media
    retry budget.
 3. **Session failures**, handled in `internal/discord`. A gateway-silence
-   watchdog (`WS_SILENCE_TIMEOUT`) plus a 30-second API probe with three
-   strikes marks the session unhealthy, and `DISCORD_UNHEALTHY_MODE` decides
-   what happens next (`restart-session`, `restart-voice`, or `ignore`).
-   `main.go` runs `RunSession` in a restart loop, and since the voice
-   service outlives individual sessions, queues and players survive
-   reconnects — sinks just get invalidated and re-acquired.
+   watchdog (`WS_SILENCE_TIMEOUT`) marks the session unhealthy, and
+   `DISCORD_UNHEALTHY_MODE` decides what happens next (`restart-session`,
+   `restart-voice`, or `ignore`). `main.go` runs `RunSession` in a restart
+   loop, and since the voice service outlives individual sessions, queues and
+   players survive reconnects — sinks just get invalidated and re-acquired.
 
-   Both watchdogs read the heartbeat ACK, and that read is bounded on
-   purpose. `discordgo` holds the session write lock across gateway reads
-   that carry no deadline, so a wedged session parks every reader — which in
-   server-domme once meant 22 hours of a dead gateway with nothing in the log,
-   because the two watchdogs that existed to report it were queued behind the
-   same mutex. `lastHeartbeatAck` gives up after a timeout and reports that as
-   its own unhealthy signal (`session_lock_wedged`), and `closeSession`
-   abandons a session whose close will not return, so the restart loop is
-   never stranded on the same lock.
+   One watchdog, where the vendored discordgo fork needed two. That fork held
+   the session write lock across gateway reads carrying no deadline, so a
+   wedged session parked every reader — which in server-domme once meant 22
+   hours of a dead gateway with nothing in the log, because both watchdogs
+   that existed to report it were queued behind the same mutex. disgo
+   delivers the heartbeat ACK as an event, so it is recorded on arrival and
+   read without contending with anything.
+
+   Teardown is still bounded and abandonable (`closeWithin`), for the reason
+   that outlived the fork: it is the last thing `RunSession` does, so a step
+   that never returns strands the restart loop and the bot a watchdog just
+   correctly declared dead never comes back. Every step logs its duration
+   under `shutdown_phase`.
 
 On the user-facing side: synchronous failures get answered directly by the
 handler, as an ephemeral embed. Asynchronous failures — a track dying
