@@ -14,6 +14,7 @@ import (
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
+	musicsink "github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/rs/zerolog"
 )
@@ -40,8 +41,11 @@ type Service struct {
 	log           zerolog.Logger
 	mu            sync.RWMutex
 	players       map[string]*player.Player
-	sinkProviders map[string]*sink.DiscordSinkProvider
+	sinkProviders map[string]musicsink.Provider
 	resolver      *resolve.Resolver
+	// disgoVoice is built on first use and only when VOICE_BACKEND selects it,
+	// so a bot on the default path never constructs a second voice manager.
+	disgoVoice *sink.DisgoVoice
 
 	guildMusicStatus map[string]guildMusicStatus
 	// guildMusicNotifyChannel is the text channel of the last music slash (/play,
@@ -59,7 +63,7 @@ func NewVoiceService(getSession SessionGetter, cfg *config.Config, store *storag
 		store:                   store,
 		log:                     log,
 		players:                 make(map[string]*player.Player),
-		sinkProviders:           make(map[string]*sink.DiscordSinkProvider),
+		sinkProviders:           make(map[string]musicsink.Provider),
 		guildMusicStatus:        make(map[string]guildMusicStatus),
 		guildMusicNotifyChannel: make(map[string]string),
 	}
@@ -143,7 +147,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	defer s.mu.Unlock()
 
 	if s.sinkProviders == nil {
-		s.sinkProviders = make(map[string]*sink.DiscordSinkProvider)
+		s.sinkProviders = make(map[string]musicsink.Provider)
 	}
 	if p, ok := s.players[guildID]; ok {
 		return p
@@ -153,8 +157,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	}
 	provider, ok := s.sinkProviders[guildID]
 	if !ok {
-		voiceDelay := time.Duration(s.cfg.VoiceReadyDelayMs) * time.Millisecond
-		provider = sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay, s.log)
+		provider = s.newSinkProvider(guildID)
 		s.sinkProviders[guildID] = provider
 	}
 	recoveryMode, ok := player.ParseTransportRecoveryMode(s.cfg.PlayerTransportRecoveryMode)
@@ -174,6 +177,31 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	s.players[guildID] = p
 	go s.watchPlayerStatus(guildID, p)
 	return p
+}
+
+// newSinkProvider builds the guild's sink provider on the configured backend.
+// Caller holds s.mu.
+//
+// The two backends are interchangeable behind sink.Provider and differ only in
+// which library carries the audio: see sink.Backend. A guild keeps whichever
+// it was built with for the life of the process, because the setting is read
+// once per provider and providers outlive individual voice connections.
+func (s *Service) newSinkProvider(guildID string) musicsink.Provider {
+	voiceDelay := time.Duration(s.cfg.VoiceReadyDelayMs) * time.Millisecond
+
+	backend, ok := sink.ParseBackend(s.cfg.VoiceBackend)
+	if !ok {
+		s.log.Warn().Str("value", s.cfg.VoiceBackend).Msg("unknown_voice_backend_using_discordgo")
+	}
+	s.log.Info().Str("guild_id", guildID).Str("backend", string(backend)).Msg("voice_backend_selected")
+
+	if backend == sink.BackendDisgo {
+		if s.disgoVoice == nil {
+			s.disgoVoice = sink.NewDisgoVoice(s.log)
+		}
+		return sink.NewDisgoSinkProvider(s.disgoVoice, s.getSession, guildID, voiceDelay, s.log)
+	}
+	return sink.NewDiscordSinkProvider(s.getSession, guildID, voiceDelay, s.log)
 }
 
 // watchPlayerStatus is the single long-lived consumer of the player's status
@@ -334,7 +362,7 @@ func (s *Service) StopAllPlayers() {
 // restarts.
 func (s *Service) InvalidateAllSinks() {
 	s.mu.RLock()
-	providers := make([]*sink.DiscordSinkProvider, 0, len(s.sinkProviders))
+	providers := make([]musicsink.Provider, 0, len(s.sinkProviders))
 	for _, p := range s.sinkProviders {
 		providers = append(providers, p)
 	}

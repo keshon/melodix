@@ -18,6 +18,17 @@ type Config struct {
 	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"false"`
 	VoiceReadyDelayMs     int      `env:"VOICE_READY_DELAY_MS" envDefault:"500"` // VoiceReadyDelayMs is the delay in ms after joining VC before sending opus (discordgo op 4 race). Default 500.
 
+	// VoiceBackend selects which library carries the audio path: "discordgo"
+	// (the vendored fork, with its own DAVE implementation) or "disgo" (disgo's
+	// voice stack with dave-go's E2EE, bridged onto the same discordgo
+	// gateway). Everything above the audio path is discordgo either way.
+	//
+	// It exists so the two can be compared inside one running bot rather than
+	// across two builds, which is the only way to attribute a difference to the
+	// library instead of to the build. An unrecognised value falls back to
+	// discordgo and says so in the log; see internal/discord/voice/service.go.
+	VoiceBackend string `env:"VOICE_BACKEND" envDefault:"discordgo"`
+
 	// CommandTimeout is a hard timebox for command execution.
 	CommandTimeout time.Duration `env:"COMMAND_TIMEOUT" envDefault:"30s"`
 	// CommandParallelism limits concurrently running command handlers.
