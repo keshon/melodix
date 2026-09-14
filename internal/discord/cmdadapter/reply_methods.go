@@ -169,12 +169,11 @@ type Interaction interface {
 	// CanJoinVoice reports whether the bot may connect and speak in a channel.
 	CanJoinVoice(channelID string) (bool, error)
 
-	// Raw is the escape hatch, and the measure of what is left to do: it
-	// exists for the calls that still take a session and an interaction --
-	// VoiceAPI.UpdatePlaybackStatus is the last one. Callers destructure it,
-	// so they still do not name the types. When that signature is neutral
-	// too, this method goes.
-	Raw() (*discordgo.Session, *discordgo.InteractionCreate)
+	// FollowupEmbedMessage posts a followup and reports where it landed, so a
+	// caller that means to edit it later can find it again. The guild's music
+	// status message works this way: created from an interaction, edited for
+	// as long as the track plays, which is well past the token's expiry.
+	FollowupEmbedMessage(embed *Embed) (channelID, messageID string, err error)
 }
 
 func canJoinVoice(r Responder, s *discordgo.Session, channelID string) (bool, error) {
@@ -188,24 +187,33 @@ func (c *SlashInteractionContext) CanJoinVoice(channelID string) (bool, error) {
 	return canJoinVoice(c.Responder, c.Session, channelID)
 }
 
-func (c *SlashInteractionContext) Raw() (*discordgo.Session, *discordgo.InteractionCreate) {
-	return c.Session, c.Event
+func (c *SlashInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
+	if c.Responder == nil {
+		return "", "", nil
+	}
+	return c.Responder.FollowupEmbedMessage(c.Session, c.Event, embed)
 }
 
 func (c *ComponentInteractionContext) CanJoinVoice(channelID string) (bool, error) {
 	return canJoinVoice(c.Responder, c.Session, channelID)
 }
 
-func (c *ComponentInteractionContext) Raw() (*discordgo.Session, *discordgo.InteractionCreate) {
-	return c.Session, c.Event
+func (c *ComponentInteractionContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
+	if c.Responder == nil {
+		return "", "", nil
+	}
+	return c.Responder.FollowupEmbedMessage(c.Session, c.Event, embed)
 }
 
 func (c *MessageApplicationCommandContext) CanJoinVoice(channelID string) (bool, error) {
 	return canJoinVoice(c.Responder, c.Session, channelID)
 }
 
-func (c *MessageApplicationCommandContext) Raw() (*discordgo.Session, *discordgo.InteractionCreate) {
-	return c.Session, c.Event
+func (c *MessageApplicationCommandContext) FollowupEmbedMessage(embed *Embed) (string, string, error) {
+	if c.Responder == nil {
+		return "", "", nil
+	}
+	return c.Responder.FollowupEmbedMessage(c.Session, c.Event, embed)
 }
 
 // FollowupEphemeralWithButtons answers a deferred interaction with controls

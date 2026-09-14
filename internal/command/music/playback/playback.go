@@ -90,11 +90,7 @@ func StartAndRender(bot discord.VoiceAPI, ctx cmdadapter.Interaction, log zerolo
 			embed = reply.NowPlayingEmbed(track)
 		}
 	}
-	// The status message outlives the interaction token, so the voice service
-	// needs the interaction itself. That is the last signature holding a
-	// session and an event; see cmdadapter.Interaction.Raw.
-	rawSession, rawEvent := ctx.Raw()
-	if err := bot.UpdatePlaybackStatus(rawSession, rawEvent, t.GuildID, embed); err != nil {
+	if err := bot.UpdatePlaybackStatus(ctx, t.GuildID, embed); err != nil {
 		log.Warn().Str("guild_id", t.GuildID).Err(err).Msg("guild_status_update_failed")
 	}
 }

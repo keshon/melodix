@@ -23,6 +23,7 @@ type Responder interface {
 	EditResponse(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error
 	FollowupEmbedEphemeralWithComponents(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, rows []ActionRow) error
 	ReplaceComponentMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
+	FollowupEmbedMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) (string, string, error)
 }
 
 // Logger persists command invocations (implemented by cmdlogger).

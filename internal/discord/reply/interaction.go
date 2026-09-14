@@ -61,6 +61,10 @@ func (responder) ReplaceComponentMessage(s *discordgo.Session, e *discordgo.Inte
 	return ReplaceComponentMessage(s, e, embed)
 }
 
+func (responder) FollowupEmbedMessage(s *discordgo.Session, e *discordgo.InteractionCreate, embed *cmdadapter.Embed) (string, string, error) {
+	return FollowupEmbedMessage(s, e, embed)
+}
+
 var DefaultResponder cmdadapter.Responder = responder{}
 
 // --- Interaction responses ---
@@ -281,6 +285,23 @@ func FollowupEmbedEphemeralWithComponents(
 		Components: components,
 	})
 	return err
+}
+
+// FollowupEmbedMessage sends a public embed followup and reports where it
+// landed. The guild's music status message is created this way and edited
+// afterwards -- long after the interaction token has expired -- so the caller
+// has to be able to find it again by channel and id.
+func FollowupEmbedMessage(s *discordgo.Session, i *discordgo.InteractionCreate, src *cmdadapter.Embed) (string, string, error) {
+	m, err := s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{cmdadapter.DiscordEmbed(src)},
+	})
+	if err != nil {
+		return "", "", err
+	}
+	if m == nil {
+		return "", "", nil
+	}
+	return m.ChannelID, m.ID, nil
 }
 
 // ReplaceComponentMessage answers a component interaction by rewriting the

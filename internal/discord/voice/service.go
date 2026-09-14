@@ -205,7 +205,7 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			// registered and no interaction is available to create one, so check
 			// first — otherwise this traces a render that never happened.
 			registered := s.hasStatusMessage(guildID)
-			if err := s.UpdatePlaybackStatus(sess, nil, guildID, reply.NowPlayingEmbed(track)); err != nil {
+			if err := s.UpdatePlaybackStatus(nil, guildID, reply.NowPlayingEmbed(track)); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 				continue
 			}
@@ -230,7 +230,7 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			if p.IsPlaying() || len(p.Queue()) > 0 {
 				continue
 			}
-			if err := s.UpdatePlaybackStatus(sess, nil, guildID, reply.PlaybackFinishedEmbed()); err != nil {
+			if err := s.UpdatePlaybackStatus(nil, guildID, reply.PlaybackFinishedEmbed()); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 			}
 		}
@@ -274,13 +274,19 @@ func (s *Service) hasStatusMessage(guildID string) bool {
 }
 
 // UpdatePlaybackStatus creates or edits the guild's music status message.
-func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *cmdadapter.Embed) error {
-	if i != nil && i.ChannelID != "" {
+//
+// The interaction is optional and is only ever used to create the message: the
+// status is edited for as long as the track plays, which outlives the
+// interaction token, so editing goes through the session instead. A nil
+// interaction is the asynchronous path -- auto-advance, queue end -- where
+// there is nobody to reply to and the message must already exist.
+func (s *Service) UpdatePlaybackStatus(from cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error {
+	if from != nil && from.ChannelID() != "" {
 		s.guildMusicStatusMu.Lock()
 		if s.guildMusicNotifyChannel == nil {
 			s.guildMusicNotifyChannel = make(map[string]string)
 		}
-		s.guildMusicNotifyChannel[guildID] = i.ChannelID
+		s.guildMusicNotifyChannel[guildID] = from.ChannelID()
 		s.guildMusicStatusMu.Unlock()
 	}
 
@@ -289,26 +295,28 @@ func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.
 	s.guildMusicStatusMu.RUnlock()
 
 	if ok {
+		session := s.getSession()
+		if session == nil {
+			return nil
+		}
 		_, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, cmdadapter.DiscordEmbed(embed))
 		return err
 	}
 
-	if i == nil {
+	if from == nil {
 		return nil
 	}
 
-	m, err := session.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{cmdadapter.DiscordEmbed(embed)},
-	})
+	channelID, messageID, err := from.FollowupEmbedMessage(embed)
 	if err != nil {
 		return err
 	}
-	if m == nil {
+	if messageID == "" {
 		return nil
 	}
 
 	s.guildMusicStatusMu.Lock()
-	s.guildMusicStatus[guildID] = guildMusicStatus{ChannelID: m.ChannelID, MessageID: m.ID}
+	s.guildMusicStatus[guildID] = guildMusicStatus{ChannelID: channelID, MessageID: messageID}
 	s.guildMusicStatusMu.Unlock()
 	return nil
 }
