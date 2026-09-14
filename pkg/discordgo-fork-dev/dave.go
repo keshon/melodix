@@ -125,7 +125,7 @@ func (d *DAVESession) HandlePrepareTransition(transitionID uint16, protocolVersi
 func (d *DAVESession) ActivatePreparedTransition(transitionID uint16) error {
 	d.mu.Lock()
 	if transitionID != d.pendingTransitionID {
-		if d.senderKey != nil {
+		if d.senderKey != nil && d.exporterSecret != nil {
 			d.active = true
 		}
 		d.mu.Unlock()
@@ -146,7 +146,7 @@ func (d *DAVESession) HandleExecuteTransition(transitionID uint16) error {
 	defer d.mu.Unlock()
 
 	if transitionID != d.pendingTransitionID {
-		if d.senderKey != nil {
+		if d.senderKey != nil && d.exporterSecret != nil {
 			d.active = true
 		}
 		return nil
@@ -161,6 +161,22 @@ func (d *DAVESession) HandleExecuteTransition(transitionID uint16) error {
 			d.hasPendingKey = false
 			derivedNewKey = true
 		}
+
+		// No exporter secret means we asked to sit this transition out.
+		// ResetForReWelcome drops the secret when opcode 29 announces a commit
+		// this implementation cannot process: we reject it and ask to be
+		// Welcomed into the epoch it created. The group moves into that epoch
+		// here, and the cipher we are still holding was derived from the
+		// secret of the one it just left. Frames encrypted under it are
+		// well-formed and undecryptable — every listener drops them, which is
+		// silence that looks like working audio from this end. Measured at six
+		// and seven seconds on a channel with members coming and going. Clear
+		// the sender so holdFrames stops the audio until the Welcome lands.
+		if d.exporterSecret == nil {
+			d.clearSenderLocked()
+			return nil
+		}
+
 		if d.senderKey == nil {
 			return nil
 		}
@@ -171,9 +187,7 @@ func (d *DAVESession) HandleExecuteTransition(transitionID uint16) error {
 
 		d.active = true
 	} else {
-		d.active = false
-		d.senderKey = nil
-		d.frameCipher = nil
+		d.clearSenderLocked()
 		d.hasPendingKey = false
 	}
 	return nil
@@ -191,6 +205,15 @@ func (d *DAVESession) HandlePrepareEpoch(epoch uint64, protocolVersion int) ([]b
 	d.receivers = nil
 
 	return d.generateKeyPackageLocked()
+}
+
+// clearSenderLocked drops everything the send path needs, which is what makes
+// holdFrames hold. Callers that also want a fresh key package go through
+// ResetForReWelcome or HandlePrepareEpoch instead.
+func (d *DAVESession) clearSenderLocked() {
+	d.active = false
+	d.senderKey = nil
+	d.frameCipher = nil
 }
 
 func (d *DAVESession) DeriveSenderKey() error {

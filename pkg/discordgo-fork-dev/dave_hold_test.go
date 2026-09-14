@@ -42,3 +42,35 @@ func TestHoldFramesStopsSendingAfterTheEpochIsTornDown(t *testing.T) {
 		t.Fatal("the epoch is gone, so the frames have to stop")
 	}
 }
+
+// The other way an epoch dies: somebody else commits. This implementation
+// cannot process a commit, so it rejects one and asks to be re-Welcomed --
+// and until that Welcome arrives the only cipher it has belongs to the epoch
+// the group has just left.
+func TestHoldFramesStopsSendingOnceTheEpochWeHoldIsDead(t *testing.T) {
+	dave := NewDAVESession("1")
+	// The state a Welcome leaves behind: an epoch we can send under.
+	dave.active = true
+	dave.frameCipher = readyCipher(t)
+	dave.senderKey = make([]byte, 32)
+	dave.exporterSecret = make([]byte, 32)
+	if holdFrames(dave) {
+		t.Fatal("an established epoch must send")
+	}
+
+	// Opcode 29: another member announced a commit, which we answered with
+	// invalid_commit_welcome and a fresh key package.
+	if _, err := dave.ResetForReWelcome(); err != nil {
+		t.Fatalf("reset for re-welcome: %v", err)
+	}
+
+	// Opcodes 21 and 22: the group moves into that epoch without us.
+	dave.HandlePrepareTransition(7, 1)
+	if err := dave.HandleExecuteTransition(7); err != nil {
+		t.Fatalf("execute transition: %v", err)
+	}
+
+	if !holdFrames(dave) {
+		t.Fatal("still sending under the epoch the group left; nobody can decrypt it")
+	}
+}
