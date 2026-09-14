@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/disgoorg/disgo/gateway"
@@ -52,6 +53,25 @@ type DisgoVoice struct {
 	// pending carries the hook's session out of one CreateConn call.
 	pending *davesession.Session
 }
+
+// daveRecoveryTimeout bounds how long a committed epoch may sit unactivated
+// before dave-go declares the MLS state broken and re-requests a key package.
+//
+// Its default is 15 seconds, which is chosen for a call: a caller who cannot
+// be heard for fifteen seconds asks whether anyone can hear them. Nobody asks
+// a music bot anything — they hear silence and assume it is broken, and every
+// frame sent meanwhile is encrypted under an epoch the listeners left. Watched
+// happening: after a listener left and rejoined, the bot committed them back
+// in, the gateway never announced the transition, and 796 frames went out on a
+// dead epoch over twelve seconds. The test was stopped three seconds before
+// the watchdog would have fired.
+//
+// Five seconds is a guess, not a measurement. It is meant to leave room for a
+// slow or lossy link to complete a round trip that normally takes about a
+// tenth of a second, without the round trip being retried into a re-key storm.
+// If re-keys start appearing on a link that used to be quiet, this is the
+// number that bought them.
+const daveRecoveryTimeout = 5 * time.Second
 
 // NewDisgoVoice creates the bridge. The manager itself is built on first use,
 // because it needs the bot's own user ID and that is only known once the
@@ -134,6 +154,7 @@ func (d *DisgoVoice) ensureManagerLocked(dg *discordgo.Session) error {
 		voice.WithLogger(logger),
 		voice.WithDaveSessionLogger(logger),
 		voice.WithDaveSessionCreateFunc(davesession.CreateFunc(
+			davesession.WithRecoveryTimeout(daveRecoveryTimeout),
 			davesession.WithSessionHook(func(s *davesession.Session) { d.pending = s }),
 		)),
 	)
