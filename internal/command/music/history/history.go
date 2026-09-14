@@ -27,23 +27,23 @@ func (c *History) UserPermissions() []int64 { return []int64{} }
 // discordgo requires a pointer for MinValue on slash options.
 var historyPageMinValue = 1.0
 
-func (c *History) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *History) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []*discordgo.ApplicationCommandOption{
+		Options: []cmdadapter.SlashOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        cmdadapter.OptionString,
 				Name:        "view",
 				Description: "Chronological list or plays per link",
 				Required:    false,
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
+				Choices: []cmdadapter.SlashChoice{
 					{Name: "Timeline", Value: "timeline"},
 					{Name: "By URL", Value: "counts"},
 				},
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
+				Type:        cmdadapter.OptionInteger,
 				Name:        "page",
 				Description: "Page number (default 1)",
 				Required:    false,

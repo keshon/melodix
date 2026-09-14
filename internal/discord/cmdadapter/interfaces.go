@@ -29,13 +29,13 @@ type Logger interface {
 
 // SlashProvider is implemented by commands that expose a slash definition.
 type SlashProvider interface {
-	SlashDefinition() *discordgo.ApplicationCommand
+	SlashDefinition() *SlashCommand
 }
 
 // ContextMenuProvider is implemented by commands that expose a context-menu
 // definition.
 type ContextMenuProvider interface {
-	ContextDefinition() *discordgo.ApplicationCommand
+	ContextDefinition() *SlashCommand
 }
 
 // ReactionProvider is implemented by commands triggered by a message reaction.

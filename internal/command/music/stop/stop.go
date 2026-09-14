@@ -3,7 +3,6 @@ package stop
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 )
@@ -18,8 +17,8 @@ func (c *Stop) Group() string            { return "music" }
 func (c *Stop) Category() string         { return "🎵 Music" }
 func (c *Stop) UserPermissions() []int64 { return []int64{} }
 
-func (c *Stop) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *Stop) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}

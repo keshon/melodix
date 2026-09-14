@@ -20,8 +20,8 @@ func (c *About) UserPermissions() []int64 {
 	return []int64{}
 }
 
-func (c *About) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *About) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/command"
 )
 
@@ -14,13 +13,13 @@ func FormatCommandEntry(c command.Command) string {
 }
 
 // AppendSlashSubcommands writes nested slash subcommand paths into sb.
-func AppendSlashSubcommands(sb *strings.Builder, commandName string, options []*discordgo.ApplicationCommandOption, prefix string) {
+func AppendSlashSubcommands(sb *strings.Builder, commandName string, options []SlashOption, prefix string) {
 	for _, opt := range options {
 		switch opt.Type {
-		case discordgo.ApplicationCommandOptionSubCommand:
+		case OptionSubCommand:
 			path := strings.TrimSpace(prefix + " " + opt.Name)
 			fmt.Fprintf(sb, "  `/%s %s` - %s\n", commandName, path, opt.Description)
-		case discordgo.ApplicationCommandOptionSubCommandGroup:
+		case OptionSubCommandGroup:
 			groupPrefix := strings.TrimSpace(prefix + " " + opt.Name)
 			AppendSlashSubcommands(sb, commandName, opt.Options, groupPrefix)
 		}

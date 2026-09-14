@@ -22,8 +22,8 @@ func (c *Queue) Group() string            { return "music" }
 func (c *Queue) Category() string         { return "🎵 Music" }
 func (c *Queue) UserPermissions() []int64 { return []int64{} }
 
-func (c *Queue) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *Queue) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}

@@ -70,22 +70,22 @@ func (c *Search) Group() string            { return "music" }
 func (c *Search) Category() string         { return "🎵 Music" }
 func (c *Search) UserPermissions() []int64 { return []int64{} }
 
-func (c *Search) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *Search) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []*discordgo.ApplicationCommandOption{
+		Options: []cmdadapter.SlashOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        cmdadapter.OptionString,
 				Name:        "query",
 				Description: "What to search for",
 				Required:    true,
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        cmdadapter.OptionString,
 				Name:        "source",
 				Description: "Where to search (YouTube by default)",
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
+				Choices: []cmdadapter.SlashChoice{
 					{Name: "YouTube", Value: sources.YouTube},
 					{Name: "SoundCloud", Value: sources.SoundCloud},
 				},

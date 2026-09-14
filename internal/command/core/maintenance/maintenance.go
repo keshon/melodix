@@ -19,23 +19,23 @@ func (c *Maintenance) UserPermissions() []int64 {
 	return []int64{discordgo.PermissionAdministrator}
 }
 
-func (c *Maintenance) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *Maintenance) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []*discordgo.ApplicationCommandOption{
+		Options: []cmdadapter.SlashOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Type:        cmdadapter.OptionSubCommand,
 				Name:        "ping",
 				Description: "Check bot latency",
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Type:        cmdadapter.OptionSubCommand,
 				Name:        "export-data",
 				Description: "Export the current server database as JSON",
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Type:        cmdadapter.OptionSubCommand,
 				Name:        "status",
 				Description: "Retrieve statistics about the guild",
 			},

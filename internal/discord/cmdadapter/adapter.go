@@ -21,16 +21,19 @@ func (a *Adapter) Run(ctx context.Context, inv *command.Invocation) error {
 	return a.Cmd.Run(inv.Data)
 }
 
+// SlashDefinition returns the wire form, because that is what cmdsync
+// registers. This is the translation point: commands above declare a
+// cmdadapter.SlashCommand and never see discordgo's.
 func (a *Adapter) SlashDefinition() *discordgo.ApplicationCommand {
 	if sp, ok := a.Cmd.(SlashProvider); ok {
-		return sp.SlashDefinition()
+		return DiscordSlashCommand(sp.SlashDefinition())
 	}
 	return nil
 }
 
 func (a *Adapter) ContextDefinition() *discordgo.ApplicationCommand {
 	if cp, ok := a.Cmd.(ContextMenuProvider); ok {
-		return cp.ContextDefinition()
+		return DiscordSlashCommand(cp.ContextDefinition())
 	}
 	return nil
 }

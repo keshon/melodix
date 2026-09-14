@@ -24,32 +24,32 @@ func (c *Play) Group() string            { return "music" }
 func (c *Play) Category() string         { return "🎵 Music" }
 func (c *Play) UserPermissions() []int64 { return []int64{} }
 
-func (c *Play) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *Play) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []*discordgo.ApplicationCommandOption{
+		Options: []cmdadapter.SlashOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        cmdadapter.OptionString,
 				Name:        "input",
 				Description: "Link, search query, or history id(s)",
 				Required:    true,
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        cmdadapter.OptionString,
 				Name:        "source",
 				Description: "Specify a source if search query is used",
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
+				Choices: []cmdadapter.SlashChoice{
 					{Name: "YouTube", Value: sources.YouTube},
 					{Name: "SoundCloud", Value: sources.SoundCloud},
 					{Name: "Radio", Value: sources.Radio},
 				},
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        cmdadapter.OptionString,
 				Name:        "parser",
 				Description: "Override autodetect parser",
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
+				Choices: []cmdadapter.SlashChoice{
 					{Name: "youtube native", Value: sources.ParserYtnativeLink},
 					{Name: "soundcloud native", Value: sources.ParserScnativeLink},
 					{Name: "ytdlp pipe", Value: sources.ParserYtdlpPipe},

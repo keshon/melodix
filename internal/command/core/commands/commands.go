@@ -5,8 +5,6 @@ import (
 
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 const (
@@ -18,27 +16,27 @@ const (
 var maxContentLength = discordMaxMessageLength - len(codeLeftBlockWrapper) - len(codeRightBlockWrapper)
 
 // CommandsSubcommandOptions returns slash options for command management.
-func CommandsSubcommandOptions() []*discordgo.ApplicationCommandOption {
+func CommandsSubcommandOptions() []cmdadapter.SlashOption {
 	groupChoices := groupOptionChoices()
 
-	return []*discordgo.ApplicationCommandOption{
+	return []cmdadapter.SlashOption{
 		{
-			Type:        discordgo.ApplicationCommandOptionSubCommand,
+			Type:        cmdadapter.OptionSubCommand,
 			Name:        "log",
 			Description: "Review recently used commands",
 		},
 		{
-			Type:        discordgo.ApplicationCommandOptionSubCommand,
+			Type:        cmdadapter.OptionSubCommand,
 			Name:        "status",
 			Description: "Show enabled and disabled command groups",
 		},
 		{
-			Type:        discordgo.ApplicationCommandOptionSubCommand,
+			Type:        cmdadapter.OptionSubCommand,
 			Name:        "enable",
 			Description: "Enable a command group",
-			Options: []*discordgo.ApplicationCommandOption{
+			Options: []cmdadapter.SlashOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
+					Type:        cmdadapter.OptionString,
 					Name:        "group",
 					Description: "Choose command group to enable",
 					Required:    true,
@@ -47,12 +45,12 @@ func CommandsSubcommandOptions() []*discordgo.ApplicationCommandOption {
 			},
 		},
 		{
-			Type:        discordgo.ApplicationCommandOptionSubCommand,
+			Type:        cmdadapter.OptionSubCommand,
 			Name:        "disable",
 			Description: "Disable a command group",
-			Options: []*discordgo.ApplicationCommandOption{
+			Options: []cmdadapter.SlashOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
+					Type:        cmdadapter.OptionString,
 					Name:        "group",
 					Description: "Choose command group to disable",
 					Required:    true,
@@ -63,10 +61,10 @@ func CommandsSubcommandOptions() []*discordgo.ApplicationCommandOption {
 	}
 }
 
-func groupOptionChoices() []*discordgo.ApplicationCommandOptionChoice {
-	groupChoices := []*discordgo.ApplicationCommandOptionChoice{}
+func groupOptionChoices() []cmdadapter.SlashChoice {
+	groupChoices := []cmdadapter.SlashChoice{}
 	for _, g := range GetUniqueGroups() {
-		groupChoices = append(groupChoices, &discordgo.ApplicationCommandOptionChoice{Name: g, Value: g})
+		groupChoices = append(groupChoices, cmdadapter.SlashChoice{Name: g, Value: g})
 	}
 	sort.Slice(groupChoices, func(i, j int) bool { return groupChoices[i].Name < groupChoices[j].Name })
 	return groupChoices

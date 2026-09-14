@@ -22,13 +22,13 @@ func (c *SettingsCommand) UserPermissions() []int64 {
 	return []int64{discordgo.PermissionAdministrator}
 }
 
-func (c *SettingsCommand) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *SettingsCommand) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []*discordgo.ApplicationCommandOption{
+		Options: []cmdadapter.SlashOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionSubCommandGroup,
+				Type:        cmdadapter.OptionSubCommandGroup,
 				Name:        "commands",
 				Description: "Command group management",
 				Options:     commands.CommandsSubcommandOptions(),

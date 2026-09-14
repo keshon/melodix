@@ -24,8 +24,8 @@ func (c *Next) Group() string            { return "music" }
 func (c *Next) Category() string         { return "🎵 Music" }
 func (c *Next) UserPermissions() []int64 { return []int64{} }
 
-func (c *Next) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *Next) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}

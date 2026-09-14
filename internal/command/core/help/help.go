@@ -18,23 +18,23 @@ func (c *Help) UserPermissions() []int64 {
 	return []int64{}
 }
 
-func (c *Help) SlashDefinition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
+func (c *Help) SlashDefinition() *cmdadapter.SlashCommand {
+	return &cmdadapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []*discordgo.ApplicationCommandOption{
+		Options: []cmdadapter.SlashOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Type:        cmdadapter.OptionSubCommand,
 				Name:        "category",
 				Description: "View commands grouped by category",
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Type:        cmdadapter.OptionSubCommand,
 				Name:        "group",
 				Description: "View commands grouped by group",
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Type:        cmdadapter.OptionSubCommand,
 				Name:        "flat",
 				Description: "View all commands as a flat list",
 			},

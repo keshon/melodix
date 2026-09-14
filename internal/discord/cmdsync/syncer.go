@@ -139,19 +139,20 @@ func toApplicationCommand(c command.Command) *discordgo.ApplicationCommand {
 
 	if slash, ok := root.(cmdadapter.SlashProvider); ok {
 		if def := slash.SlashDefinition(); def != nil {
-			if def.Type == 0 {
-				def.Type = discordgo.ChatApplicationCommand
-			}
-			return def
+			// A declaration that says nothing about its type is a chat-input
+			// command, which is what the zero value already means.
+			return cmdadapter.DiscordSlashCommand(def)
 		}
 	}
 
 	if menu, ok := root.(cmdadapter.ContextMenuProvider); ok {
 		if def := menu.ContextDefinition(); def != nil {
-			if def.Type == 0 {
-				def.Type = discordgo.MessageApplicationCommand
+			// A context-menu command that did not say which menu it belongs to
+			// means the message menu, which is what this has always assumed.
+			if def.Type == cmdadapter.ChatInputCommand {
+				def.Type = cmdadapter.MessageMenuCommand
 			}
-			return def
+			return cmdadapter.DiscordSlashCommand(def)
 		}
 	}
 
