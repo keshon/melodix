@@ -200,13 +200,24 @@ reply needs the session and the event together, under disgo the event answers
 for itself. This was phase 2's work, done in an order where the build never
 broke.
 
-**2b -- add the disgo implementation.** Siblings of the six packages that still
-name discordgo: `reply` (responder, session API, renderers), `cmdsync`,
-`cmdlogger`, `perm`, `voice/sink`, and the root handlers. Additive; nothing
-existing breaks. `VOICE_BACKEND` comes across from `voice-disgo-spike` here.
+**2b -- add the disgo implementation. Done.** `disgoreply` (responder, session
+API, renderers), `disgosync`, `disgolog`, `disgosession`, the disgo handlers
+and the disgo audio path. One `Bot` runs either: `DISCORD_BACKEND` is read once
+in `RunSession` and dispatches. Commands already held `discord.VoiceAPI` rather
+than `*discord.Bot`, so nothing above changed at all.
 
-**2c -- flip the bootstrap**, then delete `pkg/discordgo-fork-dev` and the
-`replace` directive, which is the point of the whole exercise.
+Both backends run end to end. **Neither has been run against Discord**, which
+is 2c's job.
+
+**2c -- run it.** Point a real token at `DISCORD_BACKEND=disgo`, then at
+`VOICE_BACKEND=disgo` on the discordgo gateway, and fix what a live run finds.
+Then delete `pkg/discordgo-fork-dev`, the `replace` directive, and the two
+switches -- which is the point of the whole exercise.
+
+`go run ./cmd/discord -check-disgo` is the cheap first step: it connects with
+the real token, waits for READY, reads back the bot user, guild count, gateway
+latency and one guild's existing command count, and disconnects. It registers
+nothing and sends nothing.
 
 ### Decisions taken
 
@@ -227,6 +238,43 @@ already gone -- a scaffold with a demolition date, demolished on schedule.
 name -- reply, permissions, channel sends, guild counts, latency, registration,
 voice state -- are the Bot's actual API. Naming them was the split; a second
 seam over the first would have been ceremony.
+
+### What 2b turned out to need
+
+Three places where the libraries genuinely disagree, rather than merely differ:
+
+- **Arguments.** discordgo delivers options as a nested tree; disgo has
+  already resolved it, handing over the subcommand and group names separately
+  with a flat map of leaves whose values are raw JSON. `cmdadapter` models the
+  tree because that is what commands walk, so `disgoreply` rebuilds it.
+  `/settings commands enable <group>` is the case that matters: without the
+  rebuild, `FirstOption` then `First` then `Option` all return nothing, and
+  "no such option" is a legitimate answer, so nothing reports a failure.
+- **Registration.** The fingerprint that decides whether a command changed is
+  computed over the neutral declaration, not either library's types -- that is
+  what lets the two sides of the comparison come from different places. The
+  round trip is the property worth testing and cannot be checked from either
+  side alone: render a declaration the way registration does, read it back the
+  way Discord reports it, and the fingerprint must be unchanged. Otherwise
+  every startup re-edits every command, N writes per guild on a throttled
+  link, forever, with nothing in the log to say why.
+- **The DAVE session.** `WithConnCreateFunc` takes the guild id as a
+  parameter, so the create hook can close over the guild it is building for
+  and file the session by construction. That removes the spike's `pending`
+  field and its "every CreateConn must come through this type under this
+  mutex" constraint -- which is also what makes it usable from a disgo
+  gateway, where the manager is built by the client rather than by us.
+
+Two places disgo is simply better, both consequences of the library:
+
+- **Handlers are typed events**, so one that takes the wrong event does not
+  compile. Under discordgo the signature decides what arrives, and a signature
+  matching nothing just never fires.
+- **The heartbeat is an event.** The disgo health watcher is one goroutine;
+  the fork's is two, and the second exists only to notice a session whose lock
+  will never come free -- a discordgo pathology, since it holds the session
+  write lock across gateway reads with no deadline. `lastHeartbeatAck`'s
+  timeout and abandoned goroutine go away with it.
 
 ## What phase 2 found on the way
 
@@ -334,12 +382,16 @@ seam over the first would have been ceremony.
 
 ## Still open
 
+- **A live run.** Nothing here has touched Discord. The disgo path compiles,
+  is unit-tested where the libraries disagree, and has never received an
+  interaction.
 - Whether server-domme needs the three dead context types, `Args`,
   `EmbedColor()` and `CheckBotPermissions`. They are kept on the shared-layer
-  rule; confirming would let 2b port less.
-- disgo's heartbeat is an event (`events.HeartbeatAck`), not a field behind
-  the session lock. That deletes `lastHeartbeatAck`, the 30-second probe
-  timeout and the `session_lock_wedged` machinery -- all of which exist only
-  because discordgo holds the session write lock across gateway reads. Worth
-  confirming against a live run before deleting a watchdog that caught a real
-  22-hour outage.
+  rule; confirming would let the disgo side carry less.
+- `disgoInvoker` has no test. Its discordgo counterpart does, and the logic is
+  parallel, but disgo's interactions are interfaces with unexported methods
+  and are not constructible from a test without a fixture. Worth a JSON
+  fixture if caller resolution is ever wrong.
+- The disgo syncer diffs and writes per command, matching the fork so the two
+  are comparable. disgo also has `SetGuildCommands`, a bulk overwrite: one
+  request instead of N. Worth taking once the comparison is over.
