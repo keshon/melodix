@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
-
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
@@ -43,15 +41,13 @@ func (c *Next) Run(ctx interface{}) error {
 	guildID := e.GuildID
 	member := e.Member
 
-	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	}); err != nil {
+	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to defer response: %w", err)
 	}
 
 	voiceState, err := c.Bot.FindUserVoiceState(guildID, member.User.ID)
 	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Voice Channel Error",
 			Description: fmt.Sprintf("Join a voice channel first.\n\n**Error:** %v", err),
 		})
@@ -60,7 +56,7 @@ func (c *Next) Run(ctx interface{}) error {
 
 	permOK, err := perm.CheckBotVoicePermissions(s, voiceState.ChannelID)
 	if err != nil || !permOK {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Voice Error",
 			Description: "I don't have permission to join or speak in that voice channel.",
 		})
@@ -71,7 +67,7 @@ func (c *Next) Run(ctx interface{}) error {
 
 	player := c.Bot.GetOrCreatePlayer(guildID)
 	if player == nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -79,7 +75,7 @@ func (c *Next) Run(ctx interface{}) error {
 	}
 	queue := player.Queue()
 	if len(queue) == 0 {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Queue Empty",
 			Description: "No tracks left to skip.",
 		})
@@ -89,14 +85,14 @@ func (c *Next) Run(ctx interface{}) error {
 	_ = player.Stop(false)
 	if err = player.PlayNext(voiceState.ChannelID); err != nil {
 		if errors.Is(err, musicplayer.ErrTrackStartFailed) {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 				Title:       "🎵 Playback Error",
 				Description: common.PlaybackErrorDescription(err),
 				Color:       reply.EmbedColor,
 			})
 			return nil
 		}
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Playback Error",
 			Description: fmt.Sprintf("Failed to play next track.\n\n**Error:** %v", err),
 		})

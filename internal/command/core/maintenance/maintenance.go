@@ -4,9 +4,7 @@ import (
 	"fmt"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
-
-	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/melodix/internal/discord/perm"
 )
 
 type Maintenance struct{}
@@ -16,7 +14,7 @@ func (c *Maintenance) Description() string { return "Bot maintenance commands" }
 func (c *Maintenance) Group() string       { return "core" }
 func (c *Maintenance) Category() string    { return "⚙️ Settings" }
 func (c *Maintenance) UserPermissions() []int64 {
-	return []int64{discordgo.PermissionAdministrator}
+	return []int64{perm.Administrator}
 }
 
 func (c *Maintenance) SlashDefinition() *cmdadapter.SlashCommand {
@@ -56,7 +54,7 @@ func (c *Maintenance) Run(ctx interface{}) error {
 	options := e.ApplicationCommandData().Options
 
 	if len(options) == 0 {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: "No subcommand provided.",
 		})
 	}
@@ -70,7 +68,7 @@ func (c *Maintenance) Run(ctx interface{}) error {
 	case "status":
 		return runStatus(s, e, *storage)
 	default:
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

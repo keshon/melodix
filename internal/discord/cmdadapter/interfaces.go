@@ -6,8 +6,8 @@ import "github.com/bwmarrin/discordgo"
 // package directly (avoids import cycles); reply.DefaultResponder implements
 // it.
 type Responder interface {
-	RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
-	RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
+	RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
+	RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
 	CheckBotPermissions(s *discordgo.Session, channelID string) bool
 	EmbedColor() int
 
@@ -17,8 +17,8 @@ type Responder interface {
 	// offer them instead, so a command never holds either.
 	AckDeferred(s *discordgo.Session, e *discordgo.InteractionCreate) error
 	AckDeferredEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate) error
-	FollowupEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
-	FollowupEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
+	FollowupEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
+	FollowupEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed) error
 	EditResponse(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error
 }
 

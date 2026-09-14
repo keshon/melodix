@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
@@ -38,7 +37,7 @@ func (c *About) Run(ctx interface{}) error {
 
 	info := buildinfo.Get()
 
-	fields := []*discordgo.MessageEmbedField{
+	fields := []cmdadapter.EmbedField{
 		{
 			Name:  "Developed by Señor Mega",
 			Value: "[LinkedIn](https://www.linkedin.com/in/keshon), [GitHub](https://github.com/keshon), [Homepage](https://keshon.ru)",
@@ -53,7 +52,7 @@ func (c *About) Run(ctx interface{}) error {
 		},
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := &cmdadapter.Embed{
 		Title:       "ℹ️ About " + info.Project,
 		Description: info.Description,
 		Color:       reply.EmbedColor,
@@ -66,7 +65,7 @@ func (c *About) Run(ctx interface{}) error {
 	if f, err := os.Open(imagePath); err == nil {
 		defer f.Close()
 		imageName := filepath.Base(imagePath)
-		embed.Image = &discordgo.MessageEmbedImage{URL: "attachment://" + imageName}
+		embed.ImageURL = "attachment://" + imageName
 		return reply.RespondEmbedEphemeralWithFile(session, event, embed, f, imageName)
 	}
 

@@ -4,8 +4,6 @@ import (
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 type Help struct{}
@@ -58,7 +56,7 @@ func (c *Help) Run(ctx interface{}) error {
 
 	data := event.ApplicationCommandData()
 	if len(data.Options) == 0 {
-		return reply.FollowupEmbedEphemeral(session, event, &discordgo.MessageEmbed{
+		return reply.FollowupEmbedEphemeral(session, event, &cmdadapter.Embed{
 			Description: "No subcommand provided. Use `category`, `group`, or `flat`.",
 		})
 	}
@@ -74,7 +72,7 @@ func (c *Help) Run(ctx interface{}) error {
 	}
 
 	info := buildinfo.Get()
-	embed := &discordgo.MessageEmbed{
+	embed := &cmdadapter.Embed{
 		Title:       info.Project + " Help",
 		Description: output,
 		Color:       reply.EmbedColor,

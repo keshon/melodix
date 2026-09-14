@@ -4,12 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/command/music/playback"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
@@ -86,7 +84,7 @@ func (c *Play) Run(ctx interface{}) error {
 	}
 
 	if input == "" {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Input is required.",
 		})
@@ -95,20 +93,18 @@ func (c *Play) Run(ctx interface{}) error {
 	parsed, err := common.ParsePlayInput(input)
 	if err != nil {
 		if errors.Is(err, common.ErrPlayInputTooManyItems) {
-			return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			return slashCtx.RespondEphemeral(&cmdadapter.Embed{
 				Title:       "🎵 Error",
 				Description: "Too many tracks in one command.",
 			})
 		}
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Invalid input: %v", err),
 		})
 	}
 
-	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	}); err != nil {
+	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
@@ -123,7 +119,7 @@ func (c *Play) Run(ctx interface{}) error {
 	switch parsed.Kind {
 	case common.PlayInputKindHistoryIDs:
 		if store == nil {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 				Title:       "🎵 Error",
 				Description: "Music history storage is not available.",
 			})
@@ -135,12 +131,12 @@ func (c *Play) Run(ctx interface{}) error {
 			mp, gerr := store.MusicPlayback(guildID, hid)
 			if gerr != nil {
 				if errors.Is(gerr, storage.ErrMusicPlaybackNotFound) {
-					reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 						Title:       "🎵 History",
 						Description: "Unknown history id. It may have been removed when the list was trimmed, or the id is wrong.",
 					})
 				} else {
-					reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+					slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 						Title:       "🎵 History",
 						Description: fmt.Sprintf("Could not load history entry: %v", gerr),
 					})
@@ -160,7 +156,7 @@ func (c *Play) Run(ctx interface{}) error {
 		for _, u := range parsed.URLs {
 			tracks, resErr := c.Bot.ResolveTracks(guildID, u, source, parser)
 			if resErr != nil || len(tracks) == 0 {
-				reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+				slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 					Title:       "🎵 Error",
 					Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
 				})
@@ -177,7 +173,7 @@ func (c *Play) Run(ctx interface{}) error {
 	case common.PlayInputKindQuery:
 		tracks, resErr := c.Bot.ResolveTracks(guildID, parsed.Query, source, parser)
 		if resErr != nil || len(tracks) == 0 {
-			reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+			slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 				Title:       "🎵 Error",
 				Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
 			})

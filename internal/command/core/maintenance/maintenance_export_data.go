@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
@@ -14,7 +15,7 @@ func runExportData(s *discordgo.Session, e *discordgo.InteractionCreate, storage
 	guildID := e.GuildID
 	record, err := storage.ExportGuild(guildID)
 	if err != nil {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Description: fmt.Sprintf("Failed to fetch record: ```%v```", err),
 			Color:       reply.EmbedColor,
 		})
@@ -22,13 +23,13 @@ func runExportData(s *discordgo.Session, e *discordgo.InteractionCreate, storage
 
 	jsonBytes, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Description: fmt.Sprintf("JSON encode failed: ```%v```", err),
 			Color:       reply.EmbedColor,
 		})
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := &cmdadapter.Embed{
 		Title:       "🧠 Database Dump",
 		Description: "Here’s your current in-memory datastore snapshot.",
 		Color:       reply.EmbedColor,

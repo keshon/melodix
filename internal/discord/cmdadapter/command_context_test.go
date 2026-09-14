@@ -113,10 +113,10 @@ func TestEveryContextIsACommandContext(t *testing.T) {
 
 type stubResponder struct{}
 
-func (stubResponder) RespondEmbedEphemeral(*discordgo.Session, *discordgo.InteractionCreate, *discordgo.MessageEmbed) error {
+func (stubResponder) RespondEmbedEphemeral(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
 	return nil
 }
-func (stubResponder) RespondEmbed(*discordgo.Session, *discordgo.InteractionCreate, *discordgo.MessageEmbed) error {
+func (stubResponder) RespondEmbed(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
 	return nil
 }
 func (stubResponder) CheckBotPermissions(*discordgo.Session, string) bool { return false }
@@ -127,10 +127,10 @@ func (stubResponder) AckDeferred(*discordgo.Session, *discordgo.InteractionCreat
 func (stubResponder) AckDeferredEphemeral(*discordgo.Session, *discordgo.InteractionCreate) error {
 	return nil
 }
-func (stubResponder) FollowupEmbed(*discordgo.Session, *discordgo.InteractionCreate, *discordgo.MessageEmbed) error {
+func (stubResponder) FollowupEmbed(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
 	return nil
 }
-func (stubResponder) FollowupEmbedEphemeral(*discordgo.Session, *discordgo.InteractionCreate, *discordgo.MessageEmbed) error {
+func (stubResponder) FollowupEmbedEphemeral(*discordgo.Session, *discordgo.InteractionCreate, *Embed) error {
 	return nil
 }
 func (stubResponder) EditResponse(*discordgo.Session, *discordgo.InteractionCreate, string) error {

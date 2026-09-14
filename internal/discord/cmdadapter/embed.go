@@ -28,9 +28,12 @@ type EmbedField struct {
 	Inline bool
 }
 
-// discordEmbed translates to the wire format. A nil Embed stays nil so the
+// DiscordEmbed translates to the wire format. A nil Embed stays nil so the
 // callers that pass one through can keep doing so.
-func discordEmbed(e *Embed) *discordgo.MessageEmbed {
+//
+// Exported because reply is where the translation happens: it owns every call
+// that puts an embed on the wire, and cmdadapter cannot import it.
+func DiscordEmbed(e *Embed) *discordgo.MessageEmbed {
 	if e == nil {
 		return nil
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
@@ -23,7 +24,7 @@ type VoiceAPI interface {
 
 	// UpdatePlaybackStatus creates or edits the guild's music status message so
 	// updates work beyond 15 min token expiry.
-	UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error
+	UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *cmdadapter.Embed) error
 
 	// SetGuildMusicNotifyChannel stores the slash command text channel for async
 	// playback failure UI.
@@ -71,7 +72,7 @@ func (b *Bot) ResolveTracks(guildID, input, source, parser string) ([]sources.Tr
 
 // UpdatePlaybackStatus creates or edits the guild's music status message
 // (delegates to voice service).
-func (b *Bot) UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
+func (b *Bot) UpdatePlaybackStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *cmdadapter.Embed) error {
 	if b.voice == nil {
 		return nil
 	}

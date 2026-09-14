@@ -113,13 +113,13 @@ func (c *Search) Run(ctx interface{}) error {
 	}
 	searcher, tag, err := c.pick(wanted)
 	if err != nil {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("%v", err),
 		})
 	}
 	if query == "" {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "A search query is required.",
 		})
@@ -127,13 +127,13 @@ func (c *Search) Run(ctx interface{}) error {
 
 	// Ephemeral throughout: the chooser belongs to whoever asked, and only they
 	// should be able to press its buttons.
-	if err := reply.RespondDeferredEphemeral(s, e); err != nil {
+	if err := slashCtx.DeferEphemeral(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
 	hits, err := searcher.Search(query, resultCount)
 	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🔎 Search",
 			Description: fmt.Sprintf("Nothing found for %q.", query),
 			Color:       reply.EmbedColor,
@@ -160,7 +160,7 @@ func (c *Search) Run(ctx interface{}) error {
 		})
 	}
 	if len(buttons) == 0 {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🔎 Search",
 			Description: fmt.Sprintf("Nothing playable found for %q.", query),
 			Color:       reply.EmbedColor,
@@ -168,11 +168,11 @@ func (c *Search) Run(ctx interface{}) error {
 		return nil
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := &cmdadapter.Embed{
 		Title:       "🔎 Search results",
 		Description: strings.Join(lines, "\n"),
 		Color:       reply.EmbedColor,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Pick a number to queue it"},
+		Footer:      "Pick a number to queue it",
 	}
 	return reply.FollowupEmbedEphemeralWithComponents(s, e, embed,
 		[]discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}})
@@ -189,7 +189,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 	}
 	if !knownSource(source) {
 		// A chooser from a future version, or a hand-crafted id.
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🔎 Search",
 			Description: "This result is from a version of the bot that is no longer running. Run `/search` again.",
 			Color:       reply.EmbedColor,
@@ -198,7 +198,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	// Rewriting the chooser both acknowledges the click and takes the buttons
 	// away, so a result cannot be queued twice by pressing again.
-	if err := reply.ReplaceComponentMessage(s, e, &discordgo.MessageEmbed{
+	if err := reply.ReplaceComponentMessage(s, e, &cmdadapter.Embed{
 		Title:       "🔎 Search",
 		Description: "Adding to the queue…",
 		Color:       reply.EmbedColor,
@@ -213,7 +213,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	url, err := c.trackURL(source, payload)
 	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Could not look that track up again: %v", err),
 		})
@@ -222,7 +222,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	tracks, err := c.Bot.ResolveTracks(target.GuildID, url, "", "")
 	if err != nil || len(tracks) == 0 {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Failed to resolve track: %v", err),
 		})

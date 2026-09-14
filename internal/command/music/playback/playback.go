@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/command/music/common"
@@ -36,7 +37,7 @@ func Join(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.InteractionCr
 
 	voiceState, err := bot.FindUserVoiceState(guildID, e.Member.User.ID)
 	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Voice Error",
 			Description: fmt.Sprintf("%v", err),
 		})
@@ -45,7 +46,7 @@ func Join(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.InteractionCr
 
 	permOK, err := perm.CheckBotVoicePermissions(s, voiceState.ChannelID)
 	if err != nil || !permOK {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Voice Error",
 			Description: "I don't have permission to join or speak in that voice channel.",
 		})
@@ -57,7 +58,7 @@ func Join(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.InteractionCr
 
 	p := bot.GetOrCreatePlayer(guildID)
 	if p == nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -98,7 +99,7 @@ func StartAndRender(bot discord.VoiceAPI, s *discordgo.Session, e *discordgo.Int
 
 // QueueError reports a failed enqueue.
 func QueueError(s *discordgo.Session, e *discordgo.InteractionCreate, err error) {
-	reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+	reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 		Title:       "🎵 Queue Error",
 		Description: fmt.Sprintf("%v", err),
 	})
@@ -107,19 +108,19 @@ func QueueError(s *discordgo.Session, e *discordgo.InteractionCreate, err error)
 func renderStartError(s *discordgo.Session, e *discordgo.InteractionCreate, err error) {
 	switch {
 	case errors.Is(err, player.ErrTrackStartFailed):
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Playback Error",
 			Description: common.PlaybackErrorDescription(err),
 			Color:       reply.EmbedColor,
 		})
 	case errors.Is(err, player.ErrNoTracksInQueue):
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Queue",
 			Description: "Nothing is in the queue to play.",
 			Color:       reply.EmbedColor,
 		})
 	default:
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		reply.FollowupEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Title:       "🎵 Playback Error",
 			Description: fmt.Sprintf("%v", err),
 			Color:       reply.EmbedColor,

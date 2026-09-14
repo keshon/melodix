@@ -29,9 +29,9 @@ func respondEmbed(r Responder, s *discordgo.Session, e *discordgo.InteractionCre
 		return nil
 	}
 	if ephemeral {
-		return r.RespondEmbedEphemeral(s, e, discordEmbed(embed))
+		return r.RespondEmbedEphemeral(s, e, embed)
 	}
-	return r.RespondEmbed(s, e, discordEmbed(embed))
+	return r.RespondEmbed(s, e, embed)
 }
 
 func followupEmbed(r Responder, s *discordgo.Session, e *discordgo.InteractionCreate, embed *Embed, ephemeral bool) error {
@@ -39,9 +39,9 @@ func followupEmbed(r Responder, s *discordgo.Session, e *discordgo.InteractionCr
 		return nil
 	}
 	if ephemeral {
-		return r.FollowupEmbedEphemeral(s, e, discordEmbed(embed))
+		return r.FollowupEmbedEphemeral(s, e, embed)
 	}
-	return r.FollowupEmbed(s, e, discordEmbed(embed))
+	return r.FollowupEmbed(s, e, embed)
 }
 
 func editResponse(r Responder, s *discordgo.Session, e *discordgo.InteractionCreate, content string) error {

@@ -23,20 +23,20 @@ func RunCmdDisable(s *discordgo.Session, e *discordgo.InteractionCreate, stor st
 
 func runCmdSetGroupState(s *discordgo.Session, e *discordgo.InteractionCreate, stor storage.Storage, syncer cmdadapter.CommandSyncer, group string, enabled bool) error {
 	if group == "" {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Description: "Missing required group option.",
 		})
 	}
 
 	if group == "core" && !enabled {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Description: "You can't disable the `core` group. It's the backbone of the discord.",
 		})
 	}
 
 	var err error
-	embed := &discordgo.MessageEmbed{
-		Footer: &discordgo.MessageEmbedFooter{Text: "Use /settings commands status to check which commands are disabled."},
+	embed := &cmdadapter.Embed{
+		Footer: "Use /settings commands status to check which commands are disabled.",
 	}
 
 	if enabled {

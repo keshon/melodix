@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
-
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
@@ -63,7 +61,6 @@ func (c *History) Run(ctx interface{}) error {
 		return nil
 	}
 
-	s := slashCtx.Session
 	e := slashCtx.Event
 	store := slashCtx.Storage
 
@@ -80,15 +77,13 @@ func (c *History) Run(ctx interface{}) error {
 		}
 	}
 
-	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	}); err != nil {
+	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
 	guildID := e.GuildID
 	if c.Bot.GetOrCreatePlayer(guildID) == nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -96,7 +91,7 @@ func (c *History) Run(ctx interface{}) error {
 	}
 
 	if store == nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music history storage is not available.",
 		})
@@ -105,7 +100,7 @@ func (c *History) Run(ctx interface{}) error {
 
 	rows, err := store.ListMusicPlaybackTimeline(guildID)
 	if err != nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 History",
 			Description: fmt.Sprintf("Could not load history: %v", err),
 		})
@@ -113,7 +108,7 @@ func (c *History) Run(ctx interface{}) error {
 	}
 
 	if len(rows) == 0 {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 History",
 			Description: "No playback history yet. Use `/play` first. History is stored per server; very old entries may be removed when the list is trimmed.",
 			Color:       reply.EmbedColor,
@@ -180,15 +175,13 @@ func (c *History) Run(ctx interface{}) error {
 		desc = desc[:3997] + "..."
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := &cmdadapter.Embed{
 		Title:       embedTitle,
 		Description: desc,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),
-		},
-		Color: reply.EmbedColor,
+		Footer:      fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),
+		Color:       reply.EmbedColor,
 	}
-	if err := reply.FollowupEmbed(s, e, embed); err != nil {
+	if err := slashCtx.Followup(embed); err != nil {
 		slashCtx.AppLog.Warn().Str("command", "history").Err(err).Msg("followup_embed_failed")
 	}
 	return nil

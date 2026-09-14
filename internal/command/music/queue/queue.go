@@ -3,8 +3,6 @@ package queue
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
-
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
@@ -35,18 +33,15 @@ func (c *Queue) Run(ctx interface{}) error {
 		return nil
 	}
 
-	s := slashCtx.Session
 	e := slashCtx.Event
 
-	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	}); err != nil {
+	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
 	p := c.Bot.GetOrCreatePlayer(e.GuildID)
 	if p == nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -57,7 +52,7 @@ func (c *Queue) Run(ctx interface{}) error {
 	current := p.CurrentTrack()
 	upcoming := p.Queue()
 
-	embed := &discordgo.MessageEmbed{
+	embed := &cmdadapter.Embed{
 		Title:       "🎵 Queue",
 		Description: common.FormatQueueBody(current, upcoming),
 		Color:       reply.EmbedColor,
@@ -70,11 +65,9 @@ func (c *Queue) Run(ctx interface{}) error {
 		// The per-link cap is named here because this is where someone counts the
 		// tracks and wonders why a 300-track playlist became fewer. It is per
 		// link, not per queue: several playlists still stack up.
-		embed.Footer = &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("%d %s queued · up to %d per playlist link · skip with /next",
-				n, noun, youtube.MaxPlaylistItems),
-		}
+		embed.Footer = fmt.Sprintf("%d %s queued · up to %d per playlist link · skip with /next",
+			n, noun, youtube.MaxPlaylistItems)
 	}
-	reply.FollowupEmbedEphemeral(s, e, embed)
+	slashCtx.FollowupEphemeral(embed)
 	return nil
 }

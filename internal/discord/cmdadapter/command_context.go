@@ -115,7 +115,7 @@ func respondEphemeral(r Responder, s *discordgo.Session, e *discordgo.Interactio
 	if r == nil {
 		return nil
 	}
-	return r.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{Description: msg})
+	return r.RespondEmbedEphemeral(s, e, &Embed{Description: msg})
 }
 
 // --- SlashInteractionContext ---

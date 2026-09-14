@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/config"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/playbackerr"
@@ -94,7 +95,7 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 	} else {
 		desc = detail
 	}
-	s.deliverPlaybackFailureEmbed(sess, guildID, &discordgo.MessageEmbed{
+	s.deliverPlaybackFailureEmbed(sess, guildID, &cmdadapter.Embed{
 		Title:       "Playback failed",
 		Description: desc,
 		Color:       reply.EmbedColor,
@@ -104,17 +105,17 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 // deliverPlaybackFailureEmbed edits the stored "now playing" message when
 // possible; otherwise sends a public embed to the last known slash channel (see
 // SetGuildMusicNotifyChannel / UpdatePlaybackStatus).
-func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
+func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildID string, embed *cmdadapter.Embed) {
 	s.guildMusicStatusMu.RLock()
 	msg, hasMsg := s.guildMusicStatus[guildID]
 	notifyCh := s.guildMusicNotifyChannel[guildID]
 	s.guildMusicStatusMu.RUnlock()
 
 	if hasMsg && msg.ChannelID != "" && msg.MessageID != "" {
-		if _, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, embed); err != nil {
+		if _, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, cmdadapter.DiscordEmbed(embed)); err != nil {
 			s.log.Warn().Str("guild_id", guildID).Err(err).Msg("playback_failed_embed_edit_failed")
 			if notifyCh != "" {
-				if _, err2 := session.ChannelMessageSendEmbed(notifyCh, embed); err2 != nil {
+				if _, err2 := session.ChannelMessageSendEmbed(notifyCh, cmdadapter.DiscordEmbed(embed)); err2 != nil {
 					s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err2).Msg("playback_failed_fallback_send_failed")
 				} else {
 					s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_after_edit_failed")
@@ -125,7 +126,7 @@ func (s *Service) deliverPlaybackFailureEmbed(session *discordgo.Session, guildI
 	}
 
 	if notifyCh != "" {
-		if _, err := session.ChannelMessageSendEmbed(notifyCh, embed); err != nil {
+		if _, err := session.ChannelMessageSendEmbed(notifyCh, cmdadapter.DiscordEmbed(embed)); err != nil {
 			s.log.Warn().Str("guild_id", guildID).Str("channel_id", notifyCh).Err(err).Msg("playback_failed_channel_send_failed")
 		} else {
 			s.log.Info().Str("guild_id", guildID).Str("channel_id", notifyCh).Msg("playback_failed_sent_public_fallback")
@@ -273,7 +274,7 @@ func (s *Service) hasStatusMessage(guildID string) bool {
 }
 
 // UpdatePlaybackStatus creates or edits the guild's music status message.
-func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *discordgo.MessageEmbed) error {
+func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.InteractionCreate, guildID string, embed *cmdadapter.Embed) error {
 	if i != nil && i.ChannelID != "" {
 		s.guildMusicStatusMu.Lock()
 		if s.guildMusicNotifyChannel == nil {
@@ -288,7 +289,7 @@ func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.
 	s.guildMusicStatusMu.RUnlock()
 
 	if ok {
-		_, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, embed)
+		_, err := session.ChannelMessageEditEmbed(msg.ChannelID, msg.MessageID, cmdadapter.DiscordEmbed(embed))
 		return err
 	}
 
@@ -297,7 +298,7 @@ func (s *Service) UpdatePlaybackStatus(session *discordgo.Session, i *discordgo.
 	}
 
 	m, err := session.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{embed},
+		Embeds: []*discordgo.MessageEmbed{cmdadapter.DiscordEmbed(embed)},
 	})
 	if err != nil {
 		return err

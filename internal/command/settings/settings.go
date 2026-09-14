@@ -7,6 +7,7 @@ import (
 
 	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/keshon/melodix/internal/discord/reply"
 
 	"github.com/keshon/melodix/internal/storage"
@@ -19,7 +20,7 @@ func (c *SettingsCommand) Description() string { return "Server settings" }
 func (c *SettingsCommand) Group() string       { return "core" }
 func (c *SettingsCommand) Category() string    { return "⚙️ Settings" }
 func (c *SettingsCommand) UserPermissions() []int64 {
-	return []int64{discordgo.PermissionAdministrator}
+	return []int64{perm.Administrator}
 }
 
 func (c *SettingsCommand) SlashDefinition() *cmdadapter.SlashCommand {
@@ -49,14 +50,14 @@ func (c *SettingsCommand) Run(ctx interface{}) error {
 
 	data := e.ApplicationCommandData()
 	if len(data.Options) == 0 {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: "No settings group provided.",
 		})
 	}
 
 	group := data.Options[0]
 	if len(group.Options) == 0 {
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: "No subcommand provided.",
 		})
 	}
@@ -67,7 +68,7 @@ func (c *SettingsCommand) Run(ctx interface{}) error {
 	case "commands":
 		return runCommandsSettings(s, e, *st, context.Syncer, sub)
 	default:
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return context.RespondEphemeral(&cmdadapter.Embed{
 			Description: fmt.Sprintf("Unknown settings group: %s", group.Name),
 		})
 	}
@@ -84,7 +85,7 @@ func runCommandsSettings(s *discordgo.Session, e *discordgo.InteractionCreate, s
 	case "disable":
 		return commands.RunCmdDisable(s, e, st, syncer, sub)
 	default:
-		return reply.RespondEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		return reply.RespondEmbedEphemeral(s, e, &cmdadapter.Embed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

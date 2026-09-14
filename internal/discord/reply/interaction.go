@@ -16,11 +16,11 @@ const EmbedColor = 0xb01e66
 // importing the discord package directly (avoids import cycles).
 type responder struct{}
 
-func (responder) RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
-	return RespondEmbedEphemeral(s, e, embed)
+func (responder) RespondEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	return RespondEmbedEphemeral(s, e, src)
 }
-func (responder) RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
-	return RespondEmbed(s, e, embed)
+func (responder) RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	return RespondEmbed(s, e, src)
 }
 func (responder) CheckBotPermissions(s *discordgo.Session, channelID string) bool {
 	return perm.CheckBotPermissions(s, channelID)
@@ -37,12 +37,12 @@ func (responder) AckDeferredEphemeral(s *discordgo.Session, e *discordgo.Interac
 	return RespondDeferredEphemeral(s, e)
 }
 
-func (responder) FollowupEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
-	return FollowupEmbed(s, e, embed)
+func (responder) FollowupEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	return FollowupEmbed(s, e, src)
 }
 
-func (responder) FollowupEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
-	return FollowupEmbedEphemeral(s, e, embed)
+func (responder) FollowupEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	return FollowupEmbedEphemeral(s, e, src)
 }
 
 func (responder) EditResponse(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error {
@@ -115,7 +115,8 @@ func RespondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, cont
 }
 
 // RespondEmbed sends a public embed response to an interaction.
-func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
@@ -132,7 +133,8 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 }
 
 // RespondEmbedEphemeral sends an ephemeral embed response to an interaction.
-func RespondEmbedEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+func RespondEmbedEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -144,7 +146,7 @@ func RespondEmbedEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return nil
 	}
 	if isAlreadyAcknowledged(err) {
-		return FollowupEmbedEphemeral(s, i, embed)
+		return FollowupEmbedEphemeral(s, i, src)
 	}
 	return err
 }
@@ -153,10 +155,11 @@ func RespondEmbedEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate,
 func RespondEmbedEphemeralWithFile(
 	s *discordgo.Session,
 	i *discordgo.InteractionCreate,
-	embed *discordgo.MessageEmbed,
+	src *cmdadapter.Embed,
 	fileReader interface{ Read([]byte) (int, error) },
 	fileName string,
 ) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -194,7 +197,8 @@ func EditResponse(s *discordgo.Session, i *discordgo.InteractionCreate, content 
 }
 
 // EditResponseEmbed replaces embeds in the original interaction response.
-func EditResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+func EditResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	if embed == nil {
 		return fmt.Errorf("nil embed")
 	}
@@ -218,7 +222,8 @@ func FollowupEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, con
 }
 
 // FollowupEmbed sends a public embed followup message.
-func FollowupEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+func FollowupEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	_, err := s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{embed},
 	})
@@ -226,7 +231,8 @@ func FollowupEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *
 }
 
 // FollowupEmbedEphemeral sends an ephemeral embed followup message.
-func FollowupEmbedEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+func FollowupEmbedEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{embed},
 	})
@@ -242,7 +248,8 @@ func Message(s *discordgo.Session, channelID, content string) error {
 }
 
 // MessageEmbed sends an embed to a channel.
-func MessageEmbed(s *discordgo.Session, channelID string, embed *discordgo.MessageEmbed) error {
+func MessageEmbed(s *discordgo.Session, channelID string, src *cmdadapter.Embed) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	_, err := s.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }
@@ -253,9 +260,10 @@ func MessageEmbed(s *discordgo.Session, channelID string, embed *discordgo.Messa
 func FollowupEmbedEphemeralWithComponents(
 	s *discordgo.Session,
 	i *discordgo.InteractionCreate,
-	embed *discordgo.MessageEmbed,
+	src *cmdadapter.Embed,
 	components []discordgo.MessageComponent,
 ) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds:     []*discordgo.MessageEmbed{embed},
 		Components: components,
@@ -266,7 +274,8 @@ func FollowupEmbedEphemeralWithComponents(
 // ReplaceComponentMessage answers a component interaction by rewriting the
 // message it came from, which is how a chooser is consumed: the buttons go away
 // with the same click that acts on them, so nothing can be pressed twice.
-func ReplaceComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+func ReplaceComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate, src *cmdadapter.Embed) error {
+	embed := cmdadapter.DiscordEmbed(src)
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{

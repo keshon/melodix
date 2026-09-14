@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 )
@@ -35,10 +36,10 @@ func RunCmdStatus(s *discordgo.Session, e *discordgo.InteractionCreate, storage 
 		enabled = []string{"_none_"}
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := &cmdadapter.Embed{
 		Title:       "Commands Status",
 		Description: "Commands are grouped (e.g., purge, core, translate). Use `/help category` to view or `/settings commands enable` / `/settings commands disable` to manage. Core group can't be disabled.",
-		Fields: []*discordgo.MessageEmbedField{
+		Fields: []cmdadapter.EmbedField{
 			{Name: "Disabled", Value: strings.Join(disabled, ", "), Inline: false},
 			{Name: "Enabled", Value: strings.Join(enabled, ", "), Inline: false},
 		},
