@@ -1097,6 +1097,27 @@ func (v *VoiceConnection) opusSender(ctx context.Context, rate, size int) {
 			v.log(LogDebug, "opus sender dequeued idx=%d opus_len=%d queued=%d seq=%d timestamp=%d dave_active=%v speaking=%v", i, len(recvbuf), opusQueued, sequence, timestamp, daveActive, speaking)
 		}
 
+		// Encryption is expected here and we have none, so this frame does not
+		// go out. See holdFrames. The wait on the ticker still happens, so the
+		// hold keeps 20ms time rather than draining OpusSend as fast as the
+		// player can fill it; the counters still advance, so resuming looks
+		// like the packet loss it resembles instead of a jump in time. We stay
+		// silent to the server too — announcing speaking while sending nothing
+		// is a claim we are not backing.
+		if holdFrames(dave) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			if sampleLog {
+				v.log(LogWarning, "opus frame held, no DAVE epoch idx=%d seq=%d timestamp=%d opus_len=%d", i, sequence, timestamp, len(recvbuf))
+			}
+			sequence++
+			timestamp += uint32(size)
+			continue
+		}
+
 		if !speaking {
 			err := v.Speaking(true)
 			if err != nil {

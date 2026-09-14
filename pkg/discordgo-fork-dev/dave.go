@@ -380,6 +380,26 @@ func (d *DAVESession) CanEncrypt() bool {
 	return d.active && d.frameCipher != nil
 }
 
+// holdFrames reports whether the sender must not transmit right now.
+//
+// A nil session means the channel never negotiated encryption — v.dave is only
+// built when op 4 reports a DAVE version above zero — and plaintext is what
+// belongs on the wire there. A session that exists but cannot encrypt is the
+// dangerous case: the channel is end-to-end encrypted and we have no epoch, so
+// anything sent goes out in the clear, in a channel that promised otherwise,
+// to receivers that will discard it and a server entitled to close us for it.
+//
+// This is not hypothetical. HandlePrepareEpoch tears the session down to
+// nothing and waits to be Welcomed, and this implementation cannot commit
+// itself back in (see the proposals case in onDAVEBinary), so a bot left alone
+// in a channel stays in that state until somebody returns. Measured on one
+// such run: twenty-three seconds. Hold instead — a gap is recoverable and a
+// listener hears it as a stall, where the alternative is unencrypted audio
+// nobody asked us to send.
+func holdFrames(dave *DAVESession) bool {
+	return dave != nil && !dave.CanEncrypt()
+}
+
 func (d *DAVESession) Reset() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
