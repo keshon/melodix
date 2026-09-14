@@ -336,7 +336,18 @@ func TestChunkedBodyCloseStopsThePrefetcher(t *testing.T) {
 		t.Fatal("Close blocked on a chunk in flight")
 	}
 
-	// Nothing new after teardown.
+	// The property is that the prefetch loop stopped, not that the server saw
+	// nothing more. The handler logs a range at its first line, before it parks,
+	// so a request the prefetcher had already put on the wire is logged even
+	// though Close cancelled it -- on a server goroutine that nothing here
+	// synchronises with. Sampling straight after Close therefore races the
+	// arrival of a request that was already doomed, which is a false failure and
+	// was one under -race.
+	//
+	// So let anything already in flight land first, then watch. A loop still
+	// running would keep asking: the payload is a megabyte in four-kilobyte
+	// chunks, so it has 255 more requests to make.
+	time.Sleep(200 * time.Millisecond)
 	before := len(log.snapshot())
 	time.Sleep(200 * time.Millisecond)
 	if after := len(log.snapshot()); after != before {
