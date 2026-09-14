@@ -1,9 +1,11 @@
 package discord
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
@@ -55,10 +57,18 @@ func (b *Bot) currentConn() conn {
 }
 
 // discordgoConn is the vendored fork's connection.
+//
+// It is the one that VOICE_BACKEND applies to: both audio paths can run on
+// this gateway, which is what voice-disgo-spike proved, so the choice is a
+// real comparison inside one process rather than a restart.
 type discordgoConn struct {
 	dg         *discordgo.Session
 	voiceDelay time.Duration
 	log        zerolog.Logger
+	// bridge is disgo's voice stack driven by this gateway, or nil when the
+	// fork's own is in use. It is shared across guilds, because one voice
+	// manager serves all of them.
+	bridge *sink.DisgoVoice
 }
 
 var _ conn = discordgoConn{}
@@ -68,6 +78,17 @@ func (c discordgoConn) API() cmdadapter.BotAPI {
 }
 
 func (c discordgoConn) NewSinkProvider(guildID string) musicsink.Provider {
+	if c.bridge != nil {
+		if p, err := c.disgoSinkProvider(guildID); err == nil {
+			return p
+		} else {
+			// Falling back rather than refusing: the bridge needs the bot's
+			// own user id, which is only known once READY has landed, and a
+			// guild that asked earlier should still get audio.
+			c.log.Warn().Str("guild_id", guildID).Err(err).
+				Msg("disgo_voice_unavailable_using_discordgo")
+		}
+	}
 	// The provider takes a getter rather than the session because it outlives
 	// individual joins; the session it closes over is this connection's, and
 	// the provider is discarded with the connection.
@@ -75,6 +96,18 @@ func (c discordgoConn) NewSinkProvider(guildID string) musicsink.Provider {
 		func() *discordgo.Session { return c.dg },
 		guildID, c.voiceDelay, c.log,
 	)
+}
+
+func (c discordgoConn) disgoSinkProvider(guildID string) (musicsink.Provider, error) {
+	gid, err := snowflake.Parse(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("parsing guild id: %w", err)
+	}
+	manager, dave, err := c.bridge.Manager(c.dg)
+	if err != nil {
+		return nil, err
+	}
+	return sink.NewDisgoSinkProvider(manager, dave, gid, c.voiceDelay, c.log), nil
 }
 
 // deadSinkProvider is what a guild gets when it asks for an audio path while

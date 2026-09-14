@@ -13,6 +13,7 @@ import (
 	"github.com/keshon/melodix/internal/discord/cmdlogger"
 	"github.com/keshon/melodix/internal/discord/cmdsync"
 	"github.com/keshon/melodix/internal/discord/execguard"
+	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/discord/watchdog"
 )
 
@@ -62,11 +63,22 @@ func (b *Bot) runDiscordgoSession(ctx context.Context) error {
 	attachDiscordgoLogger(b.log)
 	b.mu.Unlock()
 
-	b.setConn(discordgoConn{
+	voiceBackend, ok := ParseBackend(b.cfg.VoiceBackend)
+	if !ok {
+		b.log.Warn().Str("value", b.cfg.VoiceBackend).
+			Str("using", string(voiceBackend)).Msg("voice_backend_unknown")
+	}
+	b.log.Info().Str("voice_backend", string(voiceBackend)).Msg("voice_backend_selected")
+
+	dgConn := discordgoConn{
 		dg:         dg,
 		voiceDelay: time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond,
 		log:        b.log,
-	})
+	}
+	if voiceBackend == BackendDisgo {
+		dgConn.bridge = sink.NewDisgoVoice(b.log)
+	}
+	b.setConn(dgConn)
 	defer b.clearConn()
 
 	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(b.cfg.CommandTimeout, b.cfg.CommandParallelism)})

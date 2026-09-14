@@ -7,7 +7,9 @@ import (
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/keshon/command"
+	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/disgolog"
@@ -15,12 +17,16 @@ import (
 	"github.com/keshon/melodix/internal/discord/disgosession"
 	"github.com/keshon/melodix/internal/discord/disgosync"
 	"github.com/keshon/melodix/internal/discord/execguard"
+	"github.com/keshon/melodix/internal/discord/voice/sink"
 	musicsink "github.com/keshon/melodix/pkg/music/sink"
 )
 
 // disgoConn is disgo's connection.
 type disgoConn struct {
-	client *bot.Client
+	client     *bot.Client
+	dave       *sink.DaveRegistry
+	voiceDelay time.Duration
+	log        zerolog.Logger
 }
 
 var _ conn = disgoConn{}
@@ -29,11 +35,20 @@ func (c disgoConn) API() cmdadapter.BotAPI {
 	return disgoreply.NewSessionAPI(c.client)
 }
 
-// NewSinkProvider has no disgo audio path wired yet, so it reports that
-// rather than pretending. VOICE_BACKEND is what will choose here, and the
-// spike on voice-disgo-spike is what goes in.
-func (c disgoConn) NewSinkProvider(string) musicsink.Provider {
-	return deadSinkProvider{}
+// NewSinkProvider builds the audio path on disgo's voice manager.
+//
+// VOICE_BACKEND does not get a vote here. It chooses between two audio paths
+// that both run on discordgo's gateway, which is what the spike proved is
+// possible; running the fork's voice stack on a disgo gateway is the mirror
+// image and nothing has ever needed it. A disgo gateway therefore always
+// carries disgo's voice.
+func (c disgoConn) NewSinkProvider(guildID string) musicsink.Provider {
+	gid, err := snowflake.Parse(guildID)
+	if err != nil {
+		c.log.Error().Str("guild_id", guildID).Err(err).Msg("voice_guild_id_invalid")
+		return deadSinkProvider{}
+	}
+	return sink.NewDisgoSinkProvider(c.client.VoiceManager, c.dave, gid, c.voiceDelay, c.log)
 }
 
 // runDisgoSession opens one session on disgo and blocks until ctx is
@@ -57,9 +72,12 @@ func (b *Bot) runDisgoSession(ctx context.Context) error {
 		logger *disgolog.Logger
 	)
 
+	dave := sink.NewDaveRegistry()
+
 	session, err := disgosession.New(disgosession.Options{
-		Token: b.cfg.DiscordToken,
-		Log:   b.log,
+		Token:            b.cfg.DiscordToken,
+		Log:              b.log,
+		VoiceManagerOpts: dave.ManagerOptions(disgosession.SlogLogger(b.log)),
 		Listeners: []bot.EventListener{
 			bot.NewListenerFunc(func(e *events.Ready) {
 				b.onDisgoReady(e, syncer)
@@ -84,7 +102,12 @@ func (b *Bot) runDisgoSession(ctx context.Context) error {
 	syncer = disgosync.NewSyncer(client, command.DefaultRegistry, b.log)
 	logger = disgolog.NewLogger(client, b.storage, b.log)
 
-	b.setConn(disgoConn{client: client})
+	b.setConn(disgoConn{
+		client:     client,
+		dave:       dave,
+		voiceDelay: time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond,
+		log:        b.log,
+	})
 	defer b.clearConn()
 
 	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(b.cfg.CommandTimeout, b.cfg.CommandParallelism)})

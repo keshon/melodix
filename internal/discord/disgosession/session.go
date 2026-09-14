@@ -19,6 +19,7 @@ import (
 	"github.com/disgoorg/disgo/cache"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/disgo/voice"
 	"github.com/rs/zerolog"
 )
 
@@ -48,6 +49,10 @@ type Options struct {
 	// Listeners are added before the gateway opens, so nothing is missed
 	// between connecting and wiring.
 	Listeners []bot.EventListener
+	// VoiceManagerOpts configure the voice manager the client builds. This is
+	// where the DAVE session registry gets in: the session cannot be reached
+	// from a Conn in v0.19.6, so it has to be caught as each Conn is created.
+	VoiceManagerOpts []voice.ManagerConfigOpt
 }
 
 // New builds a disgo client without connecting.
@@ -79,6 +84,7 @@ func New(opts Options) (*Session, error) {
 		bot.WithCacheConfigOpts(
 			cache.WithCaches(cache.FlagsAll),
 		),
+		bot.WithVoiceManagerConfigOpts(opts.VoiceManagerOpts...),
 		bot.WithEventListeners(listeners...),
 	)
 	if err != nil {
@@ -176,4 +182,12 @@ func slogLevel(l zerolog.Level) slog.Level {
 	default:
 		return slog.LevelError
 	}
+}
+
+// SlogLogger is the app logger in the shape disgo's own subsystems take, for
+// callers that configure one (the voice manager) outside New.
+func SlogLogger(log zerolog.Logger) *slog.Logger {
+	return slog.New(slog.NewTextHandler(logWriter{log: log}, &slog.HandlerOptions{
+		Level: slogLevel(log.GetLevel()),
+	}))
 }
