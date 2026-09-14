@@ -576,12 +576,15 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 					return
 				}
 
-				// 4014 indicates a manual disconnection by someone in the guild;
-				// 4021 indicates that the voice connection was dropped due to rate limiting;
-				// 4022 indicates that the call was terminated (e.g., channel deleted, voice server changed, call ended).
-				// we shouldn't reconnect.
+				// 4014 is someone else ending it (kicked, channel deleted, or
+				// the main gateway session dropped), 4021 is rate limiting and
+				// 4022 is the call being terminated. None are worth
+				// reconnecting into, but they are three different stories, and
+				// the one line a user can paste read "disconnected" for all
+				// three — which is why issue #11's logs cannot say whether that
+				// bot was removed by a person or dropped by the server.
 				if websocket.IsCloseError(err, 4014, 4021, 4022) {
-					v.log(LogInformational, "received close code disconnected")
+					v.log(LogInformational, "received close code %s", voiceCloseReason(err))
 
 					return
 				}
@@ -611,6 +614,28 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 	}
 
 	v.failure(ErrVoiceReconnectionLimit)
+}
+
+// voiceCloseReason renders a websocket close error as "<code> (<meaning>)" so
+// that a pasted log line can be read without the voice gateway's close-code
+// table open. Only the codes this file acts on are named; anything else keeps
+// its number, which is still more than the caller had before.
+func voiceCloseReason(err error) string {
+	var ce *websocket.CloseError
+	if !errors.As(err, &ce) {
+		return err.Error()
+	}
+
+	meaning := "unknown"
+	switch ce.Code {
+	case 4014:
+		meaning = "kicked, channel deleted, or gateway session dropped"
+	case 4021:
+		meaning = "rate limited"
+	case 4022:
+		meaning = "call terminated"
+	}
+	return fmt.Sprintf("%d (%s)", ce.Code, meaning)
 }
 
 // wsEvent handles any voice websocket events. This is only called by the
@@ -1319,7 +1344,19 @@ func (v *VoiceConnection) handleDAVEBinary(message []byte) {
 		}
 
 	case 27:
-		v.log(LogDebug, "DAVE proposals (%d bytes), ignoring", len(payload))
+		// Proposals arrive when the group has to move to a new epoch and this
+		// client is expected to commit them. Answering means producing an MLS
+		// commit plus a Welcome for whoever is joining, and mls/ is a joiner
+		// only: it can process a Welcome that someone else's commit produced,
+		// and cannot produce one. Dropping them is therefore deliberate — the
+		// group advances only if another member commits on our behalf.
+		//
+		// Raised to the level the Welcome path logs at, because "we were
+		// never asked to commit" and "we were asked and could not answer" are
+		// different diagnoses for the same silent join, and issue #11's logs
+		// cannot tell them apart. Whether Discord expects a sole member to
+		// commit for itself is unverified; this line is what will show it.
+		v.log(LogInformational, "DAVE proposals (%d bytes) — cannot commit, waiting for another member to", len(payload))
 
 	case 29:
 		if len(payload) < 2 {
