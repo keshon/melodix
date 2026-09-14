@@ -206,8 +206,8 @@ and the disgo audio path. One `Bot` runs either: `DISCORD_BACKEND` is read once
 in `RunSession` and dispatches. Commands already held `discord.VoiceAPI` rather
 than `*discord.Bot`, so nothing above changed at all.
 
-Both backends run end to end. **Neither has been run against Discord**, which
-is 2c's job.
+Both backends run end to end. **`DISCORD_BACKEND=disgo` has been run against
+Discord and works.** That was the one thing nothing here could prove.
 
 **2c -- run it.** Point a real token at `DISCORD_BACKEND=disgo`, then at
 `VOICE_BACKEND=disgo` on the discordgo gateway, and fix what a live run finds.
@@ -382,9 +382,15 @@ Two places disgo is simply better, both consequences of the library:
 
 ## Still open
 
-- **A live run.** Nothing here has touched Discord. The disgo path compiles,
-  is unit-tested where the libraries disagree, and has never received an
-  interaction.
+- **How much of the disgo path a live run has actually exercised.** It
+  connects, syncs and serves commands. Voice under `VOICE_BACKEND=disgo`, the
+  unhealthy-session restart, and a component chooser have not been confirmed
+  by hand.
+- **Shutdown on disgo was visibly slower** than on discordgo. The structural
+  cause found and fixed: the discordgo close was abandonable and disgo's was
+  not. Whether that was the whole of it is now answerable rather than
+  guessable -- every teardown step logs `shutdown_phase` with a duration, so
+  the next Ctrl-C names the slow one.
 - Whether server-domme needs the three dead context types, `Args`,
   `EmbedColor()` and `CheckBotPermissions`. They are kept on the shared-layer
   rule; confirming would let the disgo side carry less.
