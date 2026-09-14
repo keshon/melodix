@@ -127,9 +127,16 @@ func (b *Bot) runDisgoSession(ctx context.Context) error {
 	}
 	defer func() {
 		b.log.Info().Msg("discord_session_close")
-		closeCtx, cancelClose := context.WithTimeout(context.Background(), sessionCloseTimeout)
-		defer cancelClose()
-		session.Close(closeCtx)
+		// Bounded and abandonable, for the same reason the discordgo close is:
+		// disgo's Close tears down the voice manager, then the gateway, then
+		// the REST rate limiter, each waiting on the last, and the usual
+		// reason a session is being closed early is that one of them has
+		// stopped answering.
+		closeWithin("session_close", sessionCloseTimeout, b.log, func() {
+			closeCtx, cancelClose := context.WithTimeout(context.Background(), sessionCloseTimeout)
+			defer cancelClose()
+			session.Close(closeCtx)
+		})
 	}()
 
 	b.startDisgoHealthWatcher(sessionCtx, session, notifyUnhealthy)
@@ -137,7 +144,7 @@ func (b *Bot) runDisgoSession(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		b.log.Info().Msg("shutdown_signal_received")
-		b.stopAllPlayers()
+		closeWithin("stop_players", playersStopTimeout, b.log, b.stopAllPlayers)
 		return nil
 	case <-disconnected:
 		return fmt.Errorf("%w: websocket disconnected", ErrSessionUnhealthy)

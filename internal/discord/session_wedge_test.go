@@ -51,14 +51,16 @@ func TestLastHeartbeatAckGivesUpOnWedgedSession(t *testing.T) {
 	}
 }
 
-func TestCloseSessionAbandonsWedgedSession(t *testing.T) {
+func TestCloseWithinAbandonsWedgedSession(t *testing.T) {
 	dg := wedgedSession(t)
 	log := zerolog.New(io.Discard)
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		closeSession(dg, 50*time.Millisecond, log)
+		closeWithin("session_close", 50*time.Millisecond, log, func() {
+			_ = dg.Close()
+		})
 	}()
 
 	select {
@@ -66,6 +68,39 @@ func TestCloseSessionAbandonsWedgedSession(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		// A blocking close here is RunSession's last statement, so it strands
 		// the restart loop in main and the bot never reconnects.
-		t.Fatal("closeSession blocked on a wedged session")
+		t.Fatal("closeWithin blocked on a wedged session")
+	}
+}
+
+// Both backends tear down through this, so the property has to hold for any
+// step rather than for discordgo's close in particular: disgo's Close walks
+// the voice manager, the gateway and the REST rate limiter in turn, and any
+// one of them waiting on a server that has stopped answering would otherwise
+// strand the same restart loop.
+func TestCloseWithinAbandonsAnyBlockedStep(t *testing.T) {
+	log := zerolog.New(io.Discard)
+	blocked := make(chan struct{})
+	defer close(blocked)
+
+	start := time.Now()
+	closeWithin("voice_close", 50*time.Millisecond, log, func() {
+		<-blocked
+	})
+
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("returned after %s — the timeout is not bounding the step", elapsed)
+	}
+}
+
+// A step that finishes must not be made to wait out its own timeout, or every
+// shutdown costs the worst case.
+func TestCloseWithinReturnsAsSoonAsTheStepDoes(t *testing.T) {
+	log := zerolog.New(io.Discard)
+
+	start := time.Now()
+	closeWithin("noop", 30*time.Second, log, func() {})
+
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("a step that returned immediately took %s", elapsed)
 	}
 }

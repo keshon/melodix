@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/rs/zerolog"
 	davesession "github.com/thomas-vilte/dave-go/session"
 
 	"github.com/keshon/command"
@@ -102,7 +101,9 @@ func (b *Bot) runDiscordgoSession(ctx context.Context) error {
 	}
 	defer func() {
 		b.log.Info().Msg("discord_session_close")
-		closeSession(dg, sessionCloseTimeout, b.log)
+		closeWithin("session_close", sessionCloseTimeout, b.log, func() {
+			_ = dg.Close()
+		})
 	}()
 
 	b.startSessionHealthWatchers(sessionCtx, dg, tracker, notifyUnhealthy)
@@ -110,7 +111,7 @@ func (b *Bot) runDiscordgoSession(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		b.log.Info().Msg("shutdown_signal_received")
-		b.stopAllPlayers()
+		closeWithin("stop_players", playersStopTimeout, b.log, b.stopAllPlayers)
 		return nil
 	case <-disconnected:
 		return fmt.Errorf("%w: websocket disconnected", ErrSessionUnhealthy)
@@ -122,25 +123,8 @@ func (b *Bot) runDiscordgoSession(ctx context.Context) error {
 // that a watchdog found nothing will ever release it — see lastHeartbeatAck.
 const sessionCloseTimeout = 15 * time.Second
 
-// closeSession closes dg, abandoning it if the close does not return.
-//
-// Do NOT go back to a bare dg.Close() here. It is the last thing RunSession
-// does, so a close that blocks blocks the restart loop in main with it, and
-// the bot that a watchdog just correctly declared dead never comes back. What
-// leaks instead is one parked goroutine and one socket the kernel reaps: the
-// next RunSession builds a fresh *discordgo.Session and owes this one nothing.
-func closeSession(dg *discordgo.Session, timeout time.Duration, log zerolog.Logger) {
-	closed := make(chan struct{})
-	go func() {
-		defer close(closed)
-		_ = dg.Close()
-	}()
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case <-closed:
-	case <-timer.C:
-		log.Warn().Dur("timeout", timeout).Msg("discord_session_close_abandoned")
-	}
-}
+// playersStopTimeout bounds stopping playback across every guild. Each player
+// leaves its voice channel, which is a round trip, and they are stopped one
+// after another -- so a server that has stopped answering costs this once
+// rather than once per guild.
+const playersStopTimeout = 10 * time.Second
