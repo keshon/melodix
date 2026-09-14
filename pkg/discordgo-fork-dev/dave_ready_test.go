@@ -2,8 +2,6 @@ package discordgo
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -19,21 +17,6 @@ import (
 
 func newTestVoiceConnection() *VoiceConnection {
 	return &VoiceConnection{Cond: sync.NewCond(&sync.Mutex{})}
-}
-
-// readyCipher makes CanEncrypt report true, the way an established MLS group
-// would.
-func readyCipher(t *testing.T) cipher.AEAD {
-	t.Helper()
-	block, err := aes.NewCipher(make([]byte, 32))
-	if err != nil {
-		t.Fatalf("aes: %v", err)
-	}
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		t.Fatalf("gcm: %v", err)
-	}
-	return aead
 }
 
 // The ordinary case: no encryption on the channel, so there is nothing to wait
@@ -58,7 +41,7 @@ func TestWaitForDAVEReadyReturnsImmediatelyWithoutEncryption(t *testing.T) {
 // must give up when the context says so instead of blocking playback forever.
 func TestWaitForDAVEReadyGivesUpWhenEncryptionNeverComesUp(t *testing.T) {
 	v := newTestVoiceConnection()
-	v.dave = NewDAVESession("user-id") // no group: CanEncrypt stays false
+	v.dave = &stubSession{ready: false} // no group: never ready
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -77,15 +60,12 @@ func TestWaitForDAVEReadyGivesUpWhenEncryptionNeverComesUp(t *testing.T) {
 // handling matter: without them the waiter sleeps through the group coming up.
 func TestWaitForDAVEReadyReturnsOnceEncryptionComesUp(t *testing.T) {
 	v := newTestVoiceConnection()
-	dave := NewDAVESession("user-id")
+	dave := &stubSession{ready: false}
 	v.dave = dave
 
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		dave.mu.Lock()
-		dave.active = true
-		dave.frameCipher = readyCipher(t)
-		dave.mu.Unlock()
+		dave.ready = true
 		v.Cond.Broadcast()
 	}()
 
@@ -95,7 +75,7 @@ func TestWaitForDAVEReadyReturnsOnceEncryptionComesUp(t *testing.T) {
 	if err := v.WaitForDAVEReady(ctx); err != nil {
 		t.Fatalf("should have woken when the group came up: %v", err)
 	}
-	if !dave.CanEncrypt() {
+	if !dave.Ready() {
 		t.Fatal("returned before the session could encrypt")
 	}
 }

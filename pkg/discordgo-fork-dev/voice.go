@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/disgoorg/godave"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -93,11 +94,20 @@ type VoiceConnection struct {
 
 	cipher cipher.AEAD
 
-	dave *DAVESession
+	// dave is the DAVE session for this connection, or nil on a channel that
+	// never negotiated encryption. What implements it is chosen elsewhere;
+	// this file decodes opcodes and hands them over.
+	dave godave.Session
 
+	// ssrcToUserID maps the transport's SSRC to the identity a DAVE session
+	// keys its receive ratchets by. Fed by opcodes 5 and 12.
 	ssrcToUserID map[uint32]string
 
-	pendingReWelcome bool
+	// daveMembers is who the gateway has said is in the channel. A DAVE
+	// session will not commit an add proposal for somebody it has not been
+	// told about, and opcode 11 arrives before opcode 4 builds the session,
+	// so the names are kept here and replayed into each new one.
+	daveMembers map[string]struct{}
 
 	voiceSpeakingUpdateHandlers []VoiceSpeakingUpdateHandler
 
@@ -166,26 +176,28 @@ func (v *VoiceConnection) WaitForDAVEReady(ctx context.Context) error {
 		return nil
 	}
 
-	stopWake := make(chan struct{})
-	defer close(stopWake)
-	go func() {
+	// Polled rather than waited on v.Cond, because Cond.Wait can only be
+	// called holding v.Cond.L and asking the session anything while holding it
+	// is what deadlocks us. See the lock order note on daveSession. The
+	// interval is short next to how long a handshake takes, and this runs once
+	// per track rather than once per frame.
+	ticker := time.NewTicker(daveReadyPollInterval)
+	defer ticker.Stop()
+	for {
+		if dave.Ready() {
+			return nil
+		}
 		select {
 		case <-ctx.Done():
-			v.Cond.Broadcast()
-		case <-stopWake:
-		}
-	}()
-
-	v.Cond.L.Lock()
-	defer v.Cond.L.Unlock()
-	for !dave.CanEncrypt() {
-		if ctx.Err() != nil {
 			return ctx.Err()
+		case <-ticker.C:
 		}
-		v.Cond.Wait()
 	}
-	return nil
 }
+
+// daveReadyPollInterval is how often WaitForDAVEReady asks whether encryption
+// has come up.
+const daveReadyPollInterval = 20 * time.Millisecond
 
 // Disconnect requests disconnect from this voice channel and wait for disconencted
 func (v *VoiceConnection) Disconnect(ctx context.Context) error {
@@ -516,9 +528,16 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 			}}
 			v.Cond.L.Unlock()
 
-			// Reset DAVE on reconnection
-			if v.dave != nil {
-				v.dave.Reset()
+			// Reset DAVE on reconnection, in place. A resume does not repeat
+			// opcode 4, so the session has to survive the reconnect: dropping it
+			// would leave the send path with no session at all, which reads as
+			// "this channel is not encrypted" and is how plaintext used to get
+			// out. Sessions that cannot be reset this way keep whatever state
+			// they have, which is the safe direction.
+			if dave := v.daveSession(); dave != nil {
+				if resettable, ok := dave.(daveResetter); ok {
+					resettable.Reset()
+				}
 			}
 
 			v.log(LogInformational, "resuming voice websocket")
@@ -576,12 +595,15 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 					return
 				}
 
-				// 4014 indicates a manual disconnection by someone in the guild;
-				// 4021 indicates that the voice connection was dropped due to rate limiting;
-				// 4022 indicates that the call was terminated (e.g., channel deleted, voice server changed, call ended).
-				// we shouldn't reconnect.
+				// 4014 is someone else ending it (kicked, channel deleted, or
+				// the main gateway session dropped), 4021 is rate limiting and
+				// 4022 is the call being terminated. None are worth
+				// reconnecting into, but they are three different stories, and
+				// the one line a user can paste read "disconnected" for all
+				// three — which is why issue #11's logs cannot say whether that
+				// bot was removed by a person or dropped by the server.
 				if websocket.IsCloseError(err, 4014, 4021, 4022) {
-					v.log(LogInformational, "received close code disconnected")
+					v.log(LogInformational, "received close code %s", voiceCloseReason(err))
 
 					return
 				}
@@ -611,6 +633,28 @@ func (v *VoiceConnection) websocket(ctx context.Context, endpoint string, token 
 	}
 
 	v.failure(ErrVoiceReconnectionLimit)
+}
+
+// voiceCloseReason renders a websocket close error as "<code> (<meaning>)" so
+// that a pasted log line can be read without the voice gateway's close-code
+// table open. Only the codes this file acts on are named; anything else keeps
+// its number, which is still more than the caller had before.
+func voiceCloseReason(err error) string {
+	var ce *websocket.CloseError
+	if !errors.As(err, &ce) {
+		return err.Error()
+	}
+
+	meaning := "unknown"
+	switch ce.Code {
+	case 4014:
+		meaning = "kicked, channel deleted, or gateway session dropped"
+	case 4021:
+		meaning = "rate limited"
+	case 4022:
+		meaning = "call terminated"
+	}
+	return fmt.Sprintf("%d (%s)", ce.Code, meaning)
 }
 
 // wsEvent handles any voice websocket events. This is only called by the
@@ -656,8 +700,14 @@ func (v *VoiceConnection) onEvent(ctx context.Context, binary bool, message []by
 
 			v.Cond.L.Lock()
 			v.op2 = op2
+			dave := v.dave
 			v.Cond.Broadcast()
 			v.Cond.L.Unlock()
+
+			// A reconnect re-announces the SSRC without necessarily rebuilding
+			// the DAVE session, and a session holding the previous SSRC cannot
+			// encrypt for this one. Outside the lock, always.
+			v.assignDAVECodec(dave, op2.SSRC)
 
 			// Start the UDP connection
 			err := v.udpOpen(ctx)
@@ -708,18 +758,22 @@ func (v *VoiceConnection) onEvent(ctx context.Context, binary bool, message []by
 				return
 			}
 
-			var daveKPData []byte
+			var (
+				daveSession godave.Session
+				daveSSRC    uint32
+				daveRoster  []string
+			)
 			v.log(LogInformational, "DAVE protocol version %d", op4.DAVEProtocolVersion)
 			if op4.DAVEProtocolVersion > 0 {
-				v.dave = NewDAVESession(v.session.State.User.ID)
-				for ssrc, userID := range v.ssrcToUserID {
-					v.dave.SetSSRC(ssrc, userID)
-				}
-
-				var err error
-				daveKPData, err = v.dave.GenerateKeyPackage()
-				if err != nil {
-					v.log(LogError, "DAVE key package generation failed: %s", err)
+				// Built here because v.dave has to be published under the lock;
+				// told anything only after it is released.
+				session := v.newDAVESession()
+				v.dave = session
+				daveSession = session
+				daveSSRC = v.op2.SSRC
+				daveRoster = make([]string, 0, len(v.daveMembers))
+				for userID := range v.daveMembers {
+					daveRoster = append(daveRoster, userID)
 				}
 			}
 
@@ -741,8 +795,12 @@ func (v *VoiceConnection) onEvent(ctx context.Context, binary bool, message []by
 			v.Cond.Broadcast()
 			v.Cond.L.Unlock()
 
-			if daveKPData != nil {
-				v.sendDAVEKeyPackageBinary(daveKPData)
+			// Outside the lock: the session answers this by sending a key
+			// package, and sending takes the same lock.
+			if daveSession != nil {
+				v.assignDAVECodec(daveSession, daveSSRC)
+				v.addKnownDAVEMembers(daveSession, daveRoster)
+				daveSession.OnSelectProtocolAck(uint16(op4.DAVEProtocolVersion))
 			}
 			return
 
@@ -758,11 +816,7 @@ func (v *VoiceConnection) onEvent(ctx context.Context, binary bool, message []by
 				v.ssrcToUserID = make(map[uint32]string)
 			}
 			v.ssrcToUserID[uint32(voiceSpeakingUpdate.SSRC)] = voiceSpeakingUpdate.UserID
-			dave := v.dave
 			v.Cond.L.Unlock()
-			if dave != nil {
-				dave.SetSSRC(uint32(voiceSpeakingUpdate.SSRC), voiceSpeakingUpdate.UserID)
-			}
 
 			for _, h := range v.voiceSpeakingUpdateHandlers {
 				h(v, voiceSpeakingUpdate)
@@ -788,11 +842,7 @@ func (v *VoiceConnection) onEvent(ctx context.Context, binary bool, message []by
 					v.ssrcToUserID = make(map[uint32]string)
 				}
 				v.ssrcToUserID[op12.AudioSSRC] = op12.UserID
-				dave := v.dave
 				v.Cond.L.Unlock()
-				if dave != nil {
-					dave.SetSSRC(op12.AudioSSRC, op12.UserID)
-				}
 			}
 			return
 
@@ -811,7 +861,51 @@ func (v *VoiceConnection) onEvent(ctx context.Context, binary bool, message []by
 			v.log(LogInformational, "resumed voice websocket")
 			return
 
+		case 11: // CLIENTS CONNECT
+			// Discord sends this one, plural, and not the singular opcode 12
+			// below. Measured on a live channel: 11 arrived with the listener's
+			// ID and 12 never arrived at all, which is why a DAVE session was
+			// being asked to commit an add proposal for a user it had never
+			// heard of, and declined.
+			var op11 struct {
+				UserIDs []string `json:"user_ids"`
+			}
+			if err := json.Unmarshal(e.RawData, &op11); err != nil {
+				v.log(LogError, "OP11 unmarshal error, %s, %s", err, string(e.RawData))
+				return
+			}
+
+			v.Cond.L.Lock()
+			if v.daveMembers == nil {
+				v.daveMembers = make(map[string]struct{}, len(op11.UserIDs))
+			}
+			for _, userID := range op11.UserIDs {
+				v.daveMembers[userID] = struct{}{}
+			}
+			dave := v.dave
+			v.Cond.L.Unlock()
+
+			v.log(LogDebug, "voice clients connect: %v", op11.UserIDs)
+			if dave != nil {
+				for _, userID := range op11.UserIDs {
+					dave.AddUser(godave.UserID(userID))
+				}
+			}
+			return
+
 		case 13: // Client Disconnect
+			var op13 struct {
+				UserID string `json:"user_id"`
+			}
+			if err := json.Unmarshal(e.RawData, &op13); err == nil && op13.UserID != "" {
+				v.Cond.L.Lock()
+				delete(v.daveMembers, op13.UserID)
+				dave := v.dave
+				v.Cond.L.Unlock()
+				if dave != nil {
+					dave.RemoveUser(godave.UserID(op13.UserID))
+				}
+			}
 			v.log(LogDebug, "user disconnected: %s", string(e.RawData))
 			return
 
@@ -1085,16 +1179,41 @@ func (v *VoiceConnection) opusSender(ctx context.Context, rate, size int) {
 
 		v.Cond.L.Lock()
 		dave := v.dave
-		daveActive := dave != nil && dave.CanEncrypt()
+		daveSSRC := v.op2.SSRC
 		speaking := v.speaking
 		opusQueued := 0
 		if v.OpusSend != nil {
 			opusQueued = len(v.OpusSend)
 		}
 		v.Cond.L.Unlock()
+
+		// Asked after the unlock, never before it. See the lock order note on
+		// daveSession.
+		daveActive := dave != nil && dave.Ready()
 		sampleLog := i < 5 || i%50 == 0
 		if sampleLog {
 			v.log(LogDebug, "opus sender dequeued idx=%d opus_len=%d queued=%d seq=%d timestamp=%d dave_active=%v speaking=%v", i, len(recvbuf), opusQueued, sequence, timestamp, daveActive, speaking)
+		}
+
+		// Encryption is expected here and we have none, so this frame does not
+		// go out. See holdFrames. The wait on the ticker still happens, so the
+		// hold keeps 20ms time rather than draining OpusSend as fast as the
+		// player can fill it; the counters still advance, so resuming looks
+		// like the packet loss it resembles instead of a jump in time. We stay
+		// silent to the server too — announcing speaking while sending nothing
+		// is a claim we are not backing.
+		if holdFrames(dave) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			if sampleLog {
+				v.log(LogWarning, "opus frame held, no DAVE epoch idx=%d seq=%d timestamp=%d opus_len=%d", i, sequence, timestamp, len(recvbuf))
+			}
+			sequence++
+			timestamp += uint32(size)
+			continue
 		}
 
 		if !speaking {
@@ -1109,14 +1228,35 @@ func (v *VoiceConnection) opusSender(ctx context.Context, rate, size int) {
 		binary.BigEndian.PutUint32(udpHeader[4:], timestamp)
 
 		if daveActive {
-			encrypted, err := dave.EncryptFrame(recvbuf)
+			encryptBuf := make([]byte, dave.MaxEncryptedFrameSize(len(recvbuf)))
+			n, err := dave.Encrypt(daveSSRC, recvbuf, encryptBuf)
 			if err != nil {
-				v.log(LogError, "DAVE encrypt error idx=%d seq=%d timestamp=%d opus_len=%d: %s", i, sequence, timestamp, len(recvbuf), err)
-			} else {
-				recvbuf = encrypted
+				// The channel is encrypted and this frame is not, so it does not
+				// go out. This is the same leak holdFrames exists to prevent,
+				// reached through a door holdFrames cannot see: the session
+				// reports Ready, and encrypting fails anyway. Falling through
+				// used to send the plaintext Opus, which the transport cipher
+				// then wrapped and the server happily forwarded to receivers
+				// that discarded it -- a leak and silence at the same time.
+				//
+				// Held on the ticker like every other skipped frame, so the
+				// stream keeps 20ms time. Sampled, because a session that
+				// refuses one frame refuses all of them, fifty times a second.
 				if sampleLog {
-					v.log(LogDebug, "opus sender encrypted idx=%d encrypted_len=%d seq=%d timestamp=%d", i, len(recvbuf), sequence, timestamp)
+					v.log(LogError, "DAVE encrypt failed, frame held idx=%d seq=%d timestamp=%d opus_len=%d: %s", i, sequence, timestamp, len(recvbuf), err)
 				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+				sequence++
+				timestamp += uint32(size)
+				continue
+			}
+			recvbuf = encryptBuf[:n]
+			if sampleLog {
+				v.log(LogDebug, "opus sender encrypted idx=%d encrypted_len=%d seq=%d timestamp=%d", i, len(recvbuf), sequence, timestamp)
 			}
 		}
 
@@ -1245,14 +1385,16 @@ func (v *VoiceConnection) opusReceiver(ctx context.Context) {
 
 		v.Cond.L.Lock()
 		dave := v.dave
+		userID := v.ssrcToUserID[p.SSRC]
 		v.Cond.L.Unlock()
 		if dave != nil {
-			decrypted, err := dave.DecryptFrame(p.SSRC, p.Opus)
+			decryptBuf := make([]byte, dave.MaxDecryptedFrameSize(godave.UserID(userID), len(p.Opus)))
+			n, err := dave.Decrypt(godave.UserID(userID), p.Opus, decryptBuf)
 			if err != nil {
 				v.log(LogDebug, "DAVE decrypt error for SSRC %d: %s", p.SSRC, err)
 				continue
 			}
-			p.Opus = decrypted
+			p.Opus = decryptBuf[:n]
 		}
 
 		if ch != nil {
@@ -1269,6 +1411,9 @@ func (v *VoiceConnection) opusReceiver(ctx context.Context) {
 // DAVE E2EE Protocol Handlers
 // ------------------------------------------------------------------------------------------------
 
+// handleDAVEBinary decodes a DAVE binary frame and hands it to the session.
+// What any of them mean, and what has to be sent back, is the session's
+// business -- see legacySession and godave.Session.
 func (v *VoiceConnection) handleDAVEBinary(message []byte) {
 	if len(message) < 3 {
 		v.log(LogWarning, "DAVE binary message too short: %d bytes", len(message))
@@ -1279,97 +1424,40 @@ func (v *VoiceConnection) handleDAVEBinary(message []byte) {
 	payload := message[3:]
 	v.log(LogDebug, "DAVE binary opcode=%d len=%d", opcode, len(payload))
 
+	v.Cond.L.Lock()
+	dave := v.dave
+	v.Cond.L.Unlock()
+	if dave == nil {
+		v.log(LogWarning, "DAVE binary opcode %d received but no session", opcode)
+		return
+	}
+
+	// The two opcodes carrying a transition ID put it in the first two bytes,
+	// ahead of the MLS message itself.
+	transitionID := func() (uint16, bool) {
+		if len(payload) < 2 {
+			v.log(LogWarning, "DAVE opcode %d payload too short", opcode)
+			return 0, false
+		}
+		return binary.BigEndian.Uint16(payload[0:2]), true
+	}
+
 	switch opcode {
-	case 25:
-		v.Cond.L.Lock()
-		dave := v.dave
-		v.Cond.L.Unlock()
-		if dave != nil {
-			// Logged on success as well as failure, because its absence is the
-			// diagnosis. This is the first thing the server sends back after our
-			// key package and it is small, where the Welcome that follows is
-			// several kilobytes. A connection that receives this and never the
-			// Welcome is losing large frames somewhere on the path, which looks
-			// nothing like a connection that receives neither.
-			v.log(LogInformational, "DAVE external sender package (%d bytes)", len(payload))
-			if err := dave.HandleExternalSenderPackage(payload); err != nil {
-				v.log(LogError, "DAVE external sender package failed: %s", err)
-			}
+	case daveOpMLSExternalSenderPackage:
+		dave.OnDaveMLSExternalSenderPackage(payload)
+
+	case daveOpMLSProposals:
+		dave.OnDaveMLSProposals(payload)
+
+	case daveOpMLSAnnounceCommitTransition:
+		if id, ok := transitionID(); ok {
+			dave.OnDaveMLSPrepareCommitTransition(id, payload[2:])
 		}
 
-	case 27:
-		v.log(LogDebug, "DAVE proposals (%d bytes), ignoring", len(payload))
-
-	case 29:
-		if len(payload) < 2 {
-			v.log(LogWarning, "DAVE commit payload too short")
-			return
+	case daveOpMLSWelcome:
+		if id, ok := transitionID(); ok {
+			dave.OnDaveMLSWelcome(id, payload[2:])
 		}
-		transitionID := binary.BigEndian.Uint16(payload[0:2])
-		v.log(LogInformational, "DAVE commit transition_id=%d, requesting re-Welcome", transitionID)
-
-		v.Cond.L.Lock()
-		dave := v.dave
-		v.Cond.L.Unlock()
-		if dave == nil {
-			return
-		}
-
-		v.sendDAVEInvalidCommitWelcome(transitionID)
-
-		kpData, err := dave.ResetForReWelcome()
-		if err != nil {
-			v.log(LogError, "DAVE reset for re-Welcome failed: %s", err)
-			return
-		}
-		v.sendDAVEKeyPackageBinary(kpData)
-
-		v.Cond.L.Lock()
-		v.pendingReWelcome = true
-		v.Cond.L.Unlock()
-
-	case 30:
-		if len(payload) < 2 {
-			v.log(LogWarning, "DAVE welcome payload too short")
-			return
-		}
-		transitionID := binary.BigEndian.Uint16(payload[0:2])
-		welcomeData := payload[2:]
-
-		v.log(LogInformational, "DAVE welcome (%d bytes) transition_id=%d", len(welcomeData), transitionID)
-		v.Cond.L.Lock()
-		dave := v.dave
-		v.Cond.L.Unlock()
-		if dave == nil {
-			v.log(LogWarning, "DAVE welcome received but no session")
-			return
-		}
-
-		if err := dave.HandleWelcome(welcomeData); err != nil {
-			v.log(LogError, "DAVE welcome processing failed: %s", err)
-			return
-		}
-
-		if err := dave.DeriveSenderKey(); err != nil {
-			v.log(LogError, "DAVE sender key derivation failed: %s", err)
-			return
-		}
-
-		dave.HandlePrepareTransition(transitionID, 1)
-		if err := dave.ActivatePreparedTransition(transitionID); err != nil {
-			v.log(LogError, "DAVE initial transition activation failed: %s", err)
-			return
-		}
-		v.log(LogInformational, "DAVE encryption prepared after Welcome")
-		v.log(LogInformational, "DAVE initial transition activated after Welcome canEncrypt=%v", dave.CanEncrypt())
-
-		v.Cond.Broadcast()
-
-		v.sendDAVEReadyForTransition(transitionID)
-
-		v.Cond.L.Lock()
-		v.pendingReWelcome = true
-		v.Cond.L.Unlock()
 
 	default:
 		v.log(LogDebug, "DAVE unknown binary opcode %d (%d bytes)", opcode, len(payload))
@@ -1379,20 +1467,15 @@ func (v *VoiceConnection) handleDAVEBinary(message []byte) {
 func (v *VoiceConnection) handleDAVEPrepareTransition(data json.RawMessage) {
 	var msg struct {
 		TransitionID        uint16 `json:"transition_id"`
-		DAVEProtocolVersion int    `json:"protocol_version"`
+		DAVEProtocolVersion uint16 `json:"protocol_version"`
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		v.log(LogError, "DAVE prepare_transition unmarshal error: %s", err)
 		return
 	}
 
-	v.log(LogInformational, "DAVE prepare_transition id=%d version=%d", msg.TransitionID, msg.DAVEProtocolVersion)
-
-	v.Cond.L.Lock()
-	dave := v.dave
-	v.Cond.L.Unlock()
-	if dave != nil {
-		dave.HandlePrepareTransition(msg.TransitionID, msg.DAVEProtocolVersion)
+	if dave := v.daveSession(); dave != nil {
+		dave.OnDavePrepareTransition(msg.TransitionID, msg.DAVEProtocolVersion)
 	}
 }
 
@@ -1405,136 +1488,122 @@ func (v *VoiceConnection) handleDAVEExecuteTransition(data json.RawMessage) {
 		return
 	}
 
-	v.Cond.L.Lock()
-	dave := v.dave
-	v.Cond.L.Unlock()
-	if dave != nil {
-		if err := dave.HandleExecuteTransition(msg.TransitionID); err != nil {
-			v.log(LogError, "DAVE execute_transition failed: %s", err)
-			return
-		}
-		v.log(LogInformational, "DAVE execute_transition id=%d canEncrypt=%v", msg.TransitionID, dave.CanEncrypt())
-
-		v.Cond.Broadcast()
-
-		v.Cond.L.Lock()
-		pending := v.pendingReWelcome
-		v.pendingReWelcome = false
-		v.Cond.L.Unlock()
-
-		if !pending {
-			v.sendDAVEReadyForTransition(msg.TransitionID)
-		}
+	if dave := v.daveSession(); dave != nil {
+		dave.OnDaveExecuteTransition(msg.TransitionID)
 	}
 }
 
-func (v *VoiceConnection) handleDAVEPrepareEpoch(ctx context.Context, data json.RawMessage) {
+func (v *VoiceConnection) handleDAVEPrepareEpoch(_ context.Context, data json.RawMessage) {
 	var msg struct {
-		Epoch               uint64 `json:"epoch"`
-		DAVEProtocolVersion int    `json:"protocol_version"`
+		Epoch               int    `json:"epoch"`
+		DAVEProtocolVersion uint16 `json:"protocol_version"`
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		v.log(LogError, "DAVE prepare_epoch unmarshal error: %s", err)
 		return
 	}
 
-	v.log(LogInformational, "DAVE prepare_epoch epoch=%d version=%d", msg.Epoch, msg.DAVEProtocolVersion)
-
-	v.Cond.L.Lock()
-	dave := v.dave
-	v.Cond.L.Unlock()
-	if dave == nil {
-		return
+	if dave := v.daveSession(); dave != nil {
+		dave.OnDavePrepareEpoch(msg.Epoch, msg.DAVEProtocolVersion)
 	}
-
-	kpData, err := dave.HandlePrepareEpoch(msg.Epoch, msg.DAVEProtocolVersion)
-	if err != nil {
-		v.log(LogError, "DAVE prepare_epoch failed: %s", err)
-		return
-	}
-
-	v.sendDAVEKeyPackageBinary(kpData)
 }
 
-func (v *VoiceConnection) RekeyDAVE() {
+// daveSession reads the session under the lock that guards it.
+func (v *VoiceConnection) daveSession() godave.Session {
 	v.Cond.L.Lock()
-	dave := v.dave
-	v.Cond.L.Unlock()
-	if dave == nil {
-		return
-	}
-
-	kpData, err := dave.ResetForReWelcome()
-	if err != nil {
-		v.log(LogError, "DAVE rekey failed: %s", err)
-		return
-	}
-	v.sendDAVEKeyPackageBinary(kpData)
+	defer v.Cond.L.Unlock()
+	return v.dave
 }
 
-func (v *VoiceConnection) sendDAVEKeyPackageBinary(kpData []byte) {
+// The DAVE binary opcodes this client receives. The JSON ones (4, 21, 22, 24)
+// arrive through onEvent instead.
+const (
+	daveOpMLSExternalSenderPackage    = 25
+	daveOpMLSProposals                = 27
+	daveOpMLSAnnounceCommitTransition = 29
+	daveOpMLSWelcome                  = 30
+)
+
+// The DAVE opcodes this client sends. These four are the only messages that
+// travel the other way, and they are exactly what godave.Callbacks asks for.
+const (
+	daveOpReadyForTransition      = 23
+	daveOpMLSKeyPackage           = 26
+	daveOpMLSCommitWelcome        = 28
+	daveOpMLSInvalidCommitWelcome = 31
+)
+
+// errDAVENoConnection is returned when there is a DAVE message to send and no
+// voice websocket to send it on. Reported rather than swallowed, which is what
+// the old senders did: a session that has just committed needs to know its
+// commit never left, or it sits waiting out a transition nobody else has heard
+// of. Implementations behind godave.Session retry on this.
+var errDAVENoConnection = errors.New("dave: no voice websocket")
+
+// sendDAVEBinary writes one DAVE binary frame: a single opcode byte followed by
+// the payload.
+func (v *VoiceConnection) sendDAVEBinary(opcode byte, payload []byte) error {
+	v.Cond.L.Lock()
+	wsConn := v.wsConn
+	v.Cond.L.Unlock()
+	if wsConn == nil {
+		return errDAVENoConnection
+	}
+
+	msg := make([]byte, 1+len(payload))
+	msg[0] = opcode
+	copy(msg[1:], payload)
+
+	v.wsMu.Lock()
+	defer v.wsMu.Unlock()
+	return wsConn.WriteMessage(websocket.BinaryMessage, msg)
+}
+
+// sendDAVETransitionOp writes one of the two JSON opcodes whose entire payload
+// is a transition ID.
+func (v *VoiceConnection) sendDAVETransitionOp(op int, transitionID uint16) error {
+	v.Cond.L.Lock()
+	wsConn := v.wsConn
+	v.Cond.L.Unlock()
+	if wsConn == nil {
+		return errDAVENoConnection
+	}
+
+	var msg struct {
+		Op   int `json:"op"`
+		Data struct {
+			TransitionID uint16 `json:"transition_id"`
+		} `json:"d"`
+	}
+	msg.Op = op
+	msg.Data.TransitionID = transitionID
+
+	v.wsMu.Lock()
+	defer v.wsMu.Unlock()
+	return wsConn.WriteJSON(msg)
+}
+
+func (v *VoiceConnection) sendDAVEKeyPackageBinary(kpData []byte) error {
 	v.log(LogInformational, "DAVE sending key package (%d bytes)", len(kpData))
-	binMsg := make([]byte, 1+len(kpData))
-	binMsg[0] = 26
-	copy(binMsg[1:], kpData)
-
-	v.Cond.L.Lock()
-	wsConn := v.wsConn
-	v.Cond.L.Unlock()
-	if wsConn != nil {
-		v.wsMu.Lock()
-		err := wsConn.WriteMessage(websocket.BinaryMessage, binMsg)
-		v.wsMu.Unlock()
-		if err != nil {
-			v.log(LogError, "DAVE key package send failed: %s", err)
-		}
-	}
+	return v.sendDAVEBinary(daveOpMLSKeyPackage, kpData)
 }
 
-func (v *VoiceConnection) sendDAVEReadyForTransition(transitionID uint16) {
+// sendDAVECommitWelcome answers proposals with a commit plus a Welcome for
+// whoever is joining. Nothing in this package calls it, because the hand-rolled
+// MLS cannot commit — that is why op 27 is dropped and op 29 is rejected. It
+// exists because godave.Callbacks requires it, and a session that can answer
+// proposals is the entire point of moving to that interface.
+func (v *VoiceConnection) sendDAVECommitWelcome(commitWelcome []byte) error {
+	v.log(LogInformational, "DAVE sending commit welcome (%d bytes)", len(commitWelcome))
+	return v.sendDAVEBinary(daveOpMLSCommitWelcome, commitWelcome)
+}
+
+func (v *VoiceConnection) sendDAVEReadyForTransition(transitionID uint16) error {
 	v.log(LogDebug, "DAVE sending ready_for_transition id=%d", transitionID)
-
-	type readyData struct {
-		TransitionID uint16 `json:"transition_id"`
-	}
-	type readyOp struct {
-		Op   int       `json:"op"`
-		Data readyData `json:"d"`
-	}
-
-	v.Cond.L.Lock()
-	wsConn := v.wsConn
-	v.Cond.L.Unlock()
-	if wsConn != nil {
-		v.wsMu.Lock()
-		err := wsConn.WriteJSON(readyOp{23, readyData{transitionID}})
-		v.wsMu.Unlock()
-		if err != nil {
-			v.log(LogError, "DAVE ready_for_transition send failed: %s", err)
-		}
-	}
+	return v.sendDAVETransitionOp(daveOpReadyForTransition, transitionID)
 }
 
-func (v *VoiceConnection) sendDAVEInvalidCommitWelcome(transitionID uint16) {
+func (v *VoiceConnection) sendDAVEInvalidCommitWelcome(transitionID uint16) error {
 	v.log(LogInformational, "DAVE sending invalid_commit_welcome id=%d", transitionID)
-
-	type invalidData struct {
-		TransitionID uint16 `json:"transition_id"`
-	}
-	type invalidOp struct {
-		Op   int         `json:"op"`
-		Data invalidData `json:"d"`
-	}
-
-	v.Cond.L.Lock()
-	wsConn := v.wsConn
-	v.Cond.L.Unlock()
-	if wsConn != nil {
-		v.wsMu.Lock()
-		err := wsConn.WriteJSON(invalidOp{31, invalidData{transitionID}})
-		v.wsMu.Unlock()
-		if err != nil {
-			v.log(LogError, "DAVE invalid_commit_welcome send failed: %s", err)
-		}
-	}
+	return v.sendDAVETransitionOp(daveOpMLSInvalidCommitWelcome, transitionID)
 }

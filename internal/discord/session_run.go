@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/rs/zerolog"
+	davesession "github.com/thomas-vilte/dave-go/session"
 
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/discord/cmdlogger"
@@ -23,7 +24,16 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	dg.LogLevel = discordgo.LogInformational
+	dg.LogLevel = discordgoLogLevel(b.cfg.LogLevel)
+	// End-to-end encryption for voice. Set before Open: the session itself is
+	// built later, when the gateway says a channel is encrypted, but the
+	// factory has to be in place before any voice connection exists.
+	//
+	// dave-go is a full RFC 9420 implementation in pure Go, and "full" is the
+	// operative word -- it can commit to an MLS group, so the bot holds its own
+	// epoch while alone in a channel. The hand-rolled joiner this replaced
+	// could not, which is what issue #11 was.
+	dg.DAVESessionCreate = davesession.CreateFunc()
 
 	b.mu.Lock()
 	b.dg = dg

@@ -18,6 +18,8 @@ import (
 	"net/http"
 	"regexp"
 	"sync"
+
+	"github.com/disgoorg/godave"
 	"sync/atomic"
 	"time"
 
@@ -39,6 +41,21 @@ type Session struct {
 	// Debug for printing JSON request/responses
 	Debug    bool // Deprecated, will be removed.
 	LogLevel int
+
+	// DAVESessionCreate builds the end-to-end encryption session for each
+	// voice connection on a channel that negotiates DAVE.
+	//
+	// Leave it nil and this package's own session is used. That one can join a
+	// group but cannot commit to one, so on a channel where nobody else commits
+	// it never gets an epoch, and the sender holds every frame rather than
+	// transmitting in the clear: connected, and silent.
+	//
+	// Set it to get the commit path. github.com/thomas-vilte/dave-go's
+	// session.CreateFunc has exactly this type and is pure Go. The type itself
+	// comes from github.com/disgoorg/godave, which is the interface disgo's
+	// voice stack consumes as well, so an implementation configured here works
+	// there unchanged.
+	DAVESessionCreate godave.SessionCreateFunc
 
 	// Should the session reconnect the websocket on errors.
 	ShouldReconnectOnError bool

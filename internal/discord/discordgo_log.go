@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/rs/zerolog"
@@ -40,5 +41,26 @@ func attachDiscordgoLogger(log zerolog.Logger) {
 		// prose from the library and would make every line its own unsearchable
 		// event. One name, one field, greppable like every other event here.
 		ev.Str("raw", raw).Msg("discordgo_log")
+	}
+}
+
+// discordgoLogLevel maps the app's log level onto discordgo's, which is a
+// separate scale the library filters on before a line ever reaches the bridge
+// above. Pinning it at LogInformational is why issue #11 could not be read:
+// the reporter ran LOG_LEVEL=debug as asked, and the per-opcode DAVE trace
+// that would have named the fault (LogDebug, in the fork's
+// handleDAVEBinary) was dropped inside discordgo before zerolog saw it.
+// Don't hardcode a level here again — asking a user for debug logs has to
+// produce them.
+func discordgoLogLevel(appLevel string) int {
+	switch strings.ToLower(appLevel) {
+	case "trace", "debug":
+		return discordgo.LogDebug
+	case "warn":
+		return discordgo.LogWarning
+	case "error", "fatal", "panic":
+		return discordgo.LogError
+	default:
+		return discordgo.LogInformational
 	}
 }

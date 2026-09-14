@@ -763,6 +763,7 @@ func (s *Session) ChannelVoiceJoin(ctx context.Context, gID, cID string, mute, d
 	voice.GuildID = gID
 	voice.session = s
 	voice.LogLevel = s.LogLevel
+	voice.resetForNewChannelLocked()
 	voice.Cond.L.Unlock()
 
 	err = s.VoiceStateUpdate(gID, cID, mute, deaf)

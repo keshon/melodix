@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/cloudflare/circl v1.6.5
+	github.com/disgoorg/godave v0.2.0
 	github.com/gorilla/websocket v1.5.3
 	golang.org/x/crypto v0.55.0
 )
