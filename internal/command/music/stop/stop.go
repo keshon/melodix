@@ -6,7 +6,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 type Stop struct {
@@ -32,18 +31,13 @@ func (c *Stop) Run(ctx interface{}) error {
 		return nil
 	}
 
-	s := slashCtx.Session
-	e := slashCtx.Event
-
-	if err := s.InteractionRespond(e.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	}); err != nil {
+	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to defer response: %w", err)
 	}
 
-	player := c.Bot.GetOrCreatePlayer(e.GuildID)
+	player := c.Bot.GetOrCreatePlayer(slashCtx.GuildID())
 	if player == nil {
-		reply.FollowupEmbedEphemeral(s, e, &discordgo.MessageEmbed{
+		_ = slashCtx.FollowupEphemeral(&cmdadapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -53,11 +47,11 @@ func (c *Stop) Run(ctx interface{}) error {
 		slashCtx.AppLog.Warn().Err(err).Msg("player_stop_failed")
 	}
 	stopMsg := "Playback stopped. Queue cleared."
-	if err := reply.FollowupEmbed(s, e, &discordgo.MessageEmbed{
+	if err := slashCtx.Followup(&cmdadapter.Embed{
 		Description: "⏹️ " + stopMsg,
 	}); err != nil {
 		slashCtx.AppLog.Warn().Str("command", "stop").Err(err).Msg("followup_embed_failed")
-		_ = reply.EditResponse(s, e, "⏹️ "+stopMsg)
+		_ = slashCtx.EditResponseText("⏹️ " + stopMsg)
 	}
 	return nil
 }

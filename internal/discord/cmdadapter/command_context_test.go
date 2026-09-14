@@ -121,3 +121,18 @@ func (stubResponder) RespondEmbed(*discordgo.Session, *discordgo.InteractionCrea
 }
 func (stubResponder) CheckBotPermissions(*discordgo.Session, string) bool { return false }
 func (stubResponder) EmbedColor() int                                     { return 0 }
+func (stubResponder) AckDeferred(*discordgo.Session, *discordgo.InteractionCreate) error {
+	return nil
+}
+func (stubResponder) AckDeferredEphemeral(*discordgo.Session, *discordgo.InteractionCreate) error {
+	return nil
+}
+func (stubResponder) FollowupEmbed(*discordgo.Session, *discordgo.InteractionCreate, *discordgo.MessageEmbed) error {
+	return nil
+}
+func (stubResponder) FollowupEmbedEphemeral(*discordgo.Session, *discordgo.InteractionCreate, *discordgo.MessageEmbed) error {
+	return nil
+}
+func (stubResponder) EditResponse(*discordgo.Session, *discordgo.InteractionCreate, string) error {
+	return nil
+}

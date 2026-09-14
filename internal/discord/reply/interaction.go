@@ -29,6 +29,26 @@ func (responder) EmbedColor() int { return EmbedColor }
 
 // DefaultResponder is injected into command contexts so commands never import
 // discord directly.
+func (responder) AckDeferred(s *discordgo.Session, e *discordgo.InteractionCreate) error {
+	return AckDeferred(s, e)
+}
+
+func (responder) AckDeferredEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate) error {
+	return RespondDeferredEphemeral(s, e)
+}
+
+func (responder) FollowupEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+	return FollowupEmbed(s, e, embed)
+}
+
+func (responder) FollowupEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+	return FollowupEmbedEphemeral(s, e, embed)
+}
+
+func (responder) EditResponse(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error {
+	return EditResponse(s, e, content)
+}
+
 var DefaultResponder cmdadapter.Responder = responder{}
 
 // --- Interaction responses ---

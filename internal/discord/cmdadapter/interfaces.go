@@ -10,6 +10,16 @@ type Responder interface {
 	RespondEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
 	CheckBotPermissions(s *discordgo.Session, channelID string) bool
 	EmbedColor() int
+
+	// The rest of what a command does with an interaction. These were plain
+	// functions in the reply package that commands called with a session and
+	// an event in hand; routing them through here is what lets the context
+	// offer them instead, so a command never holds either.
+	AckDeferred(s *discordgo.Session, e *discordgo.InteractionCreate) error
+	AckDeferredEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate) error
+	FollowupEmbed(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
+	FollowupEmbedEphemeral(s *discordgo.Session, e *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error
+	EditResponse(s *discordgo.Session, e *discordgo.InteractionCreate, content string) error
 }
 
 // Logger persists command invocations (implemented by cmdlogger).
