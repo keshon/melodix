@@ -6,66 +6,40 @@ import (
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/storage"
-
-	"github.com/bwmarrin/discordgo"
 )
 
-// WithGroupAccessCheck wraps a command to enforce group access
+// WithGroupAccessCheck stops a command whose group an admin has switched off.
+//
+// The refusal is only ever sent where it can be sent privately. A command
+// group is usually disabled to keep it out of a channel, and announcing the
+// refusal publicly every time somebody trips over it would put back exactly
+// the noise the admin was removing.
 func WithGroupAccessCheck() command.Middleware {
 	return func(c command.Command) command.Command {
 		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
-			var (
-				guildID string
-				stor    *storage.Storage
-				respond func(string)
-			)
-
-			switch v := inv.Data.(type) {
-			case *cmdadapter.SlashInteractionContext:
-				guildID, stor = v.Event.GuildID, v.Storage
-				if v.Responder != nil {
-					respond = func(msg string) {
-						_ = v.Responder.RespondEmbedEphemeral(v.Session, v.Event, &discordgo.MessageEmbed{Description: msg})
-					}
-				} else {
-					respond = func(_ string) {}
-				}
-			case *cmdadapter.ComponentInteractionContext:
-				guildID, stor = v.Event.GuildID, v.Storage
-				if v.Responder != nil {
-					respond = func(msg string) {
-						_ = v.Responder.RespondEmbedEphemeral(v.Session, v.Event, &discordgo.MessageEmbed{Description: msg})
-					}
-				} else {
-					respond = func(_ string) {}
-				}
-				if disabledGroup(c, guildID, stor, respond) {
-					return nil
-				}
-				if ch, ok := command.Root(c).(cmdadapter.ComponentInteractionHandler); ok {
-					return ch.Component(v)
-				}
-				return nil
-			case *cmdadapter.MessageApplicationCommandContext:
-				guildID, stor = v.Event.GuildID, v.Storage
-				if v.Responder != nil {
-					respond = func(msg string) {
-						_ = v.Responder.RespondEmbedEphemeral(v.Session, v.Event, &discordgo.MessageEmbed{Description: msg})
-					}
-				} else {
-					respond = func(_ string) {}
-				}
-			case *cmdadapter.MessageContext:
-				guildID, stor = v.Event.GuildID, v.Storage
-				respond = func(_ string) {}
-			case *cmdadapter.MessageReactionContext:
-				guildID, stor = v.Event.GuildID, v.Storage
-				respond = func(_ string) {}
-			default:
+			cc := cmdadapter.ContextFromInvocation(inv)
+			if cc == nil {
 				return c.Run(ctx, inv)
 			}
 
-			if disabledGroup(c, guildID, stor, respond) {
+			respond := func(string) {}
+			if cc.CanReplyPrivately() {
+				respond = func(msg string) { _ = cc.ReplyEphemeral(msg) }
+			}
+
+			// A component interaction is not run as a command: the check
+			// applies, and then it goes to the component handler instead.
+			if component, ok := inv.Data.(*cmdadapter.ComponentInteractionContext); ok {
+				if disabledGroup(c, cc.GuildID(), cc.Store(), respond) {
+					return nil
+				}
+				if handler, ok := command.Root(c).(cmdadapter.ComponentInteractionHandler); ok {
+					return handler.Component(component)
+				}
+				return nil
+			}
+
+			if disabledGroup(c, cc.GuildID(), cc.Store(), respond) {
 				return nil
 			}
 			return c.Run(ctx, inv)
