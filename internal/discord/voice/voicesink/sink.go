@@ -23,14 +23,18 @@ import (
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/stream"
 	"github.com/rs/zerolog"
+	davesession "github.com/thomas-vilte/dave-go/session"
 )
 
 // daveGate is the part of a guild's DAVE session the send path consults:
 // whether this frame may go out, or must be held until the MLS group has an
-// epoch to encrypt it under. *davesession.Session satisfies it; a nil gate
-// means no session was built, which is a channel without E2EE.
+// epoch to encrypt it under, and what became of the frames already sent.
+// *davesession.Session satisfies it; a nil gate means no session was built,
+// which is a channel without E2EE.
 type daveGate interface {
 	ShouldHoldFrames() bool
+	State() davesession.State
+	Stats() davesession.Stats
 }
 
 // Sink forwards a track's Opus packets to a voice connection.
@@ -46,6 +50,10 @@ type Sink struct {
 	guildID snowflake.ID
 	dave    daveGate
 	log     zerolog.Logger
+
+	// reportedAt is when the last tally was logged. Touched only from the
+	// goroutine inside Stream.
+	reportedAt time.Time
 }
 
 // Stream feeds the track to the connection and returns when it ends, when stop
@@ -69,9 +77,16 @@ func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 		stop:       stop,
 		dave:       d.dave,
 		holdBudget: daveReadyTimeout,
+		pullBudget: maxPullStall,
 		now:        time.Now,
 		done:       make(chan error, 1),
 	}
+	return d.run(provider)
+}
+
+// run is Stream once its provider exists, so a test can set the budgets a
+// real one takes from the constants.
+func (d *Sink) run(provider *frameProvider) error {
 	provider.markPull()
 
 	d.conn.SetOpusFrameProvider(provider)
@@ -86,10 +101,15 @@ func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	for {
 		select {
 		case err := <-provider.done:
+			d.report(provider, "ended")
 			return err
-		case <-stop:
+		case <-provider.stop:
+			d.report(provider, "stopped")
 			return stream.ErrPlaybackStopped
 		case <-watch.C:
+			if time.Since(d.reportedAt) >= sendReportEvery {
+				d.report(provider, "running")
+			}
 			if reason := d.transportDead(provider); reason != "" {
 				// Ends the provider too, so a sender still holding it cannot
 				// keep draining the track into a socket nobody is listening to.
@@ -98,10 +118,44 @@ func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 					Str("guild_id", d.guildID.String()).
 					Str("reason", reason).
 					Msg("voice_transport_lost")
+				d.report(provider, reason)
 				return stream.ErrVoiceTransport
 			}
 		}
 	}
+}
+
+// report says how much audio this sink has actually put on the wire and what
+// happened to it.
+//
+// Everything else here reports transitions -- joined, lost, stopped -- and a
+// run where nothing transitions logs nothing, which is exactly the run worth
+// diagnosing: a track that plays to the end with no audible output looks, in
+// the log, identical to one that played. Frames delivered is the number that
+// separates them, and the DAVE state beside it says whether they could be
+// heard, because dave-go forwards a frame unmodified when it has no epoch to
+// encrypt under and says nothing when it does -- no error, no info line, just
+// a counter. Frames like that are dropped by every listener on a channel
+// Discord has marked encrypted, which is heard as silence.
+func (d *Sink) report(p *frameProvider, phase string) {
+	d.reportedAt = time.Now()
+
+	event := d.log.Info().
+		Str("guild_id", d.guildID.String()).
+		Str("phase", phase).
+		Int64("frames", p.framesSent.Load()).
+		Int64("frames_held", p.framesHeld.Load())
+
+	if d.dave != nil {
+		state, stats := d.dave.State(), d.dave.Stats()
+		event = event.
+			Bool("encrypted", state.Ready).
+			Uint64("epoch", state.EpochID).
+			Int("protocol_version", int(state.ProtocolVersion)).
+			Uint64("frames_unencrypted", stats.PassthroughFrames).
+			Uint64("encrypt_failures", stats.EncryptFailures)
+	}
+	event.Msg("voice_send_report")
 }
 
 // transportDead names how the connection died, or "" while it is alive.
@@ -117,10 +171,20 @@ func (d *Sink) transportDead(provider *frameProvider) string {
 
 	// A live sender asks for a frame every 20ms. Silence past the budget means
 	// the sender goroutine is gone -- which is what a UDP write failing with a
-	// closed socket does to it, quietly. A pull that is simply taking a long
-	// time is the sender waiting on us, not the transport dying, so a pull in
-	// flight counts as alive however long it runs.
+	// closed socket does to it, quietly.
+	//
+	// A pull in flight is the sender waiting on us rather than the transport
+	// dying, so it counts as alive -- but only up to a point. A read that
+	// never returns looks exactly like a read that is merely slow, and this
+	// used to treat both as healthy forever: a source that stopped delivering
+	// mid-track parked the sender inside ReadPacket, and the track then ran to
+	// nobody until someone typed /stop, with not one line in the log to say
+	// so. Past maxPullStall it is the source that has died, which the player's
+	// transport recovery reopens the stream for.
 	if provider.pulling.Load() {
+		if time.Since(provider.pullStartedAt()) > provider.pullBudget {
+			return "sender_stalled_in_read"
+		}
 		return ""
 	}
 	if time.Since(provider.lastPullAt()) > transportSilence {
@@ -152,6 +216,11 @@ type frameProvider struct {
 	holdSince  time.Time
 	now        func() time.Time
 
+	// pullBudget is how long one pull may run before the source counts as
+	// dead; see transportDead. A field rather than the constant so a test
+	// need not take fifteen seconds to prove it.
+	pullBudget time.Duration
+
 	done   chan error
 	once   sync.Once
 	primed bool
@@ -161,14 +230,23 @@ type frameProvider struct {
 	// being asked for frames until disgo gets round to dropping it, and every
 	// one of those is a packet the next attempt will not play.
 	ended atomic.Bool
-	// pulling is true while the sender is inside ProvideOpusFrame, and
-	// lastPull is when it was last there. Between them they say whether the
-	// sender is alive, without mistaking a slow read for a dead socket.
-	pulling  atomic.Bool
-	lastPull atomic.Int64
+	// pulling is true while the sender is inside ProvideOpusFrame, lastPull is
+	// when it was last there, and pullStarted is when the pull in flight
+	// began. Between them they say whether the sender is alive, without
+	// mistaking a slow read for a dead socket or a dead source for a slow one.
+	pulling     atomic.Bool
+	lastPull    atomic.Int64
+	pullStarted atomic.Int64
+
+	// framesSent and framesHeld are what this provider actually did with the
+	// track, for the tally Stream reports. Nothing reads them to decide
+	// anything.
+	framesSent atomic.Int64
+	framesHeld atomic.Int64
 }
 
 func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
+	p.pullStarted.Store(time.Now().UnixNano())
 	p.pulling.Store(true)
 	defer func() {
 		p.markPull()
@@ -190,6 +268,7 @@ func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 			p.finish(stream.ErrVoiceTransport)
 			return nil, io.EOF
 		}
+		p.framesHeld.Add(1)
 		return nil, nil
 	}
 	p.holdSince = time.Time{}
@@ -202,6 +281,7 @@ func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 			return nil, io.EOF
 		}
 		if first != nil {
+			p.framesSent.Add(1)
 			return first, nil
 		}
 	}
@@ -211,11 +291,13 @@ func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 		p.finish(endOrErr(err))
 		return nil, io.EOF
 	}
+	p.framesSent.Add(1)
 	return packet, nil
 }
 
-func (p *frameProvider) markPull()             { p.lastPull.Store(time.Now().UnixNano()) }
-func (p *frameProvider) lastPullAt() time.Time { return time.Unix(0, p.lastPull.Load()) }
+func (p *frameProvider) markPull()                { p.lastPull.Store(time.Now().UnixNano()) }
+func (p *frameProvider) lastPullAt() time.Time    { return time.Unix(0, p.lastPull.Load()) }
+func (p *frameProvider) pullStartedAt() time.Time { return time.Unix(0, p.pullStarted.Load()) }
 
 // holdExpired starts the hold clock on the first withheld frame and reports
 // whether the hold has outlasted its budget.

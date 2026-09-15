@@ -162,18 +162,25 @@ a library swap.
 
 ## 9. A sink detects its own transport dying
 
-`Sink.Stream` watches two things it can observe: the audio sender has stopped
-asking for frames, and the connection it was built on is no longer the guild's.
+`Sink.Stream` watches three things it can observe: the audio sender has stopped
+asking for frames, the pull it is inside has outlasted its budget, and the
+connection it was built on is no longer the guild's.
 
 **Because** disgo offers one signal for a connection dying under a running
 track, `OpusFrameProvider.Close`, and v0.19.6 never calls it. A sink that waits
 for it blocks forever: the track never ends, the queue never advances, and the
-player's transport recovery sits behind an error nothing produces.
+player's transport recovery sits behind an error nothing produces. The pull
+budget is the same failure arriving from the other side — a source that stops
+delivering parks the sender inside one `ReadPacket`, where every other signal
+reads healthy, so without a bound a stalled read is indistinguishable from a
+slow one and lasts forever.
 
 **Enforced by** tested —
 `voicesink.TestClosedSocketEndsTheTrackAsTransportFailure`,
-`TestAConnRemovedBehindOurBackEndsTheTrack`, both against disgo's real audio
-sender — and documented in the `AudioSink` contract.
+`TestAConnRemovedBehindOurBackEndsTheTrack`,
+`TestASourceThatStopsDeliveringEndsTheTrack`, all against disgo's real audio
+sender, with `TestASlowReadIsNotAStalledOne` for the other edge — and
+documented in the `AudioSink` contract.
 
 ## 10. The gateway read loop dispatches and returns
 

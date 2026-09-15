@@ -44,3 +44,21 @@ const (
 	transportCheckInterval = 250 * time.Millisecond
 	transportSilence       = 500 * time.Millisecond
 )
+
+// maxPullStall bounds a single pull: how long the audio sender may sit inside
+// one ProvideOpusFrame before the source it is reading counts as dead rather
+// than slow.
+//
+// Everything else here is measured against the sender's 20ms clock, which does
+// not apply: a pull blocks in the media pipeline, and a first pull can wait on
+// ffmpeg starting up on a cold host. So this is measured against joining
+// instead -- the same fifteen seconds voiceJoinTimeout allows, for the same
+// reason, that being a length of time nothing healthy takes and a listener
+// will already have given up on.
+const maxPullStall = 15 * time.Second
+
+// sendReportEvery bounds how often a running track reports what it has put on
+// the wire. It is deliberately slow: the tally is for reading a log after the
+// fact, not for watching one live, and a line every few seconds per guild is
+// how a log stops being read at all.
+const sendReportEvery = 30 * time.Second

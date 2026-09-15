@@ -245,3 +245,101 @@ func waitUntil(t *testing.T, within time.Duration, cond func() bool) {
 	}
 	t.Fatal("condition was never met")
 }
+
+// stallingAudio yields audio until it is told to stop returning at all, which
+// is what a media pipeline that has died under a running track does: the read
+// blocks, and nothing above it is told anything.
+type stallingAudio struct {
+	reads atomic.Int64
+	stall chan struct{}
+}
+
+func newStallingAudio() *stallingAudio {
+	return &stallingAudio{stall: make(chan struct{})}
+}
+
+func (a *stallingAudio) ReadPacket() ([]byte, error) {
+	a.reads.Add(1)
+	select {
+	case <-a.stall:
+		select {} // the read that never returns
+	default:
+	}
+	return make([]byte, silenceBytes+1), nil
+}
+func (a *stallingAudio) Close() error { return nil }
+
+// The failure this was written for: a source that stops delivering parks the
+// sender inside one ReadPacket. The socket is fine, the connection is still
+// the guild's, and the sender has not stopped pulling -- it is still in the
+// pull it started. Every signal the sink watches says healthy, so the track
+// ran to its end as silence with a live "Now Playing" on it.
+func TestASourceThatStopsDeliveringEndsTheTrack(t *testing.T) {
+	conn := newStubConn()
+	manager := &stubManager{}
+	manager.set(conn)
+
+	audio := newStallingAudio()
+	done := make(chan error, 1)
+	go func() {
+		sink := newTestSink(conn, manager)
+		provider := &frameProvider{
+			r:          audio,
+			stop:       make(chan struct{}),
+			holdBudget: daveReadyTimeout,
+			pullBudget: 4 * transportSilence,
+			now:        time.Now,
+			done:       make(chan error, 1),
+		}
+		done <- sink.run(provider)
+	}()
+
+	waitUntil(t, 2*time.Second, func() bool { return conn.udp.writes.Load() > 2 })
+	close(audio.stall)
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, stream.ErrVoiceTransport) {
+			t.Fatalf("want ErrVoiceTransport, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a source that stopped delivering played on forever")
+	}
+}
+
+// The other half of that bound: a read that is slow is not a read that is
+// dead, and cutting a track off for taking a moment would be worse than the
+// wedge it replaces.
+func TestASlowReadIsNotAStalledOne(t *testing.T) {
+	conn := newStubConn()
+	manager := &stubManager{}
+	manager.set(conn)
+
+	audio := &endlessAudio{}
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		sink := newTestSink(conn, manager)
+		provider := &frameProvider{
+			r:          audio,
+			stop:       stop,
+			holdBudget: daveReadyTimeout,
+			pullBudget: maxPullStall,
+			now:        time.Now,
+			done:       make(chan error, 1),
+		}
+		done <- sink.run(provider)
+	}()
+
+	time.Sleep(6 * transportSilence)
+	select {
+	case err := <-done:
+		t.Fatalf("the pull bound ended a healthy track: %v", err)
+	default:
+	}
+
+	close(stop)
+	if err := <-done; !errors.Is(err, stream.ErrPlaybackStopped) {
+		t.Fatalf("want ErrPlaybackStopped, got %v", err)
+	}
+}

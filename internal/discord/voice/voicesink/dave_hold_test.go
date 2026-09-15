@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/keshon/melodix/pkg/music/stream"
+	davesession "github.com/thomas-vilte/dave-go/session"
 )
 
 // fakeGate is a DAVE session's hold decision with nothing else attached, so a
@@ -16,6 +17,11 @@ import (
 type fakeGate struct{ hold atomic.Bool }
 
 func (g *fakeGate) ShouldHoldFrames() bool { return g.hold.Load() }
+
+// State and Stats are what the send path reports rather than what it decides
+// on, so they answer with the shape and not with anything a test asserts.
+func (g *fakeGate) State() davesession.State { return davesession.State{} }
+func (g *fakeGate) Stats() davesession.Stats { return davesession.Stats{} }
 
 // fakeReader yields identical audible packets forever, counting the reads.
 // The count is the assertion that matters: a held frame must not consume a
