@@ -63,11 +63,11 @@ func TestRecovery_CacheHit_ServesBlobAndSkipsParser(t *testing.T) {
 	track := ytTrack("https://youtu.be/hit1", "p1")
 	rs := NewRecoveryStream(track)
 	defer rs.Close()
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if !track.Cached || rs.Parser() != "" {
-		t.Fatalf("cache hit should set Cached and empty parser (Cached=%v parser=%q)", track.Cached, rs.Parser())
+	if opened := rs.Track(); !opened.Cached || rs.Parser() != "" {
+		t.Fatalf("cache hit should set Cached and empty parser (Cached=%v parser=%q)", opened.Cached, rs.Parser())
 	}
 	for _, want := range []byte{0xC0, 0xC1} {
 		pkt, err := rs.ReadPacket()
@@ -96,15 +96,15 @@ func TestRecovery_CacheInstantFail_FallsBackToParser(t *testing.T) {
 	track := ytTrack("https://youtu.be/empty1", "p1")
 	rs := NewRecoveryStream(track)
 	defer rs.Close()
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	pkt, err := rs.ReadPacket() // cache instant-fails → fall back to p1
 	if err != nil || len(pkt) != 1 || pkt[0] != 0xAA {
 		t.Fatalf("expected fallback to p1's packet, got (%v,%v)", pkt, err)
 	}
-	if track.Cached || track.CurrentParser != "p1" {
-		t.Fatalf("after fallback want Cached=false parser=p1, got Cached=%v parser=%q", track.Cached, track.CurrentParser)
+	if opened := rs.Track(); opened.Cached || opened.CurrentParser != "p1" {
+		t.Fatalf("after fallback want Cached=false parser=p1, got Cached=%v parser=%q", opened.Cached, opened.CurrentParser)
 	}
 }
 
@@ -123,7 +123,7 @@ func TestRecovery_WriteThrough_CachesCleanPlay(t *testing.T) {
 	track := ytTrack("https://youtu.be/writethru1", "p1")
 	track.Duration = 60 * time.Millisecond // 3×20ms, so EOF at the end is "natural"
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	for {
@@ -175,7 +175,7 @@ func TestRecovery_WriteThrough_SurvivesParserSwitch(t *testing.T) {
 	track := ytTrack("https://youtu.be/switch1", "p1", "p2")
 	track.Duration = 60 * time.Millisecond
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	for {

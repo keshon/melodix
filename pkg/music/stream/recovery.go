@@ -27,7 +27,13 @@ const (
 // next 20ms Opus packet with recovery applied; Read/Close expose the same
 // stream as decoded PCM (io.ReadCloser) for consumers that still want samples.
 type RecoveryStream struct {
-	track       *parsers.Track
+	// track is this stream's own copy, not the caller's. Parsers fill in
+	// Title, Duration and Passthrough through the pointer they are handed at
+	// open time, and recovery rewrites CurrentParser as fallbacks engage --
+	// all of that used to land in the Track the player publishes to the UI,
+	// from whichever goroutine happened to be driving the reads. Runtime
+	// facts travel back up as an OpenInfo value instead; see confirmOpen.
+	track       parsers.Track
 	parserIndex int
 	reader      opus.Reader    // active packet stream
 	cleanup     func()         // cleanup for the active stream
@@ -41,7 +47,7 @@ type RecoveryStream struct {
 	// onParserConfirmed is called when a freshly opened stream yields its first
 	// packet, i.e. when the active parser is proven to actually produce audio.
 	// Fired from the ReadPacket goroutine; nil disables the notification.
-	onParserConfirmed func(parser string)
+	onParserConfirmed func(info OpenInfo)
 
 	// closed is set by Close so a read that fails because the stream was torn
 	// down is not mistaken for a recoverable one. It is atomic because the
@@ -73,7 +79,7 @@ func NewRecoveryStream(track *parsers.Track) *RecoveryStream {
 // logger.
 func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *RecoveryStream {
 	return &RecoveryStream{
-		track:     track,
+		track:     track.Clone(),
 		retries:   make(map[string]int),
 		firstRead: true,
 		log:       log,
@@ -83,7 +89,7 @@ func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *Reco
 // SetOnParserConfirmed registers a callback fired when a stream first yields a
 // packet (see confirmOpen). Call before the first ReadPacket; not safe to
 // change once packets are flowing.
-func (rs *RecoveryStream) SetOnParserConfirmed(fn func(parser string)) {
+func (rs *RecoveryStream) SetOnParserConfirmed(fn func(info OpenInfo)) {
 	rs.onParserConfirmed = fn
 }
 
@@ -92,11 +98,11 @@ func (rs *RecoveryStream) SetOnParserConfirmed(fn func(parser string)) {
 // successful Open is NOT proof that audio will flow: the ffmpeg-backed parsers
 // only spawn a process here, so a CDN 403 surfaces later, on the first read.
 // confirmOpen is where a parser is known to be playing.
-func (rs *RecoveryStream) Open(seek float64) error {
+func (rs *RecoveryStream) Open(seek float64) (OpenInfo, error) {
 	// Cache-first: serve a completed blob for this track if one exists (shared
 	// across guilds). A miss or open failure falls through to the parser list.
 	if activeCache != nil && !rs.cacheDisabled {
-		if key, ok := cache.Key(rs.track); ok && activeCache.Has(key) {
+		if key, ok := cache.Key(&rs.track); ok && activeCache.Has(key) {
 			reader, err := activeCache.OpenAt(key, opus.SeekPackets(seek))
 			if err != nil {
 				rs.log.Warn().Str("cache_key", key).Err(err).Msg("cache_open_failed")
@@ -111,7 +117,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 				rs.fromCache = true
 				rs.firstRead = true
 				rs.log.Info().Str("cache_key", key).Float64("seek", seek).Msg("stream_opening_from_cache")
-				return nil
+				return rs.openInfo(), nil
 			}
 		}
 	}
@@ -124,7 +130,7 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		}
 		rs.track.Passthrough = false // parser sets true if it opens passthrough
 		rs.track.Cached = false
-		reader, cleanup, err := openWithParser(rs.track, parser, seek)
+		reader, cleanup, err := openWithParser(&rs.track, parser, seek)
 		if err != nil {
 			rs.log.Warn().Str("parser", parser).Err(err).Msg("stream_open_failed")
 			rs.retries[parser]++
@@ -139,9 +145,9 @@ func (rs *RecoveryStream) Open(seek float64) error {
 		rs.fromCache = false
 		rs.firstRead = true
 		rs.log.Info().Str("parser", parser).Float64("seek", seek).Msg("stream_opening")
-		return nil
+		return rs.openInfo(), nil
 	}
-	return errors.New("stream: all parsers failed or exceeded recovery attempts")
+	return OpenInfo{}, errors.New("stream: all parsers failed or exceeded recovery attempts")
 }
 
 // startCacheWrite begins caching a clean from-start play of an as-yet-uncached
@@ -152,7 +158,7 @@ func (rs *RecoveryStream) startCacheWrite(seek float64) {
 	if rs.cacheWriter != nil || activeCache == nil || seek != 0 {
 		return
 	}
-	key, ok := cache.Key(rs.track)
+	key, ok := cache.Key(&rs.track)
 	if !ok || activeCache.Has(key) {
 		return
 	}
@@ -224,7 +230,7 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 				rs.cacheDisabled = true
 				rs.fromCache = false
 				rs.closeCurrent()
-				if reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
+				if _, reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
 					rs.abortCache()
 					return nil, err
 				}
@@ -235,7 +241,7 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 			rs.log.Warn().Str("parser", rs.curParser).Err(err).Msg("immediate_failure_switching_parser")
 			rs.closeCurrent()
 			rs.parserIndex++
-			if reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
+			if _, reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
 				rs.abortCache()
 				return nil, err
 			}
@@ -288,7 +294,7 @@ func (rs *RecoveryStream) confirmOpen() {
 		rs.log.Info().Str("parser", rs.curParser).Float64("seek", rs.seekSec).Msg("stream_opened")
 	}
 	if rs.onParserConfirmed != nil {
-		rs.onParserConfirmed(rs.curParser)
+		rs.onParserConfirmed(rs.openInfo())
 	}
 }
 
@@ -362,7 +368,8 @@ func (rs *RecoveryStream) reopen(cause error) error {
 		// lose by waiting.
 		time.Sleep(liveReopenBackoff)
 	}
-	return rs.Open(seek)
+	_, err := rs.Open(seek)
+	return err
 }
 
 // ReopenAfterTransportFailure reopens the media stream at the current position
@@ -370,7 +377,8 @@ func (rs *RecoveryStream) reopen(cause error) error {
 // recovery.
 func (rs *RecoveryStream) ReopenAfterTransportFailure() error {
 	rs.closeCurrent()
-	return rs.Open(rs.seekSec)
+	_, err := rs.Open(rs.seekSec)
+	return err
 }
 
 // setActive installs the freshly opened stream under the lock Close also takes.
@@ -439,8 +447,10 @@ func (rs *RecoveryStream) Close() error {
 	return nil
 }
 
-// Track returns the underlying track.
-func (rs *RecoveryStream) Track() *parsers.Track { return rs.track }
+// Track returns a copy of the track this stream is playing, including what
+// the active parser filled in at open time. A copy, because the original is
+// the producer goroutine's to write.
+func (rs *RecoveryStream) Track() parsers.Track { return rs.track.Clone() }
 
 // Parser returns the current parser key.
 func (rs *RecoveryStream) Parser() string { return rs.curParser }

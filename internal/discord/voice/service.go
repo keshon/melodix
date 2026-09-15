@@ -226,8 +226,8 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 		}
 		switch status {
 		case player.StatusPlaying:
-			track := p.CurrentTrack()
-			if track == nil {
+			track, ok := p.CurrentTrack()
+			if !ok {
 				s.log.Warn().Str("guild_id", guildID).Msg("now_playing_render_skipped_no_track")
 				continue
 			}
@@ -235,7 +235,7 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			// is registered, so check first — otherwise this traces a render
 			// that never happened.
 			registered := s.hasStatusMessage(guildID)
-			if err := s.UpdatePlaybackStatus(guildID, reply.NowPlayingEmbed(track)); err != nil {
+			if err := s.UpdatePlaybackStatus(guildID, reply.NowPlayingEmbed(&track)); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 				continue
 			}

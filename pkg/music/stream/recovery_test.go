@@ -54,7 +54,7 @@ func TestRecoveryStream_ImmediateFail_SwitchesToNextParser(t *testing.T) {
 
 	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 
@@ -65,8 +65,11 @@ func TestRecoveryStream_ImmediateFail_SwitchesToNextParser(t *testing.T) {
 	if len(pkt) != 1 || pkt[0] != 0xAA {
 		t.Fatalf("expected p2's packet, got %v", pkt)
 	}
-	if track.CurrentParser != "p2" {
-		t.Fatalf("CurrentParser = %q, want p2", track.CurrentParser)
+	if got := rs.Track().CurrentParser; got != "p2" {
+		t.Fatalf("CurrentParser = %q, want p2", got)
+	}
+	if track.CurrentParser != "" {
+		t.Fatalf("the caller's track was written: CurrentParser = %q", track.CurrentParser)
 	}
 }
 
@@ -86,7 +89,7 @@ func TestRecoveryStream_NaturalEOF_DoesNotFallback(t *testing.T) {
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}},
 	}
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 
@@ -96,8 +99,8 @@ func TestRecoveryStream_NaturalEOF_DoesNotFallback(t *testing.T) {
 	if _, err := rs.ReadPacket(); !errors.Is(err, io.EOF) {
 		t.Fatalf("second ReadPacket = %v, want EOF (no fallback)", err)
 	}
-	if track.CurrentParser != "p1" {
-		t.Fatalf("stayed off p1: %q", track.CurrentParser)
+	if got := rs.Track().CurrentParser; got != "p1" {
+		t.Fatalf("stayed off p1: %q", got)
 	}
 	if rs.parserIndex != 0 {
 		t.Fatalf("parserIndex = %d, want 0", rs.parserIndex)
@@ -123,9 +126,9 @@ func TestRecoveryStream_ParserConfirmed_NamesThePlayingParser(t *testing.T) {
 	rs := NewRecoveryStream(track)
 
 	var confirmed []string
-	rs.SetOnParserConfirmed(func(parser string) { confirmed = append(confirmed, parser) })
+	rs.SetOnParserConfirmed(func(info OpenInfo) { confirmed = append(confirmed, info.Parser) })
 
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if len(confirmed) != 0 {
@@ -162,9 +165,9 @@ func TestRecoveryStream_ReopenAfterTransportFailure_ReConfirms(t *testing.T) {
 	rs := NewRecoveryStream(track)
 
 	var confirmed []string
-	rs.SetOnParserConfirmed(func(parser string) { confirmed = append(confirmed, parser) })
+	rs.SetOnParserConfirmed(func(info OpenInfo) { confirmed = append(confirmed, info.Parser) })
 
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if _, err := rs.ReadPacket(); err != nil {
@@ -226,7 +229,7 @@ func TestRecoveryStream_MidStreamTransportError_Reopens(t *testing.T) {
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 
@@ -271,7 +274,7 @@ func TestRecoveryStream_ClosedStream_DoesNotReopen(t *testing.T) {
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if _, err := rs.ReadPacket(); err != nil {
@@ -335,7 +338,7 @@ func TestRecoveryStream_BufferCoversTheReconnectGap(t *testing.T) {
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	defer rs.Close()
@@ -389,7 +392,7 @@ func TestRecoveryStream_PacketsIsStable(t *testing.T) {
 		Duration:   time.Second,
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	})
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	defer rs.Close()
@@ -427,7 +430,7 @@ func TestRecoveryStream_LiveStreamReconnects(t *testing.T) {
 		},
 	}
 	rs := NewRecoveryStream(track)
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	defer rs.Close()
@@ -471,7 +474,7 @@ func TestRecoveryStream_LiveStreamGivesUpEventually(t *testing.T) {
 			AvailableParsers: []string{"radio"},
 		},
 	})
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	defer rs.Close()
@@ -503,7 +506,7 @@ func TestRecoveryStream_FiniteTrackNearTheEndIsDone(t *testing.T) {
 		Duration:   20 * time.Second, // 1000 packets; 990 is inside the last 5%
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	})
-	if err := rs.Open(0); err != nil {
+	if _, err := rs.Open(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	defer rs.Close()

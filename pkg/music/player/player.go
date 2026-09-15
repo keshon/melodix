@@ -325,11 +325,18 @@ func (p *Player) PlayNext(target string) error {
 			continue
 		}
 
+		// startTrack has spawned the run by now, and the run's reader fills in
+		// what the parser learned. So this is no longer a local variable to
+		// read freely: take it under the lock its writer takes.
+		p.mu.Lock()
+		started := track.Clone()
+		p.mu.Unlock()
+
 		// History is written from onParserConfirmed, once a parser has actually
 		// produced audio — opening one proves nothing (see RecoveryStream.Open).
 		p.log.Info().
-			Str("title", track.Title).
-			Str("parser", track.CurrentParser).
+			Str("title", started.Title).
+			Str("parser", started.CurrentParser).
 			Int("queue_len", len(p.Queue())).
 			Msg("track_now_playing")
 		return nil
@@ -406,13 +413,20 @@ func (p *Player) IsPlaying() bool {
 	return p.playing || p.starting
 }
 
-// CurrentTrack returns the track being opened or played, or nil when idle. The
-// pointer identity is meaningful: a playback run owns its own *parsers.Track,
-// compares against this to tell itself apart from a newer run (clearIfCurrent).
-func (p *Player) CurrentTrack() *parsers.Track {
+// CurrentTrack returns the track being opened or played; ok is false when the
+// player is idle.
+//
+// It returns a copy. The player's own Track is written while a track plays --
+// the parser that actually opened it, whether it is passthrough or cached, a
+// title the media knew and the resolver did not -- so handing the caller the
+// original would hand a renderer something the engine is still editing.
+func (p *Player) CurrentTrack() (parsers.Track, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.currTrack
+	if p.currTrack == nil {
+		return parsers.Track{}, false
+	}
+	return p.currTrack.Clone(), true
 }
 
 // Queue returns a snapshot of the waiting tracks. It is a clone, so a caller
@@ -422,14 +436,6 @@ func (p *Player) Queue() []parsers.Track {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return slices.Clone(p.queue)
-}
-
-func cloneTrack(tp parsers.Track) parsers.Track {
-	out := tp
-	if len(tp.SourceInfo.AvailableParsers) > 0 {
-		out.SourceInfo.AvailableParsers = slices.Clone(tp.SourceInfo.AvailableParsers)
-	}
-	return out
 }
 
 // startTrack opens the track and hands it to a playback goroutine. It returns
@@ -460,8 +466,9 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	p.mu.Unlock()
 
 	rs := stream.NewRecoveryStreamWithLogger(track, p.log)
-	rs.SetOnParserConfirmed(func(parser string) { p.onParserConfirmed(track, parser) })
-	if err := rs.Open(0); err != nil {
+	rs.SetOnParserConfirmed(func(info stream.OpenInfo) { p.onParserConfirmed(track, info) })
+	info, err := rs.Open(0)
+	if err != nil {
 		p.log.Error().Err(err).Msg("stream_open_failed")
 		p.mu.Lock()
 		p.starting = false
@@ -469,6 +476,14 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 		p.mu.Unlock()
 		return err
 	}
+
+	// What opened is not always what was asked for: the first preference may
+	// have failed, or a cached blob may have answered instead. Apply that
+	// before the status goes out, so the first Now Playing names the parser
+	// that is actually carrying the audio.
+	p.mu.Lock()
+	info.Apply(track)
+	p.mu.Unlock()
 
 	if resumed {
 		p.clearPlaybackUserError()
@@ -541,14 +556,21 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 	recoveryMode := p.transportRecoveryMode
 	softAttempts := p.transportSoftAttempts
 	guildID := p.guildID
+	// One snapshot for everything this run reports: its logs and the track it
+	// hands to a failure callback. The reader goroutine writes track as the
+	// parser confirms itself, so reading it field by field from here would be
+	// reading it while it is being written.
+	failedSnapshot := track.Clone()
 	p.mu.Unlock()
 
 	// The buffered view is built once and reused across transport reopens, so the
 	// read-ahead lead is not thrown away every time voice reconnects.
 	packets := rs.Packets()
 
-	failedSnapshot := cloneTrack(*track)
-	p.log.Info().Str("title", track.Title).Str("parser", track.CurrentParser).Msg("playback_running")
+	p.log.Info().
+		Str("title", failedSnapshot.Title).
+		Str("parser", failedSnapshot.CurrentParser).
+		Msg("playback_running")
 
 	var err error
 	softUsed := 0
@@ -625,12 +647,16 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 // previous parser opened, then died on its first read) re-emits StatusPlaying
 // the Now Playing embed stops naming a parser that never played.
 // Called from the playback goroutine; must not be called with p.mu held.
-func (p *Player) onParserConfirmed(track *parsers.Track, parser string) {
+func (p *Player) onParserConfirmed(track *parsers.Track, info stream.OpenInfo) {
+	parser := info.Parser
 	p.mu.Lock()
 	if p.currTrack != track {
 		p.mu.Unlock() // a newer run owns the player; this stream is being torn down
 		return
 	}
+	// The player is this Track's only writer, and this is the lock that makes
+	// that true: the callback arrives on the goroutine reading packets.
+	info.Apply(track)
 	// Compare against what the UI was told, not against the previous confirmation:
 	// when the announced parser dies on its first read, the first confirmation
 	// is already a different parser and still needs a redraw.
@@ -643,12 +669,13 @@ func (p *Player) onParserConfirmed(track *parsers.Track, parser string) {
 	if record {
 		p.recorded = true
 	}
+	confirmed := track.Clone()
 	p.mu.Unlock()
 
 	if record {
 		// Future: listened-duration aggregation would need completion callbacks,
 		// from here or from runPlayback.
-		rec.Record(gid, time.Now(), cloneTrack(*track))
+		rec.Record(gid, time.Now(), confirmed)
 	}
 	if !stale {
 		return // the UI already names this parser (same parser reopened)
@@ -657,7 +684,7 @@ func (p *Player) onParserConfirmed(track *parsers.Track, parser string) {
 	// reports the media switch, this one reports its user-visible consequence --
 	// the Now Playing embed still names `announced`, which never produced audio.
 	p.log.Info().
-		Str("title", track.Title).
+		Str("title", confirmed.Title).
 		Str("announced", announced).
 		Str("parser", parser).
 		Msg("now_playing_parser_corrected")

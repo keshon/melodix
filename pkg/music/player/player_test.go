@@ -308,7 +308,7 @@ func TestConcurrentHammer(t *testing.T) {
 		func() { _ = p.PlayNext("") },
 		func() { _ = p.Stop(false) },
 		func() { _ = p.Queue() },
-		func() { _ = p.CurrentTrack() },
+		func() { _, _ = p.CurrentTrack() },
 		func() { _ = p.IsPlaying() },
 	}
 	for _, op := range ops {

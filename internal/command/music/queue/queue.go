@@ -7,6 +7,7 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
@@ -47,12 +48,18 @@ func (c *Queue) Run(ctx interface{}) error {
 	}
 
 	// Read-only view: no voice state or permission check, and nothing is mutated.
-	current := p.CurrentTrack()
+	current, playing := p.CurrentTrack()
 	upcoming := p.Queue()
+	// FormatQueueBody reads nil as "nothing playing". The pointer is to this
+	// function's own copy, which nothing else writes.
+	var nowPlaying *parsers.Track
+	if playing {
+		nowPlaying = &current
+	}
 
 	embed := &cmdadapter.Embed{
 		Title:       "🎵 Queue",
-		Description: common.FormatQueueBody(current, upcoming),
+		Description: common.FormatQueueBody(nowPlaying, upcoming),
 		Color:       reply.EmbedColor,
 	}
 	if n := len(upcoming); n > 0 {

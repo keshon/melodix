@@ -95,8 +95,8 @@ func StartAndRender(bot discord.VoiceAPI, ctx cmdadapter.Interaction, log zerolo
 	}
 
 	embed := reply.TracksAddedEmbed(added)
-	if track := t.Player.CurrentTrack(); track != nil {
-		embed = reply.NowPlayingEmbed(track)
+	if track, ok := t.Player.CurrentTrack(); ok {
+		embed = reply.NowPlayingEmbed(&track)
 	}
 	if err := bot.AnnouncePlayback(ctx, t.GuildID, embed); err != nil {
 		log.Warn().Str("guild_id", t.GuildID).Err(err).Msg("guild_status_update_failed")
