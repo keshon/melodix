@@ -96,8 +96,7 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `internal/discord/cmdadapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
 | `internal/discord/cmdsync` | Per-guild slash-command diff sync (create/edit/delete) |
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
-| `internal/discord/cmdqueue` | One FIFO lane per guild, drained off the gateway read goroutine: a guild's commands stay ordered and never overlap, different guilds run at once |
-| `internal/discord/execguard` | Global cap on how many command bodies run at once, across every guild |
+| `internal/discord/cmdqueue` | How commands get scheduled: one FIFO lane per guild, drained off the gateway read goroutine so a guild's commands stay ordered and never overlap, plus the global cap on how many run at once across every guild |
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
 | `internal/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
@@ -443,8 +442,8 @@ discovered through interface assertion: `SlashProvider`,
 Dispatch happens through `onApplicationCommand`, which routes slash and
 context-menu commands into `cmdqueue` and returns; message components are
 matched by a `customID` prefix convention (`name`, `name:`, `name_`) and go
-the same way. The body then runs on a worker, under `execguard`
-(`COMMAND_PARALLELISM` caps how many run at once across all guilds).
+the same way. The body then runs on a worker, under the queue's own cap
+(`COMMAND_PARALLELISM` limits how many run at once across all guilds).
 
 That indirection is the point. disgo dispatches events synchronously — one
 goroutine reads the socket and calls every listener inline — so a command

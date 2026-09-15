@@ -10,7 +10,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func newTestQueue() *Queue { return New(zerolog.Nop()) }
+// Uncapped: these tests are about lanes, and the cap has its own below.
+func newTestQueue() *Queue { return New(zerolog.Nop(), 0) }
 
 // Submitting must not wait for the work, or nothing has moved off the gateway
 // read goroutine at all.
@@ -254,4 +255,55 @@ func TestALaneRefusesRatherThanGrowWithoutBound(t *testing.T) {
 	if !q.Submit("g2", func() {}) {
 		t.Fatal("one guild filling its lane refused another guild's command")
 	}
+}
+
+// The cap is global: it is what stops every guild in a busy process running a
+// command at the same moment, and it is the only thing COMMAND_PARALLELISM
+// sets.
+func TestTheCapLimitsCommandsAcrossEveryLane(t *testing.T) {
+	q := New(zerolog.Nop(), 2)
+	defer q.Close(timeoutCtx(t, time.Second))
+
+	var live, peak atomic.Int64
+	var wg sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		lane := string(rune('a' + i))
+		q.Submit(lane, func() {
+			defer wg.Done()
+			if err := q.Acquire(context.Background()); err != nil {
+				t.Errorf("acquire: %v", err)
+				return
+			}
+			defer q.Release()
+			n := live.Add(1)
+			for {
+				p := peak.Load()
+				if n <= p || peak.CompareAndSwap(p, n) {
+					break
+				}
+			}
+			time.Sleep(2 * time.Millisecond)
+			live.Add(-1)
+		})
+	}
+	wg.Wait()
+
+	if got := peak.Load(); got > 2 {
+		t.Fatalf("%d commands ran at once under a cap of 2", got)
+	}
+}
+
+// An uncapped queue must not make Acquire a no-op that blocks, or a
+// parallelism of zero would stop the bot rather than unleash it.
+func TestAnUncappedQueueNeverWaits(t *testing.T) {
+	q := New(zerolog.Nop(), 0)
+	defer q.Close(timeoutCtx(t, time.Second))
+
+	for i := 0; i < 100; i++ {
+		if err := q.Acquire(context.Background()); err != nil {
+			t.Fatalf("acquire %d on an uncapped queue: %v", i, err)
+		}
+	}
+	q.Release()
 }

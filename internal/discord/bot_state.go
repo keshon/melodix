@@ -8,7 +8,6 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/cmdqueue"
-	"github.com/keshon/melodix/internal/discord/execguard"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
@@ -38,11 +37,8 @@ type Bot struct {
 	// storing the same type twice does not panic, which is a test of the
 	// standard library.
 	sessionCtx atomic.Pointer[context.Context]
-	cmdGuard   atomic.Pointer[execguard.Guard]
 	conn       atomic.Pointer[conn]
 }
-
-var disabledGuard = execguard.New(0)
 
 // slotWaitBudget bounds how long a command waits for a free slot before it
 // gives up and says the bot is busy.
@@ -63,15 +59,6 @@ func (b *Bot) baseSessionContext() context.Context {
 	return context.Background()
 }
 
-func (b *Bot) setGuard(g *execguard.Guard) { b.cmdGuard.Store(g) }
-
-func (b *Bot) guard() *execguard.Guard {
-	if g := b.cmdGuard.Load(); g != nil {
-		return g
-	}
-	return disabledGuard
-}
-
 // commandContext is the session's context, cancelled when the session ends.
 // It carries no deadline: nothing downstream of here takes a context, so one
 // would only be a claim.
@@ -80,11 +67,11 @@ func (b *Bot) commandContext() (context.Context, context.CancelFunc) {
 }
 
 func (b *Bot) acquireCommandSlot(ctx context.Context) error {
-	return b.guard().Acquire(ctx)
+	return b.commands.Acquire(ctx)
 }
 
 func (b *Bot) releaseCommandSlot() {
-	b.guard().Release()
+	b.commands.Release()
 }
 
 func (b *Bot) isGuildBlacklisted(guildID string) bool {

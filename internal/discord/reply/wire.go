@@ -381,3 +381,21 @@ func SlashCommandUpdate(c *cmdadapter.SlashCommand) discord.ApplicationCommandUp
 		}
 	}
 }
+
+// ClampEmbedText caps a string at a rune length Discord will accept in an
+// embed description, appending an ellipsis when it has to cut.
+//
+// The cap is on runes rather than bytes because Discord counts characters and
+// Go counts bytes, and a track title is exactly the kind of string where those
+// disagree.
+func ClampEmbedText(s string) string {
+	if s == "" {
+		return ""
+	}
+	const maxRunes = 3500
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return string(r)
+	}
+	return string(r[:maxRunes]) + "…"
+}

@@ -1,13 +1,13 @@
 package common
 
 import (
-	"github.com/keshon/melodix/internal/playbackerr"
+	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 // PlaybackErrorString applies the same length limits as
 // PlaybackErrorDescription for a raw message.
 func PlaybackErrorString(s string) string {
-	return playbackerr.String(s)
+	return reply.ClampEmbedText(s)
 }
 
 // PlaybackErrorDescription formats an error for a Discord embed description
@@ -16,5 +16,5 @@ func PlaybackErrorDescription(err error) string {
 	if err == nil {
 		return "Unknown error."
 	}
-	return playbackerr.String(err.Error())
+	return reply.ClampEmbedText(err.Error())
 }

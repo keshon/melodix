@@ -8,7 +8,6 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/reply"
-	"github.com/keshon/melodix/internal/playbackerr"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
@@ -123,7 +122,7 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 	if api == nil {
 		return
 	}
-	detail := playbackerr.String(err.Error())
+	detail := reply.ClampEmbedText(err.Error())
 	var desc string
 	if track.Title != "" && track.URL != "" {
 		desc = fmt.Sprintf("%s\n\n[%s](%s)", detail, track.Title, track.URL)

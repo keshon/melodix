@@ -7,35 +7,14 @@ import (
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
-	disgovoice "github.com/disgoorg/disgo/voice"
 	"github.com/keshon/command"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/cmdlogger"
 	"github.com/keshon/melodix/internal/discord/cmdsync"
-	"github.com/keshon/melodix/internal/discord/execguard"
-	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/discord/voice/voicesink"
 	"github.com/keshon/melodix/internal/discord/watchdog"
 )
-
-// clientConn is the live disgo connection.
-type clientConn struct {
-	client *bot.Client
-	dave   *voicesink.DaveRegistry
-}
-
-var _ conn = clientConn{}
-
-func (c clientConn) API() cmdadapter.BotAPI {
-	return reply.NewSessionAPI(c.client)
-}
-
-// VoiceResources hands out this session's voice manager and DAVE registry.
-func (c clientConn) VoiceResources() (disgovoice.Manager, *voicesink.DaveRegistry) {
-	return c.client.VoiceManager, c.dave
-}
 
 // RunSession opens one Discord session and blocks until ctx is cancelled or
 // the session is judged unhealthy (transient gateway reconnects do not exit
@@ -84,17 +63,14 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	syncer = cmdsync.NewSyncer(client, command.DefaultRegistry, b.log)
 	logger = cmdlogger.NewLogger(client, b.storage, b.log)
 
-	b.setConn(clientConn{client: client, dave: dave})
+	b.setConn(&conn{client: client, dave: dave})
 	defer b.clearConn()
-
-	b.setGuard(execguard.New(b.cfg.CommandParallelism))
 
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	b.setSessionContext(sessionCtx)
 	defer func() {
 		cancelSession()
 		b.setSessionContext(context.Background())
-		b.setGuard(disabledGuard)
 	}()
 
 	openCtx, cancelOpen := context.WithTimeout(ctx, 30*time.Second)

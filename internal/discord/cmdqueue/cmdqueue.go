@@ -18,8 +18,9 @@
 // Per guild rather than per command, because a guild's music is inherently
 // sequential: /play and /next at the same instant have no meaningful
 // interleaving, and serialising them costs nothing anybody wants. Different
-// guilds run at the same time, capped by whatever the caller's own limiter
-// allows.
+// guilds run at the same time, up to the global cap this package also owns --
+// lanes and cap being two halves of one question, which is how many commands
+// may be running and which of them may overlap.
 package cmdqueue
 
 import (
@@ -42,9 +43,14 @@ import (
 // many commands into one guild meaning all of them.
 const maxPerLane = 64
 
-// Queue holds one FIFO lane per key, each drained by at most one goroutine.
+// Queue holds one FIFO lane per key, each drained by at most one goroutine,
+// and a cap on how many of those may be running at once across every lane.
 type Queue struct {
 	log zerolog.Logger
+
+	// slots caps concurrent command bodies across all lanes. nil means
+	// uncapped, which is what a parallelism of zero or less asks for.
+	slots chan struct{}
 
 	mu     sync.Mutex
 	lanes  map[string]*lane
@@ -63,11 +69,47 @@ type lane struct {
 	draining bool
 }
 
-// New creates an empty queue.
-func New(log zerolog.Logger) *Queue {
-	return &Queue{
+// New creates an empty queue that will run at most parallelism command bodies
+// at once across every lane. Zero or less means uncapped.
+func New(log zerolog.Logger, parallelism int) *Queue {
+	q := &Queue{
 		log:   log.With().Str("component", "cmdqueue").Logger(),
 		lanes: make(map[string]*lane),
+	}
+	if parallelism > 0 {
+		q.slots = make(chan struct{}, parallelism)
+	}
+	return q
+}
+
+// Acquire reserves one of the global slots, or returns ctx's error if none
+// comes free in time. Pair every successful call with exactly one Release.
+func (q *Queue) Acquire(ctx context.Context) error {
+	if q == nil || q.slots == nil {
+		return nil
+	}
+	select {
+	case q.slots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Release frees the slot the caller holds.
+//
+// The non-blocking read is not politeness towards an unpaired Release. It
+// cannot tell one apart from a real one -- an unpaired Release frees somebody
+// else's slot, silently raising the cap by one for as long as the process
+// lives -- and blocking instead would deadlock the caller rather than report
+// the bug. What it buys is that Release on an uncapped queue is a no-op.
+func (q *Queue) Release() {
+	if q == nil || q.slots == nil {
+		return
+	}
+	select {
+	case <-q.slots:
+	default:
 	}
 }
 
