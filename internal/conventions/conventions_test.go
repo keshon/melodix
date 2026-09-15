@@ -1,7 +1,6 @@
 package conventions
 
 import (
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -17,21 +16,19 @@ import (
 	"unicode/utf8"
 )
 
-// The checks below ratchet: baseline.json records what each file owed when a
-// rule was introduced, and a rule fails only when a file gets worse. New files
-// start at zero, so new code meets the rule in full while old code is only
-// required not to rot. That is what makes it possible to adopt a rule on a live
-// codebase without a repo-wide edit nobody can review.
+// The checks below are absolute: a violation anywhere is a failure.
 //
-// Frozen identifiers are the exception and carry no baseline: their whole point
-// is that they can never change. See TestFrozenIdentifiers.
+// They used to ratchet against a recorded baseline, so a rule could be adopted
+// on a codebase that already broke it and only fail on files that got worse.
+// That machinery -- the baseline file, the update mode, the guard stopping CI
+// from rewriting it, the scorecard reporting the balance -- outlived its
+// purpose: the debt was burned down to zero, the baseline file has not existed
+// since, and every rule has held at zero ever since. Managing a debt of
+// nothing is more moving parts than the rules themselves.
 //
-// To accept the current state after fixing (or knowingly adding) violations:
-//
-//	CONVENTIONS_UPDATE=1 go test ./internal/conventions/
-//
-// Do NOT reach for that to silence a failure you have not read. The number
-// going up is the finding; the baseline is only bookkeeping.
+// If a rule ever has to be adopted against existing debt again, the history
+// has the machinery, and golangci-lint's --new-from-merge-base does the same
+// job line-exactly and off the shelf.
 
 // --- project configuration ---
 //
@@ -39,15 +36,14 @@ import (
 // maps above TestFrozenIdentifiers. To reuse this package elsewhere: copy the
 // directory, edit these four fields, then rewrite frozenPackages and
 // frozenLiterals for that project's persisted strings (or delete both tests if
-// it has none). Run CONVENTIONS_UPDATE=1 once to record its baseline. Nothing
-// else is Melodix-shaped.
+// it has none). Nothing else is Melodix-shaped.
 var project = struct {
 	// docPath locates the conventions document from the repo root. The wording
 	// of every enforced rule is read out of it, so moving the file means
 	// changing this.
 	docPath []string
 	// libraryPrefix scopes the rules that only apply to the reusable surface —
-	// error prefixes and the density scorecard. Empty means the whole tree.
+	// error prefixes. Empty means the whole tree.
 	libraryPrefix string
 	// skipDirs are paths that are not ours to hold to these rules.
 	skipDirs []string
@@ -103,8 +99,8 @@ type rule struct {
 }
 
 type goFile struct {
-	// path is slash-separated and relative to the repo root, so baselines are
-	// identical on Windows and Linux.
+	// path is slash-separated and relative to the repo root, so a failure
+	// reads the same on Windows and Linux.
 	path  string
 	pkg   string
 	lines []string
@@ -154,77 +150,26 @@ func TestConventions(t *testing.T) {
 	}
 
 	doc := loadDoc(t, root)
-	base := loadBaseline(t, root)
-	found := map[string]map[string]int{}
-	update := os.Getenv("CONVENTIONS_UPDATE") != ""
-	if update && os.Getenv("CI") != "" {
-		t.Fatal("CONVENTIONS_UPDATE is set in CI, which would rewrite the " +
-			"baseline instead of checking against it — remove it from the " +
-			"workflow environment")
-	}
 
 	for _, r := range rules() {
-		vs := r.scan(t, files)
-		counts := map[string]int{}
 		byFile := map[string][]violation{}
-		for _, v := range vs {
-			counts[v.file]++
+		for _, v := range r.scan(t, files) {
 			byFile[v.file] = append(byFile[v.file], v)
 		}
-		found[r.name] = counts
-		if update {
-			continue
+		for _, file := range sortedKeys(byFile) {
+			t.Errorf("%s: %s has %d violation(s)\n  rule: %q\n%s",
+				r.name, file, len(byFile[file]), ruleText(doc, r.name), sample(byFile[file]))
 		}
-		checkRatchet(t, r, ruleText(doc, r.name), base[r.name], counts, byFile)
-	}
-
-	if update {
-		writeBaseline(t, root, found)
-		// Deliberately not a passing run. An update skips the ratchet entirely,
-		// so a green exit here would mean one stray environment variable — a
-		// shell profile, a CI block, an agent's environment — silently disables
-		// every ratcheted rule with no signal anywhere. Failing keeps the escape
-		// hatch a thing you do on purpose and then look at.
-		t.Errorf("baseline.json rewritten from the current tree; "+
-			"re-run without CONVENTIONS_UPDATE to verify, and review the diff "+
-			"before committing it (%d rules recorded)", len(found))
-	}
-	reportScorecard(t, base, found, files)
-}
-
-// checkRatchet fails on any file that got worse, and reports the ones that got
-// better so the baseline can be tightened rather than quietly drifting loose.
-func checkRatchet(t *testing.T, r rule, text string, allowed, counts map[string]int, byFile map[string][]violation) {
-	t.Helper()
-	worse, better := compareToBaseline(allowed, counts)
-
-	for _, file := range worse {
-		t.Errorf("%s: %s went from %d to %d violations\n  rule: %q\n%s",
-			r.name, file, allowed[file], counts[file], text, sample(byFile[file]))
-	}
-	if len(better) > 0 && len(worse) == 0 {
-		t.Logf("%s: %d file(s) improved — run CONVENTIONS_UPDATE=1 to lock the gain in: %s",
-			r.name, len(better), strings.Join(better, ", "))
 	}
 }
 
-// compareToBaseline splits files into those that exceeded their allowance and
-// those that beat it. It takes no *testing.T so the ratchet's arithmetic — the
-// part every rule depends on — can be asserted directly in selfcheck_test.go.
-func compareToBaseline(allowed, counts map[string]int) (worse, better []string) {
-	for file, n := range counts {
-		if n > allowed[file] {
-			worse = append(worse, file)
-		}
+func sortedKeys(m map[string][]violation) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
 	}
-	for file, n := range allowed {
-		if counts[file] < n {
-			better = append(better, file)
-		}
-	}
-	sort.Strings(worse)
-	sort.Strings(better)
-	return worse, better
+	sort.Strings(out)
+	return out
 }
 
 func sample(vs []violation) string {
@@ -436,7 +381,7 @@ var frozenLiterals = map[string][]string{
 // slash-command choices; the /search source tags sit inside component ids on
 // choosers already posted in channels, which come back when someone presses a
 // button long after a restart. Renaming any of them silently breaks data that
-// is already out there, so this test has no baseline and never gets one.
+// is already out there, so this one was never negotiable.
 //
 // It reads the constants out of the source with go/ast rather than trusting a
 // list, so the three ways this can go wrong all fail here: a value changed, a
@@ -752,56 +697,6 @@ func TestDocumentAndChecksAgree(t *testing.T) {
 // explains a hard decision from one that repeats itself, so gating it would
 // pressure people to delete comments that earn their place. It is reported so
 // drift is visible and judged by a person, which is the honest arrangement.
-func reportScorecard(t *testing.T, base, found map[string]map[string]int, files []goFile) {
-	t.Helper()
-	var b strings.Builder
-	b.WriteString("\n  convention scorecard\n")
-	for _, r := range rules() {
-		fmt.Fprintf(&b, "    %-18s %4d violations (baseline %d)\n",
-			r.name, total(found[r.name]), total(base[r.name]))
-	}
-
-	type dens struct {
-		path  string
-		ratio float64
-	}
-	var ds []dens
-	for _, f := range files {
-		if !strings.HasPrefix(f.path, project.libraryPrefix) || strings.HasSuffix(f.path, "_test.go") {
-			continue
-		}
-		var c, code int
-		for _, l := range f.lines {
-			switch {
-			case strings.TrimSpace(l) == "":
-			case strings.HasPrefix(strings.TrimSpace(l), "//"):
-				c++
-			default:
-				code++
-			}
-		}
-		if code >= 40 {
-			ds = append(ds, dens{f.path, float64(c) / float64(code)})
-		}
-	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i].ratio > ds[j].ratio })
-	fmt.Fprintf(&b, "    comment density, %s (not a gate — read them):\n", project.libraryPrefix)
-	for i, d := range ds {
-		if i == 5 {
-			break
-		}
-		fmt.Fprintf(&b, "      %.2f  %s\n", d.ratio, d.path)
-	}
-	t.Log(b.String())
-}
-
-func total(m map[string]int) int {
-	n := 0
-	for _, v := range m {
-		n += v
-	}
-	return n
-}
 
 // --- plumbing ---
 
@@ -863,45 +758,4 @@ func collectGoFiles(t *testing.T, root string) []goFile {
 		t.Fatalf("walk: %v", err)
 	}
 	return out
-}
-
-func baselinePath(root string) string {
-	return filepath.Join(root, "internal", "conventions", "baseline.json")
-}
-
-func loadBaseline(t *testing.T, root string) map[string]map[string]int {
-	t.Helper()
-	src, err := os.ReadFile(baselinePath(root))
-	if os.IsNotExist(err) {
-		return map[string]map[string]int{}
-	}
-	if err != nil {
-		t.Fatalf("read baseline: %v", err)
-	}
-	var out map[string]map[string]int
-	if err := json.Unmarshal(src, &out); err != nil {
-		t.Fatalf("parse baseline: %v", err)
-	}
-	return out
-}
-
-func writeBaseline(t *testing.T, root string, found map[string]map[string]int) {
-	t.Helper()
-	trimmed := map[string]map[string]int{}
-	for rule, counts := range found {
-		kept := map[string]int{}
-		for file, n := range counts {
-			if n > 0 {
-				kept[file] = n
-			}
-		}
-		trimmed[rule] = kept
-	}
-	src, err := json.MarshalIndent(trimmed, "", "  ")
-	if err != nil {
-		t.Fatalf("encode baseline: %v", err)
-	}
-	if err := os.WriteFile(baselinePath(root), append(src, '\n'), 0o644); err != nil {
-		t.Fatalf("write baseline: %v", err)
-	}
 }

@@ -147,39 +147,6 @@ func TestScanErrorPrefixSelfCheck(t *testing.T) {
 	}
 }
 
-func TestCompareToBaselineSelfCheck(t *testing.T) {
-	cases := []struct {
-		name          string
-		allowed       map[string]int
-		counts        map[string]int
-		worse, better []string
-	}{
-		{"unchanged", map[string]int{"a.go": 3}, map[string]int{"a.go": 3}, nil, nil},
-		{"got worse", map[string]int{"a.go": 3}, map[string]int{"a.go": 4}, []string{"a.go"}, nil},
-		{"got better", map[string]int{"a.go": 3}, map[string]int{"a.go": 1}, nil, []string{"a.go"}},
-		{"fixed entirely", map[string]int{"a.go": 3}, map[string]int{}, nil, []string{"a.go"}},
-		{"a new file owes nothing", map[string]int{}, map[string]int{"new.go": 1}, []string{"new.go"}, nil},
-		{"clean new file", map[string]int{}, map[string]int{}, nil, nil},
-		{
-			"one improves while another rots",
-			map[string]int{"a.go": 3, "b.go": 2},
-			map[string]int{"a.go": 1, "b.go": 5},
-			[]string{"b.go"}, []string{"a.go"},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			worse, better := compareToBaseline(c.allowed, c.counts)
-			if strings.Join(worse, ",") != strings.Join(c.worse, ",") {
-				t.Errorf("worse = %v, want %v", worse, c.worse)
-			}
-			if strings.Join(better, ",") != strings.Join(c.better, ",") {
-				t.Errorf("better = %v, want %v", better, c.better)
-			}
-		})
-	}
-}
-
 func TestRuleTextSelfCheck(t *testing.T) {
 	doc := "# Doc\n\n**[enforced: a-rule]** First line of the rule.\nSecond line.\n\n" +
 		"**[practice]** Something else entirely.\n"

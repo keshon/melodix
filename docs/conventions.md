@@ -45,9 +45,10 @@ arrangement exists to prevent. Prose under `[invariant]` and `[practice]` is
 free to change; nothing reads it.
 
 **Adding a rule.** Give it a tier. If it would be [enforced], write the check
-in `internal/conventions/conventions_test.go` first and let it fail, then
-record the baseline. If it would be [invariant], name the failure in the rule
-itself. If it is neither, do not add it.
+in `internal/conventions/conventions_test.go` first, let it fail, then fix
+every violation — a rule arrives at zero or it does not arrive. If it would be
+[invariant], name the failure in the rule itself. If it is neither, do not add
+it.
 
 ## Design principles
 
@@ -120,8 +121,7 @@ guild playback history and
 registered as slash-command choices, so they cannot be renamed later — add new
 ones instead of touching existing ones. The constants live in
 `pkg/music/sources/parsers.go` and `sources.go`; the registry mapping lives in
-`pkg/music/stream/stream.go`. `TestFrozenIdentifiers` pins every value and has
-no baseline, because there is nothing to ratchet toward.
+`pkg/music/stream/stream.go`. `TestFrozenIdentifiers` pins every value.
 
 **[enforced: frozen-identifiers]** `/search`'s button ids are frozen for a
 different reason but just as hard. The format is
@@ -353,45 +353,18 @@ found that.
 curated so a finding always means something. `internal/conventions` runs as
 part of the same `go test ./...`.
 
-The convention checks ratchet: a baseline, written to
-`internal/conventions/baseline.json` when there is anything to write, records
-what each file owed when a rule was introduced, and a rule fails only when a
-file gets **worse**. A new file carries no allowance, so it meets every rule
-in full; a file that already owes something is only required not to owe more.
-That is what lets a rule be adopted on a live codebase without a repo-wide
-edit nobody can review.
+The enforced checks are absolute: a violation anywhere fails the build. They
+used to ratchet against a recorded baseline, so that a rule could be adopted on
+a codebase that already broke it and only fail on files that got *worse*. The
+debt was burned down in one pass (263 violations) and every rule has held at
+zero since, so the baseline, the update mode, the guard stopping CI rewriting
+it and the scorecard were all bookkeeping for a balance of nothing — and have
+been removed. `git log` has them if a rule ever has to be adopted against real
+debt again; `golangci-lint run --new-from-merge-base=origin/main` does the same
+job line-exactly and off the shelf.
 
-**There is no baseline file.** All four ratcheted rules hold everywhere, so
-`baseline.json` has nothing to record and does not exist; a missing baseline
-reads as "nobody owes anything", which makes every violation a real regression
-rather than a number creeping up — the state worth defending. It got there by burning the
-debt down (263 violations, in one pass) rather than by lowering the bar, and
-`git log` has the commit if the method is ever needed again.
-
-Two things to know if debt ever returns. It is a per-file **count**, not a
-per-line record: inside a file that has an allowance you could remove one
-violation and add another without the build noticing. And a `git mv` moves a
-file out from under its allowance, which reads as a regression until the
-baseline is re-accepted. Line-exact ratcheting is available off the shelf —
-`golangci-lint run --new-from-merge-base=origin/main` — if either trade stops
-being acceptable.
-
-After fixing violations, lock the gain in:
-
-```bash
-CONVENTIONS_UPDATE=1 go test ./internal/conventions/
-```
-
-On Windows, `conventions.bat` runs the checks and prints the scorecard, and
-`conventions.bat accept` does the line above. `check.bat` runs the whole gate —
-gofmt, vet, lint, race tests — which is what CI does.
-
-An update run **always fails**, on purpose: it skips the ratchet, so a green
-exit would mean one stray environment variable — a shell profile, a CI block,
-an agent's environment — silently disabling every ratcheted rule with nothing
-to show for it. Re-run without the variable to verify, and read the diff to
-`baseline.json` before committing it. The number going up is the finding; the
-baseline is only bookkeeping.
+On Windows, `conventions.bat` runs the checks. `check.bat` runs the whole gate
+— gofmt, vet, lint, race tests — which is what CI does.
 
 **[practice]** CI (`.github/workflows/build.yml`) runs vet, race tests, and
 lint on every push and PR, then cross-compiles all release targets.
