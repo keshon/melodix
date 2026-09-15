@@ -580,6 +580,18 @@ is the failure this section exists to prevent.
 
 ---
 
+## Ownership
+
+Every finding in the September 2026 audit of the voice and playback layers was
+the same bug wearing different clothes: something wrote state it did not own,
+and nothing noticed. Go does not catch that class, so
+[docs/ownership.md](ownership.md) states the rules and — the part that matters
+— names what enforces each one, from "the compiler refuses it" down to "a
+comment says so". It also lists what is still unenforced, which is the half of
+such a document that is usually missing.
+
+---
+
 ## Testing & verification
 
 - `go test -race ./...` — the race detector isn't optional here. The player
