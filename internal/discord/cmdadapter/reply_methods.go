@@ -3,6 +3,8 @@ package cmdadapter
 import (
 	"io"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // The reply surface a command works with.
@@ -16,40 +18,58 @@ import (
 // Each interaction context repeats the same methods. They are one line each
 // and delegate to the shared helpers below; the alternative was embedding a
 // struct, which would have meant rewriting every construction site to say so.
+//
+// Every helper reports a failed reply before returning it. Commands do not
+// check these -- all twenty-seven call sites ignore the error -- and that is
+// defensible, because by the time a reply fails there is nothing a command can
+// do about it: the interaction it was answering is gone. What is not
+// defensible is the silence. A user who saw no answer and a log that says
+// nothing happened is the worst pair of facts to debug from, so the report
+// happens here, once, rather than at every call site or nowhere.
 
-func ackDeferred(r Responder, ephemeral bool) error {
+// reported logs a failed reply and hands the error back unchanged, so a caller
+// that does want to act on one still can.
+func reported(log zerolog.Logger, kind string, err error) error {
+	if err != nil {
+		log.Warn().Str("reply", kind).Err(err).Msg("reply_failed")
+	}
+	return err
+}
+
+func ackDeferred(r Responder, log zerolog.Logger, ephemeral bool) error {
 	if r == nil {
 		return nil
 	}
-	return r.AckDeferred(ephemeral)
+	return reported(log, "defer", r.AckDeferred(ephemeral))
 }
 
-func respondEmbed(r Responder, embed *Embed, ephemeral bool) error {
+func respondEmbed(r Responder, log zerolog.Logger, embed *Embed, ephemeral bool) error {
 	if r == nil {
 		return nil
 	}
-	return r.RespondEmbed(embed, ephemeral)
+	return reported(log, "respond", r.RespondEmbed(embed, ephemeral))
 }
 
-func followupEmbed(r Responder, embed *Embed, ephemeral bool) error {
+func followupEmbed(r Responder, log zerolog.Logger, embed *Embed, ephemeral bool) error {
 	if r == nil {
 		return nil
 	}
-	return r.FollowupEmbed(embed, ephemeral)
+	return reported(log, "followup", r.FollowupEmbed(embed, ephemeral))
 }
 
-func editResponse(r Responder, content string) error {
+func editResponse(r Responder, log zerolog.Logger, content string) error {
 	if r == nil {
 		return nil
 	}
-	return r.EditResponseText(content)
+	return reported(log, "edit", r.EditResponseText(content))
 }
 
-func answerEmbedMessage(r Responder, embed *Embed) (string, string, error) {
+func answerEmbedMessage(r Responder, log zerolog.Logger, embed *Embed) (string, string, error) {
 	if r == nil {
 		return "", "", nil
 	}
-	return r.AnswerEmbedMessage(embed)
+	channelID, messageID, err := r.AnswerEmbedMessage(embed)
+	return channelID, messageID, reported(log, "answer", err)
 }
 
 func canJoinVoice(api SessionAPI, channelID string) (bool, error) {
@@ -64,35 +84,35 @@ func canJoinVoice(api SessionAPI, channelID string) (bool, error) {
 // Defer buys time: Discord wants an acknowledgement within three seconds, and
 // resolving a track takes longer than that.
 func (c *SlashInteractionContext) Defer() error {
-	return ackDeferred(c.Responder, false)
+	return ackDeferred(c.Responder, c.AppLog, false)
 }
 
 // DeferEphemeral is Defer for a reply only the caller should see.
 func (c *SlashInteractionContext) DeferEphemeral() error {
-	return ackDeferred(c.Responder, true)
+	return ackDeferred(c.Responder, c.AppLog, true)
 }
 
 func (c *SlashInteractionContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, e, false)
+	return respondEmbed(c.Responder, c.AppLog, e, false)
 }
 
 func (c *SlashInteractionContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, e, true)
+	return respondEmbed(c.Responder, c.AppLog, e, true)
 }
 
 // Followup is what answers a deferred interaction.
 func (c *SlashInteractionContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, e, false)
+	return followupEmbed(c.Responder, c.AppLog, e, false)
 }
 
 func (c *SlashInteractionContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, e, true)
+	return followupEmbed(c.Responder, c.AppLog, e, true)
 }
 
 // EditResponseText replaces the original reply with plain text, which is the
 // fallback when an embed could not be delivered.
 func (c *SlashInteractionContext) EditResponseText(content string) error {
-	return editResponse(c.Responder, content)
+	return editResponse(c.Responder, c.AppLog, content)
 }
 
 // RespondEphemeralText answers the caller with plain content. See Responder
@@ -145,37 +165,37 @@ func (c *SlashInteractionContext) CanJoinVoice(channelID string) (bool, error) {
 }
 
 func (c *SlashInteractionContext) AnswerEmbedMessage(embed *Embed) (string, string, error) {
-	return answerEmbedMessage(c.Responder, embed)
+	return answerEmbedMessage(c.Responder, c.AppLog, embed)
 }
 
 // --- ComponentInteractionContext ---
 
 func (c *ComponentInteractionContext) Defer() error {
-	return ackDeferred(c.Responder, false)
+	return ackDeferred(c.Responder, c.AppLog, false)
 }
 
 func (c *ComponentInteractionContext) DeferEphemeral() error {
-	return ackDeferred(c.Responder, true)
+	return ackDeferred(c.Responder, c.AppLog, true)
 }
 
 func (c *ComponentInteractionContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, e, false)
+	return respondEmbed(c.Responder, c.AppLog, e, false)
 }
 
 func (c *ComponentInteractionContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, e, true)
+	return respondEmbed(c.Responder, c.AppLog, e, true)
 }
 
 func (c *ComponentInteractionContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, e, false)
+	return followupEmbed(c.Responder, c.AppLog, e, false)
 }
 
 func (c *ComponentInteractionContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, e, true)
+	return followupEmbed(c.Responder, c.AppLog, e, true)
 }
 
 func (c *ComponentInteractionContext) EditResponseText(content string) error {
-	return editResponse(c.Responder, content)
+	return editResponse(c.Responder, c.AppLog, content)
 }
 
 func (c *ComponentInteractionContext) CanJoinVoice(channelID string) (bool, error) {
@@ -183,7 +203,7 @@ func (c *ComponentInteractionContext) CanJoinVoice(channelID string) (bool, erro
 }
 
 func (c *ComponentInteractionContext) AnswerEmbedMessage(embed *Embed) (string, string, error) {
-	return answerEmbedMessage(c.Responder, embed)
+	return answerEmbedMessage(c.Responder, c.AppLog, embed)
 }
 
 // ReplaceMessage answers a component interaction by rewriting the message it

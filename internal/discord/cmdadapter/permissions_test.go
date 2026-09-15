@@ -1,8 +1,12 @@
 package cmdadapter
 
 import (
+	"bytes"
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
 )
 
 // coldCacheAPI is the connection as it behaves for a member nobody has told it
@@ -103,6 +107,43 @@ func TestBothInteractionContextsUseTheCarriedPermissions(t *testing.T) {
 		}
 		if got != 0x20 {
 			t.Errorf("%s: permissions = %#x, want 0x20", name, got)
+		}
+	}
+}
+
+// failingResponder is a reply that cannot be delivered, which is what every
+// one of these looks like once the interaction it was answering has expired.
+type failingResponder struct{ Responder }
+
+func (failingResponder) RespondEmbed(*Embed, bool) error {
+	return errors.New("40060: interaction has already been acknowledged")
+}
+func (failingResponder) AckDeferred(bool) error { return errors.New("10062: unknown interaction") }
+
+// No command checks the error from a reply, and none reasonably could -- by
+// the time one fails the interaction is gone. What must not happen is the
+// pairing of a user who saw no answer with a log that says nothing happened,
+// so the failure is reported here rather than at twenty-seven call sites or
+// nowhere.
+func TestAFailedReplyIsReportedEvenWhenNobodyChecksIt(t *testing.T) {
+	var logged bytes.Buffer
+	ctx := &SlashInteractionContext{
+		Responder: failingResponder{},
+		AppLog:    zerolog.New(&logged),
+	}
+
+	// Exactly how a command writes it: no error check.
+	_ = ctx.Defer()
+	_ = ctx.Respond(&Embed{Description: "hello"})
+	_ = ctx.ReplyEphemeral("nope")
+
+	out := logged.String()
+	if strings.Count(out, "reply_failed") != 3 {
+		t.Fatalf("want three reply_failed events, got:\n%s", out)
+	}
+	for _, kind := range []string{`"defer"`, `"respond"`, `"respond_ephemeral"`} {
+		if !strings.Contains(out, kind) {
+			t.Errorf("no report named %s:\n%s", kind, out)
 		}
 	}
 }

@@ -3,6 +3,7 @@ package cmdadapter
 import (
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/rs/zerolog"
 )
 
 // CommandContext is everything a middleware needs to know about an invocation
@@ -94,12 +95,12 @@ func memberPermissions(api SessionAPI, who Invoker) (int64, error) {
 	return api.MemberPermissions(who.UserID, who.ChannelID)
 }
 
-// respondEphemeral is the shape the three interaction contexts share.
-func respondEphemeral(r Responder, msg string) error {
+// respondEphemeral is the shape both interaction contexts share.
+func respondEphemeral(r Responder, log zerolog.Logger, msg string) error {
 	if r == nil {
 		return nil
 	}
-	return r.RespondEmbed(&Embed{Description: msg}, true)
+	return reported(log, "respond_ephemeral", r.RespondEmbed(&Embed{Description: msg}, true))
 }
 
 // replyInChannel is the fallback for the two contexts Discord offers no
@@ -124,7 +125,7 @@ func (c *SlashInteractionContext) MemberPermissions() (int64, error) {
 }
 func (c *SlashInteractionContext) CanReplyPrivately() bool { return c.Responder != nil }
 func (c *SlashInteractionContext) ReplyEphemeral(msg string) error {
-	return respondEphemeral(c.Responder, msg)
+	return respondEphemeral(c.Responder, c.AppLog, msg)
 }
 
 // --- ComponentInteractionContext ---
@@ -140,7 +141,7 @@ func (c *ComponentInteractionContext) MemberPermissions() (int64, error) {
 }
 func (c *ComponentInteractionContext) CanReplyPrivately() bool { return c.Responder != nil }
 func (c *ComponentInteractionContext) ReplyEphemeral(msg string) error {
-	return respondEphemeral(c.Responder, msg)
+	return respondEphemeral(c.Responder, c.AppLog, msg)
 }
 
 // CustomID identifies which component was used -- the button's own id, set
