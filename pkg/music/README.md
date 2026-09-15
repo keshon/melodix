@@ -14,27 +14,42 @@ At runtime the system is a pipeline:
 
 ```mermaid
 flowchart TD
-  A["User input<br/>URL / search"] --> B["Resolver<br/>Resolve()"]
+  A["User input<br/>URL / search"] --> B["Resolver.Resolve()"]
   B --> C["TrackInfo + AvailableParsers"]
   C --> D["Player.Enqueue()"]
   D --> E["Player.PlayNext()"]
-  E --> F["RecoveryStream.Open()"]
-  F --> G{"Open ok?"}
-  G -- no --> F
-  G -- yes --> H["Sink.Stream(rs)"]
-  H --> I{"Read error?"}
+  E --> F["RecoveryStream.Start(0)<br/>once, before anything reads"]
+  F --> G{"any parser opened?"}
+  G -- no --> X["skip the track"]
+  X --> E
+  G -- yes --> H["Sink.Stream(rs.Packets())"]
+  H --> I{"read error?"}
   I -- no --> H
-  I -- io.EOF early --> J["RecoveryStream.reopen()"]
-  J --> F
-  I -- instant fail (first read) --> K["Advance parserIndex"]
-  K --> F
-  I -- voice transport error --> L["RequestReopen()"]
-  L --> F
-  I -- other error --> M["Stop track + PlayNext()"]
+  I -- "io.EOF early" --> J["reopen the same parser<br/>at the current position"]
+  I -- "instant fail (first read)" --> K["advance parserIndex"]
+  I -- "reopen requested" --> J
+  J --> H
+  K --> J
+  H --> Z{"how did Stream return?"}
+  Z -- "nil — track ended" --> M["completion goroutine → PlayNext()"]
+  Z -- ErrVoiceTransport --> Q["rs.RequestReopen()<br/>then re-acquire the sink"]
+  Q --> H
+  Z -- ErrPlaybackStopped --> S["stop; the caller decides what is next"]
+  Z -- "other error" --> M
   M --> E
-  H --> N["Track ended"]
-  N --> M
 ```
+
+Everything between `Sink.Stream` and `how did Stream return?` happens on the
+goroutine pulling packets, and the player never sees it: a parser dying on its
+first read, a source ending early, a reopen it asked for — all of it is
+absorbed inside `ReadPacket`. Only two things surface. The track ended, or the
+voice transport did.
+
+`RequestReopen` is on that list rather than above it because it is a request,
+not a reopen: the player raises a flag and the reading goroutine services it.
+Reopening from the player's own goroutine rewrites the parser index, the
+position, the retry counts and a map, under whoever is reading them — see
+[ownership.md](../../docs/ownership.md) rule 3.
 
 ## Install
 

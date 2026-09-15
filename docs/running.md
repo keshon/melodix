@@ -94,6 +94,7 @@ default and can be left alone until you actually need it:
 
 | Variable                  | Description                                                | Default                 |
 | ------------------------- | ---------------------------------------------------------- | ------------------------ |
+| `DISCORD_TOKEN`           | The bot token from Step 1. Required; the bot exits without it. | (none) |
 | `STORAGE_PATH`            | Directory the datastore owns (write-ahead log + snapshots). Locked to one process. | `./data/store` |
 | `INIT_SLASH_COMMANDS`     | Set to `true` to register slash commands on every startup. | `false`                 |
 | `DEVELOPER_ID`            | Your Discord user ID, for developer-only commands.          | (none)                  |
@@ -112,6 +113,12 @@ default and can be left alone until you actually need it:
 | `BUFFER_AHEAD_MS`         | Read-ahead depth in ms. The queued lead plays through a source stall or a reconnect, so on a lossy link this decides whether a dropped connection is audible. Costs roughly 17 KB per buffered second per guild at YouTube's usual bitrate — about 500 KB at the default depth — and does not pre-fill, so raising it delays nothing. Set to `0` to disable. | `30000` |
 | `MAX_AUDIO_BITRATE`       | Cap on the YouTube audio format the native parser picks, in bits per second. `0` takes the best on offer, which is the default: unasked, tracks play at the best quality their source has. The cap is for links that cannot carry that — end-to-end encryption means Discord relays what is sent without transcoding it, so this is the rate every listener receives. Worth setting on a slow link, where it also halves what is re-fetched when a dropped stream is reopened. | `0` |
 | `COMMAND_PARALLELISM`     | Max command handlers running at once, across all guilds. Within one guild commands always run one at a time, because a guild's music is sequential. | `16` |
+| `LOG_LEVEL`               | `trace`, `debug`, `info`, `warn`, `error`, `fatal` or `panic`. The Discord library is logged at the same level, so `debug` is loud. | `info` |
+| `LOG_FILE`                | Path to a rotated JSON log. Empty means stderr only, pretty-printed. | (none) |
+| `LOG_MAX_SIZE_MB`         | Rotate the log file once it reaches this size.              | `10` |
+| `LOG_MAX_BACKUPS`         | How many rotated files to keep.                             | `3` |
+| `LOG_MAX_AGE_DAYS`        | Delete rotated files older than this; `0` keeps them by count alone. | `0` |
+| `LOG_COMPRESS`            | Gzip rotated files.                                         | `false` |
 
 ### Step 4: Run it
 

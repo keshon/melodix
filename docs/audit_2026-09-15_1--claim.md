@@ -1,3 +1,13 @@
+> **Historical record.** This is one of four documents from the audit of
+> 15 September 2026, kept as written. Every file path, line number and code
+> quotation in it describes the tree *at that date* — most have since moved
+> or been fixed, and the links are relative to the repository root rather
+> than to `docs/`. Do not read it as a description of the current code.
+>
+> What the tree looks like now: [architecture.md](architecture.md).
+> The rules that came out of this, and what enforces each:
+> [ownership.md](ownership.md).
+
 I'll start by mapping the repository structure before reading anything in depth.
 
 I read the repository, the disgo v0.19.6 source, godave v0.2.0 and dave-go v0.5.1 in the module cache, and the git history of the migration. `go vet ./...` is clean; `go test ./...` and `go test -race ./...` both pass. Below is the audit.

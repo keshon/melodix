@@ -1,3 +1,13 @@
+> **Historical record.** This is one of four documents from the audit of
+> 15 September 2026, kept as written. Every file path, line number and code
+> quotation in it describes the tree *at that date* — most have since moved
+> or been fixed, and the links are relative to the repository root rather
+> than to `docs/`. Do not read it as a description of the current code.
+>
+> What the tree looks like now: [architecture.md](architecture.md).
+> The rules that came out of this, and what enforces each:
+> [ownership.md](ownership.md).
+
 Architecture pass. Let me first ground the cost estimates in actual call-site counts rather than guessing.
 
 Three measurements first, because they change the cost calculus decisively:

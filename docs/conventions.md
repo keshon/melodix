@@ -353,7 +353,8 @@ found that.
 curated so a finding always means something. `internal/conventions` runs as
 part of the same `go test ./...`.
 
-The convention checks ratchet: `internal/conventions/baseline.json` records
+The convention checks ratchet: a baseline, written to
+`internal/conventions/baseline.json` when there is anything to write, records
 what each file owed when a rule was introduced, and a rule fails only when a
 file gets **worse**. A new file carries no allowance, so it meets every rule
 in full; a file that already owes something is only required not to owe more.

@@ -1,3 +1,13 @@
+> **Historical record.** This is one of four documents from the audit of
+> 15 September 2026, kept as written. Every file path, line number and code
+> quotation in it describes the tree *at that date* — most have since moved
+> or been fixed, and the links are relative to the repository root rather
+> than to `docs/`. Do not read it as a description of the current code.
+>
+> What the tree looks like now: [architecture.md](architecture.md).
+> The rules that came out of this, and what enforces each:
+> [ownership.md](ownership.md).
+
 I'll verify each finding against actual source. Starting with dependency pinning and the exact modules in use.
 
 Repository unmodified (the only untracked file, `docs/audit_2026-09-15_claim.md`, was not created by me). All experiments ran in the scratchpad as separate modules. Findings below are from the pinned build list: `disgo v0.19.6`, `godave v0.2.0`, `dave-go v0.5.1`, no `replace` directives, `go mod verify` clean.

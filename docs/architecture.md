@@ -283,24 +283,28 @@ sequenceDiagram
   H->>P: EnqueueTrackInfo(track)
   H->>P: PlayNext(voiceChannelID)
   P->>P: dequeue under playNextMu
-  P->>RS: Open(0) — first parser that opens
-  P->>P: spawn runPlayback goroutine
+  P->>RS: Start(0) — first parser that opens
+  RS-->>P: OpenInfo (which parser, passthrough, cached, title)
+  P->>P: apply OpenInfo to the track under p.mu
+  P->>P: spawn runPlayback goroutine (generation N)
   P-->>H: nil (track started)
   H->>H: render "Now Playing" synchronously
   S->>RS: ReadPacket (first)
-  RS->>P: parser confirmed — audio is really flowing
+  RS->>P: OpenInfo — this parser is really producing audio
   P->>P: write history row, correct "Now Playing" if the parser changed
-  loop every 20ms
+  loop every 20ms, driven by disgo's sender
+    S->>S: DAVE has no live epoch? hold, read nothing
     S->>RS: ReadPacket (Opus)
-    S->>S: forward packet → OpusSend (stop/timeout-guarded)
+    S->>S: return the frame to ProvideOpusFrame
   end
+  Note over S: a sender that stops pulling, or a conn the<br/>manager no longer knows, ends the track as<br/>ErrVoiceTransport
   RS-->>S: EOF
   P->>P: completion goroutine → PlayNext
   alt queue non-empty
-    P->>RS: next track (new goroutine)
+    P->>RS: next track (new goroutine, generation N+1)
     P->>P: emit StatusPlaying → watcher edits status message
   else queue empty
-    P->>P: Stop(true) → ReleaseSink (leave VC)
+    P->>P: stop(true, generation N) → ReleaseSink (leave VC)
     P->>P: watcher edits "Playback Finished"
   end
 ```
