@@ -103,9 +103,20 @@ writing.
 A track can end and the next begin inside that wait, so the run that is current
 when it finishes is not the one it was called for.
 
+`Stop` checks twice, and the two halves need different pressure to reach. The
+first refuses a stop aimed at a generation that is no longer current. The
+second is the one that matters here: after the wait, the stop compares again
+before writing, because the run it waited for may have been replaced while it
+waited. Reaching that needs a track to end *on its own* mid-wait, which only
+happens when tracks are short enough for the completion chain to fire inside a
+skip — long tracks exercise the first check and never the second.
+
 **Enforced by** tested: `player.TestStopDoesNotResetANewerRun`,
 `TestASupersededRunDoesNotClearTheCurrentOne`,
-`TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt`.
+`TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt` for the first check;
+`TestAStopNeverResetsARunItDidNotAskAbout` for the second, which measures six
+concurrent runs into one sink when the check is removed and one when it is
+there.
 
 ## 6. Nothing reachable from a Player has session lifetime
 

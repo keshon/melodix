@@ -292,3 +292,51 @@ func TestStopWithoutAGenerationStopsWhateverIsPlaying(t *testing.T) {
 		t.Fatal("/stop left the queue populated")
 	}
 }
+
+// The interleaving TestStopDoesNotResetANewerRun cannot reach.
+//
+// For a stop to outlive the run it asked about, that run has to end on its own
+// while the stop is waiting for it: only then does the completion chain start
+// a replacement, and only then does the stop wake to find a different run in
+// charge. Its sibling above plays four-second tracks, so no track ever ends
+// inside the skips it does, the completion chain never fires, and only the
+// first half of stop's generation check is exercised.
+//
+// Tracks of three packets end constantly instead, which puts a natural end
+// inside almost every stop. Without the second check the stop clears state
+// belonging to a run that is still streaming, and mints channels that run can
+// then never be stopped by -- measured at six concurrent runs into one sink,
+// against one on the code that checks.
+func TestAStopNeverResetsARunItDidNotAskAbout(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"ends": pacedStreamer("t", 3)})
+
+	counter := &countingSink{}
+	p := New(newFakeProvider(counter), nil)
+
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		tracks := make([]sources.TrackInfo, 0, 12)
+		for i := 0; i < 12; i++ {
+			tracks = append(tracks, testTrack("t", "ends"))
+		}
+		if err := p.EnqueueTrackInfos(tracks); err != nil {
+			t.Fatalf("enqueue: %v", err)
+		}
+		if err := p.PlayNext(""); err != nil {
+			t.Fatalf("play: %v", err)
+		}
+		// Skip far faster than a track can play, so a stop and a track ending
+		// are constantly in the same window.
+		for i := 0; i < 60; i++ {
+			_ = p.Stop(false)
+			_ = p.PlayNext("")
+		}
+		_ = p.Stop(true)
+	}
+
+	waitFor(t, 5*time.Second, func() bool { return counter.live.Load() == 0 })
+
+	if peak := counter.peak.Load(); peak > 1 {
+		t.Fatalf("%d runs streamed into one sink at once: a stop reset a run it never asked about", peak)
+	}
+}
