@@ -62,7 +62,19 @@ func (b *Bot) onReady(e *events.Ready, syncer *slashsync.Syncer) {
 		}
 		if b.cfg.InitSlashCommands {
 			if err := syncer.SyncGuildCommands(guildID); err != nil {
-				b.log.Error().Str("guild_id", guildID).Err(err).Msg("commands_sync_failed")
+				// Whatever was registered before is still registered: the
+				// commands live on Discord's side, and a sync that fails
+				// changes nothing there. It is reported rather than retried
+				// because this runs inline on the gateway's Ready -- a retry
+				// loop here would hold up every other guild in the same event
+				// -- and because the next connect calls it again anyway. Said
+				// out loud because an outage's error page makes this the
+				// loudest line in the log, and it is the least urgent.
+				b.log.Error().
+					Str("guild_id", guildID).
+					Str("impact", "existing commands unaffected; retried on next connect").
+					Err(err).
+					Msg("commands_sync_failed")
 			}
 		}
 	}
