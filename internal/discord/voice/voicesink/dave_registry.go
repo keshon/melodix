@@ -121,4 +121,11 @@ func (r *DaveRegistry) ManagerOptions(logger *slog.Logger) []voice.ManagerConfig
 // tenth of a second, without the round trip being retried into a re-key storm.
 // If re-keys start appearing on a link that used to be quiet, this is the
 // number that bought them.
+//
+// Since watched at this setting: five epochs in two minutes as a second
+// account joined and left over a bad link, including two commit races the bot
+// lost to another client. dave-go rolled its own commit back both times and
+// the group converged, and every frame in between went out under the live
+// epoch -- no passthrough, no stale key on a listener who was present. The
+// churn is survivable; the number has still never been seen to fire.
 const DaveRecoveryTimeout = 5 * time.Second
