@@ -75,13 +75,22 @@ type Config struct {
 	// per guild at the default depth — and it does not pre-fill, so raising it
 	// delays nothing. Independent of the cache.
 	BufferAheadMs int `env:"BUFFER_AHEAD_MS" envDefault:"30000"`
-	// MaxAudioBitrate caps which YouTube audio format the native parser picks, in
-	// bits per second (0 = take the best on offer). The same track is usually
-	// offered near 49, 66 and 137 kbps; a Discord voice channel carries 64 kbps
-	// unless the guild is boosted, so the top format mostly buys bandwidth the
-	// channel will not use. On a slow or lossy link a cap is worth real money,
-	// because a reopened stream is re-fetched from the start.
-	MaxAudioBitrate int `env:"MAX_AUDIO_BITRATE" envDefault:"0"`
+	// MaxAudioBitrate caps which YouTube audio format the native parser picks,
+	// in bits per second (0 = take the best on offer).
+	//
+	// It defaults to what a Discord voice channel actually carries, which is
+	// 64 kbps unless the guild is boosted. Uncapped, the native parser will
+	// happily pick a 186 kbps format and forward it untouched -- and with
+	// end-to-end encryption Discord cannot transcode it down, because it
+	// cannot read it. The stream arrives at every listener at three times the
+	// channel's rate, which a desktop on wifi absorbs and a phone on mobile
+	// data does not: it drops packets, and the listener hears the audio fade
+	// out and snap back as its jitter buffer empties and refills.
+	//
+	// Raise it to the channel's own bitrate on a boosted guild (96, 128, 256
+	// or 384 kbps by tier). Set it to 0 for the old behaviour, which is worth
+	// having only if every listener is on a connection that can take it.
+	MaxAudioBitrate int `env:"MAX_AUDIO_BITRATE" envDefault:"64000"`
 
 	// Logging (applog / zerolog). LOG_FILE empty = stderr only (pretty console).
 	LogLevel      string `env:"LOG_LEVEL" envDefault:"info"`
