@@ -7,7 +7,6 @@ package cmdsync
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
@@ -19,10 +18,6 @@ import (
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
-// rateLimitDelay spaces out writes. Registration happens once per guild at
-// READY, so the cost is paid at startup and only when something changed.
-const rateLimitDelay = 25 * time.Millisecond
-
 // Syncer registers and syncs slash commands per guild.
 type Syncer struct {
 	client   *bot.Client
@@ -31,6 +26,13 @@ type Syncer struct {
 
 	// perGuildLocks serializes sync operations per guild. Kept inside Syncer
 	// (not global) so multiple Syncer instances don't share state.
+	//
+	// It contends for real, and only because command bodies left the gateway
+	// read goroutine: READY and GuildJoin still sync inline there, while
+	// /commands enable and /commands disable sync from a command worker. Two
+	// goroutines reconciling one guild's command list against the same API is
+	// how a guild ends up with a command created twice, or deleted just after
+	// it was created.
 	perGuildLocks sync.Map // map[guildID string]*sync.Mutex
 }
 
@@ -104,7 +106,6 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 			} else {
 				edited++
 			}
-			time.Sleep(rateLimitDelay)
 			continue
 		}
 
@@ -118,7 +119,6 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 		} else {
 			created++
 		}
-		time.Sleep(rateLimitDelay)
 	}
 
 	for key, have := range existingByKey {
@@ -131,7 +131,6 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 		} else {
 			deleted++
 		}
-		time.Sleep(rateLimitDelay)
 	}
 
 	m.log.Info().Str("guild_id", guildID).Int("created", created).Int("edited", edited).

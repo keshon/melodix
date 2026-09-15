@@ -18,9 +18,15 @@ type Config struct {
 	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"false"`
 	VoiceReadyDelayMs     int      `env:"VOICE_READY_DELAY_MS" envDefault:"500"` // VoiceReadyDelayMs is the delay in ms after joining VC before sending opus (discordgo op 4 race). Default 500.
 
-	// CommandTimeout is a hard timebox for command execution.
-	CommandTimeout time.Duration `env:"COMMAND_TIMEOUT" envDefault:"30s"`
-	// CommandParallelism limits concurrently running command handlers.
+	// CommandParallelism limits how many command handlers run at once,
+	// across every guild. Commands within one guild run one at a time
+	// regardless, because a guild's music is sequential.
+	//
+	// There is no COMMAND_TIMEOUT beside it any more. It built a context
+	// nothing consumed -- a command's Run takes the invocation data, not a
+	// context, and no engine call takes one either -- so it could relabel a
+	// slow command's error and nothing else. A real one means threading a
+	// context from here to the parsers, which is worth doing and is not this.
 	CommandParallelism int `env:"COMMAND_PARALLELISM" envDefault:"16"`
 	// WSSilenceTimeout triggers a session restart if no gateway messages are
 	// received.

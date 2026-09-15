@@ -435,10 +435,27 @@ gating, permission checks, and invocation logging. Optional capabilities are
 discovered through interface assertion: `SlashProvider`,
 `ContextMenuProvider`, `ComponentInteractionHandler`.
 
-Dispatch happens through `onInteractionCreate`, which routes slash and
-context-menu commands through `execguard` (parallelism capped by
-`COMMAND_PARALLELISM`, timed out by `COMMAND_TIMEOUT`); message components
-are matched by a `customID` prefix convention (`name`, `name:`, `name_`).
+Dispatch happens through `onApplicationCommand`, which routes slash and
+context-menu commands into `cmdqueue` and returns; message components are
+matched by a `customID` prefix convention (`name`, `name:`, `name_`) and go
+the same way. The body then runs on a worker, under `execguard`
+(`COMMAND_PARALLELISM` caps how many run at once across all guilds).
+
+That indirection is the point. disgo dispatches events synchronously — one
+goroutine reads the socket and calls every listener inline — so a command
+body running there held the socket unread for as long as it took, which for
+a hundred-item playlist is seconds. An interaction arriving in that window
+was acknowledged past Discord's three-second deadline and the user saw "The
+application did not respond". It also made `COMMAND_PARALLELISM` describe a
+property the runtime did not have: commands were already serial, so the
+semaphore never contended.
+
+The gateway loop stays serial, because its ordering is load-bearing: `Ready`
+and `GuildJoin` both sync commands and must not interleave. One lane per
+guild, because a guild's music is sequential — `/play` and `/next` at the
+same instant have no meaningful interleaving. `cmdsync`'s per-guild lock
+became load-bearing in the same change rather than redundant: `Ready` syncs
+on the gateway goroutine while `/commands enable` syncs on a worker.
 Slash-command sync is handled by `cmdsync.Syncer`, which diffs desired
 against existing per-guild commands by name, type, and fingerprint whenever
 `INIT_SLASH_COMMANDS=true`. And `go run ./cmd/discord -readme` regenerates

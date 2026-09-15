@@ -74,7 +74,6 @@ func (b *Bot) RunSession(ctx context.Context) error {
 			bot.NewListenerFunc(func(e *events.ComponentInteractionCreate) {
 				b.onComponentInteraction(e, logger)
 			}),
-			bot.NewListenerFunc(b.onMessageCreate),
 		},
 	})
 	if err != nil {
@@ -88,7 +87,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	b.setConn(clientConn{client: client, dave: dave})
 	defer b.clearConn()
 
-	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(b.cfg.CommandTimeout, b.cfg.CommandParallelism)})
+	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(b.cfg.CommandParallelism)})
 
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	b.sessionCtx.Store(&sessionCtxHolder{ctx: sessionCtx})
@@ -122,6 +121,10 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		b.log.Info().Msg("shutdown_signal_received")
+		// Commands first: one of them may be the reason a player is playing,
+		// and stopping playback underneath a command mid-answer is a worse
+		// report than waiting a moment for it.
+		closeWithin("drain_commands", commandsDrainTimeout, b.log, b.drainCommands)
 		closeWithin("stop_players", playersStopTimeout, b.log, b.stopAllPlayers)
 		return nil
 	case <-disconnected:

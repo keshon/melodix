@@ -1,34 +1,25 @@
 package execguard
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
-// Guard provides a shared concurrency limit and (optional) per-call timeout.
-// It is intended to be used from Discord event handlers.
+// Guard is a cap on how many commands run at once, across every guild. It is
+// intended to be used from Discord event handlers.
+//
+// It used to carry a timeout as well, which nothing enforced: the context it
+// built reached Adapter.Run and was dropped there, because a command's Run
+// takes the invocation data rather than a context, and no engine call takes
+// one either. A deadline that cannot cancel anything is not a deadline, so it
+// is gone rather than documented.
 type Guard struct {
-	timeout time.Duration
-	sem     chan struct{}
+	sem chan struct{}
 }
 
-func New(timeout time.Duration, parallelism int) *Guard {
+func New(parallelism int) *Guard {
 	var sem chan struct{}
 	if parallelism > 0 {
 		sem = make(chan struct{}, parallelism)
 	}
-	return &Guard{timeout: timeout, sem: sem}
-}
-
-// Context returns a derived context using Guard's timeout (if configured).
-func (g *Guard) Context(base context.Context) (context.Context, context.CancelFunc) {
-	if base == nil {
-		base = context.Background()
-	}
-	if g == nil || g.timeout <= 0 {
-		return base, func() {}
-	}
-	return context.WithTimeout(base, g.timeout)
+	return &Guard{sem: sem}
 }
 
 // Acquire reserves one execution slot (if parallelism is configured).

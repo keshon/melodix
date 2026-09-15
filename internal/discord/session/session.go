@@ -72,12 +72,12 @@ func New(opts Options) (*Session, error) {
 	client, err := disgo.New(opts.Token,
 		bot.WithLogger(logger),
 		bot.WithGatewayConfigOpts(
-			gateway.WithIntents(gateway.IntentsAll),
+			gateway.WithIntents(botIntents),
 			gateway.WithEnableRawEvents(true),
 			gateway.WithLogger(logger),
 		),
 		bot.WithCacheConfigOpts(
-			cache.WithCaches(cache.FlagsAll),
+			cache.WithCaches(botCaches),
 		),
 		bot.WithVoiceManagerConfigOpts(opts.VoiceManagerOpts...),
 		bot.WithEventListeners(listeners...),
@@ -136,6 +136,34 @@ func (s *Session) onHeartbeatAck(_ *events.HeartbeatAck) {
 	s.lastHeartbeatAck = now
 	s.mu.Unlock()
 }
+
+// botIntents is what the bot is actually told about.
+//
+// IntentGuilds carries guilds, channels and roles, which every permission
+// check reads. IntentGuildVoiceStates is how the bot knows which channel a
+// user is in, which is the whole of /play's first step.
+//
+// IntentGuildMembers is privileged and is here because permission checks read
+// the member cache: a member missing from it is a command refused, not a
+// command run with fewer rights. IntentGuildPresences and IntentMessageContent
+// were both requested and neither was ever read -- presences by nothing at
+// all, message content by a mention dispatch path no command ever handled.
+// Asking for a privileged intent nobody reads is a gateway close code 4014
+// waiting for whoever next sets this bot up without ticking all three boxes.
+const botIntents = gateway.IntentGuilds |
+	gateway.IntentGuildVoiceStates |
+	gateway.IntentGuildMembers
+
+// botCaches is what the bot actually reads back: guilds and their channels and
+// roles for permission maths, members for the same, voice states to find a
+// caller. FlagsAll additionally kept every message, presence, emoji, sticker,
+// scheduled event, soundboard sound, thread member and stage instance the
+// gateway ever mentioned, none of which is read anywhere.
+const botCaches = cache.FlagGuilds |
+	cache.FlagChannels |
+	cache.FlagRoles |
+	cache.FlagMembers |
+	cache.FlagVoiceStates
 
 // logWriter turns disgo's slog output into one zerolog event per line, the
 // same shape attachDiscordgoLogger gives the fork: the library's own text is a

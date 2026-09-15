@@ -25,6 +25,12 @@ const sessionCloseTimeout = 15 * time.Second
 // looks like it was cut short, this is the number that cut it.
 const gatewayCloseBudget = 3 * time.Second
 
+// commandsDrainTimeout bounds waiting for the commands already running to
+// finish. A command is a REST round trip or two plus whatever the engine does
+// to start a track; anything past this is a command that is not coming back,
+// and the process is leaving either way.
+const commandsDrainTimeout = 5 * time.Second
+
 // playersStopTimeout bounds stopping playback across every guild. Each player
 // leaves its voice channel, which is a round trip, and they are stopped one
 // after another -- so a server that has stopped answering costs this once

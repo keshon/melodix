@@ -10,6 +10,7 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/cmdqueue"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/storage"
@@ -35,6 +36,7 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 	// Between them they are the service's entire contact with the library
 	// underneath.
 	b.voice = voice.NewVoiceService(b.sessionAPI, b.newSinkProvider, cfg, storage, log)
+	b.commands = cmdqueue.New(log)
 	b.sessionCtx.Store(&sessionCtxHolder{ctx: context.Background()})
 	b.cmdGuard.Store(&cmdGuardHolder{g: disabledGuard})
 	kkdai.SetLogger(log)
@@ -43,6 +45,19 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 	ytnative.SetLogger(log)
 	ytdlp.SetLogger(log)
 	return b
+}
+
+// drainCommands stops accepting commands and waits for the ones already
+// running. Call on shutdown, before stopping players.
+func (b *Bot) drainCommands() {
+	if b.commands == nil {
+		return
+	}
+	// closeWithin already bounds this phase and reports what it took, so the
+	// wait here is unbounded on purpose: two budgets for one step means the
+	// log names a timeout that is not the one that fired.
+	b.commands.Close(context.Background())
+	b.log.Info().Msg("commands_drained")
 }
 
 // stopAllPlayers stops playback and disconnects voice for all guilds. Call on

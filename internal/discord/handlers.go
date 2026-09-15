@@ -2,7 +2,6 @@ package discord
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -117,7 +116,7 @@ func (b *Bot) onApplicationCommand(
 		return
 	}
 
-	b.runGuardedInteraction(responder, "slash", name, func(cmdCtx context.Context) error {
+	b.dispatchInteraction(who, responder, "slash", name, func(cmdCtx context.Context) error {
 		return c.Run(cmdCtx, inv)
 	})
 }
@@ -146,69 +145,16 @@ func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, logge
 	}
 
 	responder := reply.NewComponentResponder(e)
+	who := interactionInvoker(e)
 
-	b.runGuardedInteraction(responder, "component", matched.Name(), func(cmdCtx context.Context) error {
+	b.dispatchInteraction(who, responder, "component", matched.Name(), func(cmdCtx context.Context) error {
 		_ = cmdCtx
 		return handler.Component(&cmdadapter.ComponentInteractionContext{
-			Invoker:     interactionInvoker(e),
+			Invoker:     who,
 			Responder:   responder,
 			API:         reply.NewSessionAPI(e.Client()),
 			ComponentID: customID,
 			Storage:     b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
 		})
-	})
-}
-
-// onMessageCreate handles @mention messages directed at the bot.
-func (b *Bot) onMessageCreate(e *events.MessageCreate) {
-	self, ok := e.Client().Caches.SelfUser()
-	if !ok || e.Message.Author.ID == self.ID {
-		return
-	}
-	mentioned := false
-	for _, u := range e.Message.Mentions {
-		if u.ID == self.ID {
-			mentioned = true
-			break
-		}
-	}
-	if !mentioned {
-		return
-	}
-
-	api := reply.NewSessionAPI(e.Client())
-	who := cmdadapter.Invoker{
-		ChannelID: e.ChannelID.String(),
-		UserID:    e.Message.Author.ID.String(),
-		Username:  e.Message.Author.Username,
-	}
-	if e.GuildID != nil {
-		who.GuildID = e.GuildID.String()
-	}
-
-	b.runWithCommandContext(commandRunOptions{
-		onBusy: func(err error) {
-			b.log.Warn().Str("kind", "message").Err(err).Msg("command_slot_busy")
-		},
-	}, func(cmdCtx context.Context) error {
-		inv := &command.Invocation{Data: &cmdadapter.MessageContext{
-			Invoker: who, API: api, Storage: b.storage, Config: b.cfg,
-		}}
-		for _, c := range command.DefaultRegistry.GetAll() {
-			if err := c.Run(cmdCtx, inv); err != nil {
-				if cmdCtx.Err() == context.DeadlineExceeded {
-					b.log.Warn().Str("kind", "message").Err(err).Msg("command_timeout")
-					_ = api.SendChannelEmbed(who.ChannelID, &cmdadapter.Embed{
-						Description: "Timed out running command.",
-					})
-					continue
-				}
-				b.log.Error().Str("kind", "message").Err(err).Msg("command_run_error")
-				_ = api.SendChannelEmbed(who.ChannelID, &cmdadapter.Embed{
-					Description: fmt.Sprintf("Error: %v", err),
-				})
-			}
-		}
-		return nil
 	})
 }
