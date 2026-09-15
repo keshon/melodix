@@ -37,9 +37,9 @@ func (a *API) MemberPermissions(userID, channelID string) (int64, error) {
 	if !ok {
 		return 0, fmt.Errorf("channel %s not in cache", channelID)
 	}
-	member, ok := a.client.Caches.Member(channel.GuildID(), uid)
-	if !ok {
-		return 0, fmt.Errorf("member %s not in cache", userID)
+	member, err := a.member(channel.GuildID(), uid)
+	if err != nil {
+		return 0, err
 	}
 	return int64(a.client.Caches.MemberPermissionsInChannel(channel, member)), nil
 }
@@ -76,11 +76,36 @@ func (a *API) botPermissions(channelID string) (discord.Permissions, error) {
 	if !ok {
 		return 0, fmt.Errorf("channel %s not in cache", channelID)
 	}
-	self, ok := a.client.Caches.SelfMember(channel.GuildID())
+	selfUser, ok := a.client.Caches.SelfUser()
 	if !ok {
-		return 0, fmt.Errorf("bot member not in cache for guild %s", channel.GuildID())
+		return 0, fmt.Errorf("bot user not known yet")
+	}
+	self, err := a.member(channel.GuildID(), selfUser.ID)
+	if err != nil {
+		return 0, err
 	}
 	return a.client.Caches.MemberPermissionsInChannel(channel, self), nil
+}
+
+// member answers from the cache, and asks Discord when the cache has never
+// heard of this one.
+//
+// The cache only knows members it has been told about: GUILD_CREATE carries
+// them only for guilds under Discord's large-member threshold, and past that
+// the rest are learned from events a music bot has no other reason to
+// subscribe to. A permission check that depends on which events happen to be
+// enabled is a command that works in one guild and not the next -- so where
+// the answer is missing it is fetched rather than turned into a refusal.
+func (a *API) member(guildID, userID snowflake.ID) (discord.Member, error) {
+	if member, ok := a.client.Caches.Member(guildID, userID); ok {
+		return member, nil
+	}
+	member, err := a.client.Rest.GetMember(guildID, userID)
+	if err != nil {
+		return discord.Member{}, fmt.Errorf("fetching member %s: %w", userID, err)
+	}
+	a.client.Caches.AddMember(*member)
+	return *member, nil
 }
 
 func (a *API) SendChannelMessage(channelID, content string) error {

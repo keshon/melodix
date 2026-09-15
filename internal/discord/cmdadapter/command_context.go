@@ -81,6 +81,13 @@ const (
 // could identify has no permissions to resolve, and asking anyway would spend
 // a request to be told so.
 func memberPermissions(api SessionAPI, who Invoker) (int64, error) {
+	// What the invocation itself said, when it said anything. Discord computes
+	// this for the channel the command was used in and sends it along, so it
+	// is both authoritative and always present -- unlike the cache below,
+	// which only knows members it has been told about.
+	if who.PermissionsKnown {
+		return who.Permissions, nil
+	}
 	if api == nil || who.UserID == "" || who.UserID == UnknownUserID {
 		return 0, nil
 	}

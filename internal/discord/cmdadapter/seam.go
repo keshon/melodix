@@ -19,4 +19,17 @@ type Invoker struct {
 	// Username is unknownUsername, or the user ID for a reaction, when the
 	// invocation carried no member.
 	Username string
+
+	// Permissions is what the caller may do in this channel, as computed by
+	// Discord and delivered with the invocation. PermissionsKnown says whether
+	// the invocation carried them at all.
+	//
+	// They are carried rather than looked up because an interaction already
+	// states them, channel overwrites included, and looking them up instead
+	// means asking a member cache that may never have heard of this user --
+	// which is a refused command rather than a wrong answer. The cache is
+	// warmed by events the bot does not otherwise need, so the lookup worked
+	// only for as long as the bot was told about things it had no use for.
+	Permissions      int64
+	PermissionsKnown bool
 }

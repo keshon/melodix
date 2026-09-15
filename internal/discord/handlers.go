@@ -34,6 +34,12 @@ func interactionInvoker(i discord.Interaction) cmdadapter.Invoker {
 	user := i.User()
 	if member := i.Member(); member != nil {
 		user = member.User
+		// Discord computed these for this channel, overwrites included. Taking
+		// them from here rather than from the member cache is what makes a
+		// permission check independent of which events the bot happens to
+		// subscribe to.
+		who.Permissions = int64(member.Permissions)
+		who.PermissionsKnown = true
 	}
 	if user.ID != 0 {
 		who.UserID = user.ID.String()
