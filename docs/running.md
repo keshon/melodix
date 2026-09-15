@@ -70,10 +70,13 @@ HTTP proxy cannot carry it.
 3. Go to the "Bot" tab
 4. Create the bot and copy its token — you'll need it in a moment
 
-While you're there, enable these intents:
-- Presence
-- Server Members
-- Message Content
+While you're there, enable one privileged intent: **Server Members**. Permission
+checks read the member cache, and a member missing from it is a command refused
+rather than a command run with fewer rights.
+
+Presence and Message Content are not needed. Melodix does not ask for them, and
+asking for a privileged intent nothing reads is a connection Discord refuses
+outright the day somebody sets this up without ticking all three boxes.
 
 ### Step 2: Invite it to a server
 
