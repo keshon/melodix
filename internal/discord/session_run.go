@@ -16,14 +16,14 @@ import (
 	"github.com/keshon/melodix/internal/discord/execguard"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/discord/session"
-	"github.com/keshon/melodix/internal/discord/voice/sink"
+	"github.com/keshon/melodix/internal/discord/voice/voicesink"
 	"github.com/keshon/melodix/internal/discord/watchdog"
 )
 
 // clientConn is the live disgo connection.
 type clientConn struct {
 	client *bot.Client
-	dave   *sink.DaveRegistry
+	dave   *voicesink.DaveRegistry
 }
 
 var _ conn = clientConn{}
@@ -33,7 +33,7 @@ func (c clientConn) API() cmdadapter.BotAPI {
 }
 
 // VoiceResources hands out this session's voice manager and DAVE registry.
-func (c clientConn) VoiceResources() (disgovoice.Manager, *sink.DaveRegistry) {
+func (c clientConn) VoiceResources() (disgovoice.Manager, *voicesink.DaveRegistry) {
 	return c.client.VoiceManager, c.dave
 }
 
@@ -52,7 +52,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		logger *cmdlogger.Logger
 	)
 
-	dave := sink.NewDaveRegistry()
+	dave := voicesink.NewDaveRegistry()
 	tracker := watchdog.NewTracker()
 
 	session, err := session.New(session.Options{

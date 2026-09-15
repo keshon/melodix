@@ -92,7 +92,7 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `pkg/music/sink` | `AudioSink`/`Provider` interfaces + speaker implementation |
 | `internal/discord` | The `Bot`: session lifecycle, handlers, health watchdogs, voice service |
 | `internal/discord/voice` | Per-guild players and sink providers; guild status messages; **survives session restarts** |
-| `internal/discord/voice/sink` | `DiscordSink`: forwards Opus packets to the voice connection (no encode) |
+| `internal/discord/voice/voicesink` | Joins a voice channel and forwards a track's Opus packets to it (no encode); holds frames the transport cannot protect |
 | `internal/discord/cmdadapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
 | `internal/discord/cmdsync` | Per-guild slash-command diff sync (create/edit/delete) |
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
@@ -587,7 +587,7 @@ is the failure this section exists to prevent.
   specifically to catch locking regressions. Fakes swap the registry via
   `stream.SetRegistry` (same pattern as `pkg/music/stream/recovery_test.go`)
   and stub the sink provider.
-- `internal/discord/voice/sink/` carries the parts of the send contract a
+- `internal/discord/voice/voicesink/` carries the parts of the send contract a
   library swap can silently delete, because nothing about them is visible to
   a compiler. `dave_hold_test.go`: while the guild's DAVE session reports it
   has no live epoch, the frame provider withholds frames rather than emitting

@@ -13,7 +13,7 @@ import (
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
-	musicsink "github.com/keshon/melodix/pkg/music/sink"
+	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/rs/zerolog"
 )
@@ -32,7 +32,7 @@ type APIGetter func() cmdadapter.BotAPI
 // live session itself. Caching one here used to be the bug: the provider was
 // built on a session, the cache outlived the session, and a guild that had
 // played once before a reconnect could never play again.
-type SinkProviderFactory func(guildID string) musicsink.Provider
+type SinkProviderFactory func(guildID string) sink.Provider
 
 // UserVoiceState is where a user is connected, in the shape a caller needs to
 // join them: the channel, and who was asked about.
@@ -75,7 +75,7 @@ type Service struct {
 	log             zerolog.Logger
 	mu              sync.RWMutex
 	players         map[string]*player.Player
-	sinkProviders   map[string]musicsink.Provider
+	sinkProviders   map[string]sink.Provider
 	resolver        *resolve.Resolver
 
 	guildMusicStatus map[string]guildMusicStatus
@@ -97,7 +97,7 @@ func NewVoiceService(getAPI APIGetter, newSinkProvider SinkProviderFactory, cfg 
 		store:                   store,
 		log:                     log,
 		players:                 make(map[string]*player.Player),
-		sinkProviders:           make(map[string]musicsink.Provider),
+		sinkProviders:           make(map[string]sink.Provider),
 		guildMusicStatus:        make(map[string]guildMusicStatus),
 		guildMusicNotifyChannel: make(map[string]string),
 	}
@@ -181,7 +181,7 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 	defer s.mu.Unlock()
 
 	if s.sinkProviders == nil {
-		s.sinkProviders = make(map[string]musicsink.Provider)
+		s.sinkProviders = make(map[string]sink.Provider)
 	}
 	if p, ok := s.players[guildID]; ok {
 		return p
@@ -407,7 +407,7 @@ func (s *Service) StopAllPlayers() {
 // restarts.
 func (s *Service) InvalidateAllSinks() {
 	s.mu.RLock()
-	providers := make([]musicsink.Provider, 0, len(s.sinkProviders))
+	providers := make([]sink.Provider, 0, len(s.sinkProviders))
 	for _, p := range s.sinkProviders {
 		providers = append(providers, p)
 	}

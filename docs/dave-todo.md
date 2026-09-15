@@ -32,7 +32,7 @@ order of how the work happened:
   at the one point on the pull-model path that is ours,
   `frameProvider.ProvideOpusFrame`, with the same predicate and a budget past
   which the track ends rather than holding forever. See
-  `internal/discord/voice/sink/dave_hold_test.go`.
+  `internal/discord/voice/voicesink/dave_hold_test.go`.
 - `godave.Callbacks` over the connection's senders, receivers keyed by user,
   and the session moved behind `godave.Session`.
 - `Session.DAVESessionCreate`, so the implementation is the caller's choice.

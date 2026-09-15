@@ -1,4 +1,4 @@
-package sink
+package voicesink
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rs/zerolog"
 
-	musicsink "github.com/keshon/melodix/pkg/music/sink"
+	"github.com/keshon/melodix/pkg/music/sink"
 )
 
 // ErrNoSession means there is no gateway session to join a voice channel with,
@@ -75,11 +75,11 @@ func NewProvider(
 	}
 }
 
-var _ musicsink.Provider = (*Provider)(nil)
+var _ sink.Provider = (*Provider)(nil)
 
 // Sink joins the voice channel (or reuses the existing connection) and returns
 // an AudioSink. target must be non-empty.
-func (p *Provider) Sink(target string) (musicsink.AudioSink, error) {
+func (p *Provider) Sink(target string) (sink.AudioSink, error) {
 	if target == "" {
 		return nil, fmt.Errorf("voice channel ID is required")
 	}
@@ -135,7 +135,7 @@ func (p *Provider) Sink(target string) (musicsink.AudioSink, error) {
 // sinkLocked builds the sink for the connection this provider currently holds.
 // The DAVE session is looked up per acquisition for the same reason the
 // manager is: it belongs to the connection, and a rejoin builds a new one.
-func (p *Provider) sinkLocked(manager voice.Manager, dave *DaveRegistry) musicsink.AudioSink {
+func (p *Provider) sinkLocked(manager voice.Manager, dave *DaveRegistry) sink.AudioSink {
 	return &Sink{
 		conn:    p.openedConn,
 		manager: manager,

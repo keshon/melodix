@@ -4,8 +4,8 @@ import (
 	disgovoice "github.com/disgoorg/disgo/voice"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/voice/sink"
-	musicsink "github.com/keshon/melodix/pkg/music/sink"
+	"github.com/keshon/melodix/internal/discord/voice/voicesink"
+	"github.com/keshon/melodix/pkg/music/sink"
 )
 
 // conn is the live connection.
@@ -22,7 +22,7 @@ type conn interface {
 	// VoiceResources are the parts of this session a voice connection is built
 	// from. They are handed out rather than built into anything, because both
 	// die with the session and the things that need them do not.
-	VoiceResources() (disgovoice.Manager, *sink.DaveRegistry)
+	VoiceResources() (disgovoice.Manager, *voicesink.DaveRegistry)
 }
 
 // setConn publishes a live connection; clearConn withdraws it.
@@ -47,9 +47,9 @@ func (b *Bot) currentConn() conn {
 // starts working again when a session comes back.
 type deadSinkProvider struct{}
 
-var _ musicsink.Provider = deadSinkProvider{}
+var _ sink.Provider = deadSinkProvider{}
 
-func (deadSinkProvider) Sink(string) (musicsink.AudioSink, error) {
+func (deadSinkProvider) Sink(string) (sink.AudioSink, error) {
 	return nil, errNoConnection
 }
 func (deadSinkProvider) ReleaseSink(string) {}

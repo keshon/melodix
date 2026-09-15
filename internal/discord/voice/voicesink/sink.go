@@ -1,6 +1,18 @@
-package sink
+// Package voicesink carries a track's Opus packets to a Discord voice
+// channel: join, hand back a sink that feeds the connection, leave again.
+//
+// It is the Discord-shaped half of pkg/music/sink, whose Provider and
+// AudioSink it implements, and it is named for the difference because both
+// used to be called sink -- two packages, two Providers, and every file
+// importing both had to alias one of them to say which it meant.
+//
+// End-to-end encryption comes from dave-go, which is pure Go; see
+// DaveRegistry for why that matters and for how a connection's session is
+// caught on the way past.
+package voicesink
 
 import (
+	"errors"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -262,4 +274,22 @@ func (p *frameProvider) Close() {
 func (p *frameProvider) finish(err error) {
 	p.ended.Store(true)
 	p.once.Do(func() { p.done <- err })
+}
+
+func stopped(stop <-chan struct{}) bool {
+	select {
+	case <-stop:
+		return true
+	default:
+		return false
+	}
+}
+
+// endOrErr maps a clean end-of-stream to nil (natural track end) and any other
+// error through unchanged (surfaced to the player's recovery).
+func endOrErr(err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
 }

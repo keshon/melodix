@@ -1,12 +1,11 @@
-package sink
+package voicesink
 
-import (
-	"errors"
-	"io"
-	"time"
+import "time"
 
-	"github.com/keshon/melodix/pkg/music/stream"
-)
+// The numbers this layer runs on. They are together rather than beside the
+// code that reads them because each is a judgement about the network or the
+// audio rather than about the logic, and a judgement is easier to revisit when
+// it is not buried in a loop.
 
 // How a track's leading packets are handled before the 20ms-paced send begins.
 // These describe the audio rather than the library carrying it, which is why
@@ -45,25 +44,3 @@ const (
 	transportCheckInterval = 250 * time.Millisecond
 	transportSilence       = 500 * time.Millisecond
 )
-
-func stopped(stop <-chan struct{}) bool {
-	select {
-	case <-stop:
-		return true
-	default:
-		return false
-	}
-}
-
-// endOrErr maps a clean end-of-stream to nil (natural track end) and any other
-// error through unchanged (surfaced to the player's recovery).
-func endOrErr(err error) error {
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	return err
-}
-
-// Silence the unused-import check when stream is only referenced from the
-// sink; keeping the import here documents where ErrPlaybackStopped comes from.
-var _ = stream.ErrPlaybackStopped

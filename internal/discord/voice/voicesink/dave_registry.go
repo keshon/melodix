@@ -1,4 +1,4 @@
-package sink
+package voicesink
 
 import (
 	"log/slog"

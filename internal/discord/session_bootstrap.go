@@ -12,13 +12,13 @@ import (
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/cmdqueue"
 	"github.com/keshon/melodix/internal/discord/voice"
-	"github.com/keshon/melodix/internal/discord/voice/sink"
+	"github.com/keshon/melodix/internal/discord/voice/voicesink"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
 	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
 	"github.com/keshon/melodix/pkg/music/parsers/ytnative"
-	musicsink "github.com/keshon/melodix/pkg/music/sink"
+	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/soundcloudapi"
 	"github.com/rs/zerolog"
 )
@@ -88,19 +88,19 @@ func (b *Bot) sessionAPI() cmdadapter.BotAPI {
 // newSinkProvider builds the audio path for one guild. The provider outlives
 // every session, like the player that will hold it, and reaches the live one
 // through voiceResources on each acquisition.
-func (b *Bot) newSinkProvider(guildID string) musicsink.Provider {
+func (b *Bot) newSinkProvider(guildID string) sink.Provider {
 	gid, err := snowflake.Parse(guildID)
 	if err != nil {
 		b.log.Error().Str("guild_id", guildID).Err(err).Msg("voice_guild_id_invalid")
 		return deadSinkProvider{}
 	}
 	delay := time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond
-	return sink.NewProvider(b.voiceResources, gid, delay, b.log)
+	return voicesink.NewProvider(b.voiceResources, gid, delay, b.log)
 }
 
 // voiceResources reaches the live session's voice manager and DAVE registry;
 // ok is false between sessions, which is a normal state rather than a failure.
-func (b *Bot) voiceResources() (disgovoice.Manager, *sink.DaveRegistry, bool) {
+func (b *Bot) voiceResources() (disgovoice.Manager, *voicesink.DaveRegistry, bool) {
 	c := b.currentConn()
 	if c == nil {
 		return nil, nil, false
