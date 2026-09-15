@@ -96,7 +96,8 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `internal/discord/cmdadapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
 | `internal/discord/cmdsync` | Per-guild slash-command diff sync (create/edit/delete) |
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
-| `internal/discord/execguard` | Global command parallelism cap + per-command timeout |
+| `internal/discord/cmdqueue` | One FIFO lane per guild, drained off the gateway read goroutine: a guild's commands stay ordered and never overlap, different guilds run at once |
+| `internal/discord/execguard` | Global cap on how many command bodies run at once, across every guild |
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
 | `internal/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |

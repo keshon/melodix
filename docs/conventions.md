@@ -138,6 +138,11 @@ pressed in good faith.
 
 ## Concurrency contracts
 
+The full set — who owns what, and what enforces each rule rather than merely
+stating it — is [ownership.md](ownership.md). What follows is the part that is
+about style rather than about ownership, and is not repeated there: two
+documents restating the same rule is how one of them ends up wrong.
+
 **[invariant]** `Player.PlayerStatus` has exactly one long-lived consumer per
 player — the voice service's `watchPlayerStatus`, or the CLI's own loop. Don't
 attach per-interaction listeners: competing receivers steal events from each
@@ -149,11 +154,11 @@ knows the result.
 `player.Options`, and never touched again. They are read from the playback
 goroutine without a lock, which is only safe because of that.
 
-**[invariant]** Every goroutine has an owner and a clear way to exit.
-Per-run channels (`stopPlayback`/`playbackDone`) belong to exactly one
-playback run, and a run identifies its own state by its own `*parsers.Track`
-pointer (`clearIfCurrent`) rather than by reading anything shared — otherwise
-a goroutine scheduled late acts on a newer run's track.
+**[invariant]** Every goroutine has an owner and a clear way to exit. Per-run
+channels (`stopPlayback`/`playbackDone`) belong to exactly one playback run,
+and a run names itself by its generation rather than by reading anything
+shared — otherwise a goroutine scheduled late acts on a newer run's track. See
+[ownership.md](ownership.md) rule 5.
 
 **[practice]** Package-level loggers use `atomic.Pointer[zerolog.Logger]` with
 `SetLogger` and a `Nop` fallback (see `parsers/ffmpeg/pcm.go`), wired once in
@@ -191,8 +196,8 @@ and so is a doc comment that only expands the identifier back into a sentence.
 
 The comments worth writing answer a question the code raises but cannot
 settle. Why VISIONOS rather than the library's default client. Why the
-read-ahead buffer sits above recovery instead of under it. Why a run compares
-its own `*parsers.Track` pointer instead of reading shared state. Whoever asks
+read-ahead buffer sits above recovery instead of under it. Why a stream copies
+the Track it is given instead of writing the caller's. Whoever asks
 those next — a maintainer months from now, or an agent told to "clean this
 up" — cannot recover the answer from the code, and will helpfully undo it.
 
@@ -355,9 +360,10 @@ in full; a file that already owes something is only required not to owe more.
 That is what lets a rule be adopted on a live codebase without a repo-wide
 edit nobody can review.
 
-**The baseline is currently empty.** All three ratcheted rules hold
-everywhere, so every violation is a real regression rather than a number
-creeping up — which is the state worth defending. It got there by burning the
+**There is no baseline file.** All four ratcheted rules hold everywhere, so
+`baseline.json` has nothing to record and does not exist; a missing baseline
+reads as "nobody owes anything", which makes every violation a real regression
+rather than a number creeping up — the state worth defending. It got there by burning the
 debt down (263 violations, in one pass) rather than by lowering the bar, and
 `git log` has the commit if the method is ever needed again.
 

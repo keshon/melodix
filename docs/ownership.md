@@ -1,234 +1,217 @@
 # Ownership
 
-Every bug the September 2026 audit found in the voice and playback layers was
-one bug wearing nine costumes: **something wrote state it did not own, and
-nothing noticed.**
+Who may write what, and what stops the rest.
 
-A pointer handed to a renderer while a parser filled it in. A stream reopened
-from the wrong goroutine. A lock held across a network round trip. A cached
-connection whose owner had thrown it away. None of them broke a build, failed
-a test, or looked wrong in review — and one of them silently removed
-end-to-end encryption during a library migration.
+Go will not answer that for you. Rust refuses to compile a second writer and
+Erlang puts it in another process; Go hands you a pointer and trusts you. So
+the rules live here, and each one names what enforces it — because a rule
+enforced only by review is a rule that gets broken by whoever is next in a
+hurry.
 
-Go will not catch this class. Rust refuses to compile it and Erlang makes it
-unreachable across process boundaries; Go hands you a pointer and trusts you.
-So the rules have to be written down, and — this is the part that matters —
-**each one has to name what enforces it**, because a rule enforced only by
-review is a rule that will be broken by the next person in a hurry, which is
-exactly how these arrived.
+Every rule below exists because its absence produced a real defect. The
+forensic detail is in `docs/audit_2026-09-15_*`; this document is the rules
+themselves.
 
-## How to read the enforcement column
+## Enforcement grades
 
-Strongest first. A rule's grade is the strongest thing that would stop a
-change violating it:
+A rule's grade is the strongest thing that would stop a change violating it.
 
 | Grade | Means |
 |---|---|
-| **compiler** | The violation does not typecheck. The strongest grade available, and the only one that needs no vigilance. |
-| **refused** | It compiles, and fails at runtime with an error naming the mistake. |
-| **checked** | A test reads the source and fails on the shape. Cheap, and it survives refactors that tests of behaviour do not. |
+| **compiler** | The violation does not typecheck. Needs no vigilance. |
+| **refused** | It compiles and fails at runtime with an error naming the mistake. |
+| **checked** | A test reads the source and fails on the shape. Survives refactors that behavioural tests do not. |
 | **tested** | A test fails, usually under `-race`. Depends on the test driving the right interleaving. |
-| **documented** | A comment says so. Review is the only enforcement. Treat every one of these as a rule that will eventually be broken. |
+| **documented** | A comment says so. Review is the only enforcement — treat these as rules that will eventually be broken. |
 
-`go test -race ./...` runs everything below.
+`go test -race ./...` runs all of it.
 
-## The rules
+---
 
-### 1. A Track leaves the engine by value
+## 1. A Track leaves the engine by value
 
-`Player.CurrentTrack` returns `parsers.Track`, not a pointer. Nothing exported
-from the player hands out a `*parsers.Track`.
+`Player.CurrentTrack` returns `parsers.Track`. No exported player method hands
+out a `*parsers.Track`.
 
-*Why:* the Track being played is written while it plays — the parser that
-actually opened it, whether it is passthrough or cached, a title the media knew
-and the resolver did not. The status watcher renders it from another goroutine.
-Sharing the pointer was a live race on the default configuration, invisible to
-`-race` because no test drove a parser switch and a render together.
+**Because** a playing Track is written while it plays: the parser that actually
+opened it, whether the stream is passthrough or cached, a title the media knew
+and the resolver did not. Renderers read it from their own goroutines. A
+pointer shares the writes; a value cannot.
 
-*Enforcement:* **compiler** for the callers (a value cannot be written back
-into the engine), plus **checked** —
-`player.TestNoExportedMethodHandsOutATrackPointer` reads the signatures.
+**Enforced by** compiler — a caller holding a value has nothing to write back
+into the engine — and checked:
+`player.TestNoExportedMethodHandsOutATrackPointer`.
 
-### 2. A stream owns its own Track; facts travel back as values
+## 2. A stream owns its Track; findings travel back as values
 
-`RecoveryStream` copies the Track it is given. Parsers keep writing through the
-pointer they are handed at open time, and it lands on the stream's copy.
-What the stream learned returns as a `stream.OpenInfo` — from `Start`, and
-through the confirmation callback — which the player applies under its own
-lock.
+`RecoveryStream` copies the Track it is given. Parsers write through the
+pointer they are handed, and it lands on that copy. What the stream learned
+returns as a `stream.OpenInfo`, from `Start` and from the confirmation
+callback, which the player applies under its own lock.
 
-*Why:* `Streamer.Open(track *Track, …)` is an out-parameter written by five
-parser packages. That pointer used to be the player's `currTrack`.
+**Because** `Streamer.Open(track *Track, …)` is an out-parameter, and five
+parser packages write through it. If that pointer belongs to the player, the
+parsers are writing the player's state.
 
-*Enforcement:* **tested** —
-`stream.TestRecoveryStreamDoesNotWriteTheCallersTrack` asserts the caller's
-Track is byte-identical after a mid-track parser switch.
+**Enforced by** tested: `stream.TestRecoveryStreamDoesNotWriteTheCallersTrack`.
 
-### 3. A stream's run state has exactly one writer, and it is whoever reads it
+## 3. A stream's run state has one writer, and it is whoever reads it
 
-Everything a stream mutates — parser index, position, retry counts, cache
-writer, its Track copy — belongs to the goroutine pulling packets. `Start`
-opens once, before there is a reader. After that the only way in is
-`RequestReopen`, which sets a flag and closes the source to unblock a parked
-read; the reader performs the reopen itself.
+Parser index, position, retry counts, cache writer, Track copy: all belong to
+the goroutine pulling packets. `Start` opens once, before a reader exists.
+After that the only way in is `RequestReopen`, which raises a flag and closes
+the source to unblock a parked read; the reader performs the reopen itself.
 
-*Why:* the previous `ReopenAfterTransportFailure` did the reopen from the
-playback goroutine while the read-ahead producer was running. One of the fields
-is a map, and the runtime does not survive a concurrent write to one. It had
-never fired only because the error that reached it was itself unreachable.
+There is no exported accessor for what a stream is playing. Copying the answer
+out does not help — the read itself races the writer.
 
-*Enforcement:* **compiler** — `open` is unexported, so no other package can
-call it at all; **refused** — a second `Start` returns an error rather than
-performing it; **tested** —
-`stream.TestRequestReopenDoesNotRaceTheReadAheadProducer` under `-race`.
+**Because** recovery rewrites every one of those fields, and one of them is a
+map. A concurrent map write is a runtime crash, not an error you can handle.
 
-There is deliberately no exported accessor for what a stream is playing.
-Copying the answer out does not help: the read itself races the producer.
+**Enforced by** compiler — `open` is unexported, so no other package can call
+it — refused — a second `Start` returns an error rather than performing it —
+and tested: `stream.TestRequestReopenDoesNotRaceTheReadAheadProducer`,
+`TestAStreamCannotBeStartedTwice`.
 
-### 4. `p.mu` is never held across I/O
+## 4. `p.mu` is never held across I/O
 
-Capture what the call needs under the lock, release it, then make the call.
+Capture what the call needs under the lock, release, then call.
 
-*Why:* the player's outward edges are a voice join (15s), a voice leave (10s)
-and a stream open (a fetch or an ffmpeg process). Held across any of them, the
-lock guarding one guild's queue is every reader of that queue's wait — and
-before command bodies left the gateway goroutine, that was every guild's wait.
+**Because** the player's outward edges are a voice join (15s), a voice leave
+(10s) and a stream open (a fetch, or an ffmpeg process). The lock guards one
+guild's queue, so anything held across those makes every reader of that queue
+wait for a network round trip.
 
-*Enforcement:* **checked** — `player.TestLockIsNeverHeldAcrossIO` scans
-`player.go` for the outward interfaces' method names inside a locked region.
-It is keyed on method names, not receivers, because the way to move a call out
-from under a lock is to capture the receiver into a local first — so a check
-keyed on receivers goes quiet exactly when somebody puts one back.
+**Enforced by** checked: `player.TestLockIsNeverHeldAcrossIO` scans `player.go`
+for the outward interfaces' method names inside a locked region. It matches
+method names rather than receivers, because moving a call out from under a lock
+starts by capturing the receiver into a local — so a receiver-keyed check goes
+quiet exactly when someone puts one back.
 
-*Known limit, stated because a check that hides its blind spot is worse than
-none:* it does not follow calls. A helper invoked under the lock that itself
+**Limit:** it does not follow calls. A helper called under the lock that itself
 does I/O passes this and is still wrong.
 
-### 5. A run resets only its own state
+## 5. A run resets only its own state
 
-Every playback run has a generation. `Stop`, `clearIfCurrent` and the
-confirmation callback all compare against it before writing anything, and the
-queue-end teardown names its own run rather than "whatever is playing".
+Every playback run carries a generation. `Stop`, `clearIfCurrent`, the
+confirmation callback and the queue-end teardown all compare against it before
+writing.
 
-*Why:* `Stop` waits up to ten seconds in the middle for the playback goroutine
-to exit. At a track boundary the run that finishes during that wait is not the
-run that was current when it started, so the reset landed on a track nobody
-asked about — leaving audio playing that the player believed was not, with no
-channel anyone could still signal.
+**Because** `Stop` waits up to ten seconds for the playback goroutine to exit.
+A track can end and the next begin inside that wait, so the run that is current
+when it finishes is not the one it was called for.
 
-*Enforcement:* **tested** — `player.TestStopDoesNotResetANewerRun`,
+**Enforced by** tested: `player.TestStopDoesNotResetANewerRun`,
 `TestASupersededRunDoesNotClearTheCurrentOne`,
-`TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt`, and the concurrent
-hammer.
+`TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt`.
 
-### 6. Nothing reachable from a Player has session lifetime
+## 6. Nothing reachable from a Player has session lifetime
 
-A `Player` outlives every gateway session. A `voicesink.Provider` therefore
-holds no voice manager and no DAVE registry; it resolves both per acquisition
-through a `Resources` function.
+A `voicesink.Provider` holds no voice manager and no DAVE registry. It resolves
+both per acquisition through a `Resources` function.
 
-*Why:* a voice manager belongs to one `bot.Client` and closes over that
-client's gateway. Held across a reconnect, the guild joins through a gateway
-that has been shut — which fails instantly and permanently, and which no sink
-invalidation fixes, because what went stale was the thing that makes
-connections rather than a connection.
+**Because** a `Player` outlives every gateway session, and both of those die
+with one: a voice manager belongs to a single `bot.Client` and closes over that
+client's gateway, and a DAVE registry is built fresh per session. Held across a
+reconnect, a join is addressed to a gateway that has been shut — which fails
+instantly and permanently, and which invalidating the sink does not fix,
+because what is stale is the thing that makes connections.
 
-*Enforcement:* **checked** —
+**Enforced by** checked —
 `voicesink.TestAProviderStoresNothingThatDiesWithTheSession` reflects over the
-struct; **tested** — `TestAProviderUsesTheLiveSessionAfterARestart` swaps the
-session underneath a live provider.
+struct — and tested: `TestAProviderUsesTheLiveSessionAfterARestart`.
 
-The tempting violation is "resolve once in the constructor and keep it". It
-looks like a tidy-up and reads almost identically, which is why this one is
-checked rather than documented.
+The violation to watch for is "resolve once in the constructor and keep it". It
+reads as a tidy-up.
 
-### 7. Connection liveness is the voice manager's answer, never a field of ours
+## 7. Connection liveness is the voice manager's answer
 
 The provider keeps the connection it opened only to recognise it again, and
-compares it by identity — never by reading protocol state off it, which disgo
-writes from the gateway goroutine without a lock.
+compares it by identity. It never reads protocol state off it.
 
-*Why:* disgo removes a connection on a voice websocket close it cannot resume
-from, and on closing the client, and reports neither. Both the acquire and the
-release path have to ask: acquiring without asking hands the next track a sink
-over a dead socket, releasing without asking spends the close budget waiting on
-a gateway that is not there.
+**Because** disgo removes a connection on a voice websocket close it cannot
+resume from, and on closing the client, and announces neither. A field of ours
+can only hold a memory of an answer. Acquiring without asking hands the next
+track a sink over a dead socket; releasing without asking spends the close
+budget waiting on a gateway that is not there. Reading protocol state off the
+connection races the gateway goroutine, which writes it without a lock.
 
-*Enforcement:* **checked** —
-`voicesink.TestEveryPathThatDecidesLivenessAsksTheManager`; **tested** —
+**Enforced by** checked —
+`voicesink.TestEveryPathThatDecidesLivenessAsksTheManager` — and tested:
 `TestAConnRemovedByTheLibraryForcesARejoin`,
 `TestReleasingAConnTheLibraryAlreadyTookDoesNotCloseIt`.
 
-### 8. A sink never emits a frame its transport cannot protect
+## 8. A sink never emits a frame its transport cannot protect
 
-While the guild's DAVE session reports it has no live epoch, the frame provider
-withholds frames — without consuming the packets it is holding, so the hold is
-a pause rather than a gap. A hold that outlasts its budget ends the track as a
+While the guild's DAVE session reports no live epoch, the frame provider
+withholds frames, without consuming the packets it holds — so the hold is a
+pause rather than a gap. A hold that outlasts its budget ends the track as a
 transport failure.
 
-*Why:* dave-go forwards a frame unmodified rather than failing when no ratchet
-is selectable, and disgo's send path never asks. This property existed in the
-discordgo fork, in the fork's send loop, and the migration deleted the loop —
-so it vanished with no compile error and no failing test.
+**Because** dave-go forwards a frame unmodified rather than failing when no
+ratchet is selectable, and disgo's send path never asks. An unprotected frame
+on an end-to-end encrypted channel is dropped by every receiver expecting
+encryption, and reaches the server with no end-to-end layer.
 
-*Enforcement:* **tested** — `voicesink.TestHoldStopsSendingWithoutAnEpoch` and
-the three cases beside it; **documented** in `pkg/music/sink`'s `AudioSink`
-contract, which is the thing whose absence let it vanish.
+**Enforced by** tested — `voicesink.TestHoldStopsSendingWithoutAnEpoch`,
+`TestHoldThatNeverResolvesEndsTheTrack` — and documented in `pkg/music/sink`'s
+`AudioSink` contract, whose silence is what let this property disappear during
+a library swap.
 
-### 9. A sink detects its own transport dying
+## 9. A sink detects its own transport dying
 
-`Sink.Stream` watches two things it can see: the audio sender has stopped
+`Sink.Stream` watches two things it can observe: the audio sender has stopped
 asking for frames, and the connection it was built on is no longer the guild's.
 
-*Why:* disgo offers exactly one signal for a connection going away under a
-running track, `OpusFrameProvider.Close`, and v0.19.6 never calls it. So the
-sink blocked forever — track never ended, queue never advanced, "Now Playing"
-until someone typed `/stop` — and the player's entire transport recovery sat
-behind an error nothing could produce.
+**Because** disgo offers one signal for a connection dying under a running
+track, `OpusFrameProvider.Close`, and v0.19.6 never calls it. A sink that waits
+for it blocks forever: the track never ends, the queue never advances, and the
+player's transport recovery sits behind an error nothing produces.
 
-*Enforcement:* **tested** — `voicesink.TestClosedSocketEndsTheTrackAsTransportFailure`
-and `TestAConnRemovedBehindOurBackEndsTheTrack` run disgo's real audio sender
-against a stub socket; **documented** in the `AudioSink` contract.
+**Enforced by** tested —
+`voicesink.TestClosedSocketEndsTheTrackAsTransportFailure`,
+`TestAConnRemovedBehindOurBackEndsTheTrack`, both against disgo's real audio
+sender — and documented in the `AudioSink` contract.
 
-### 10. The gateway read loop dispatches and returns
+## 10. The gateway read loop dispatches and returns
 
-Command bodies run on a per-guild worker. `Ready` and `GuildJoin` stay inline,
-because their ordering is load-bearing.
+Command bodies run on a per-guild worker. `Ready` and `GuildJoin` stay inline;
+their ordering is load-bearing.
 
-*Why:* disgo dispatches synchronously. A command body there held the socket
-unread for as long as it took — seconds, for a hundred-item playlist — and an
-interaction arriving in that window was acknowledged past Discord's three-second
-deadline. It also made `COMMAND_PARALLELISM` describe a property the runtime
-did not have.
+**Because** disgo dispatches events synchronously. A command body on that
+goroutine holds the socket unread for its whole duration, and Discord's
+acknowledgement deadline is three seconds from the interaction's creation, not
+from its delivery.
 
-*Enforcement:* **tested** — `discord.TestDispatchDoesNotRunTheCommandOnTheCallersGoroutine`,
-`TestTwoGuildsRunAtTheSameTime`, `TestOneGuildStaysSequential`, and the
-`cmdqueue` suite.
+**Enforced by** tested:
+`discord.TestDispatchDoesNotRunTheCommandOnTheCallersGoroutine`,
+`TestTwoGuildsRunAtTheSameTime`, `TestOneGuildStaysSequential`.
 
-## What is not enforced
+---
 
-Recorded because an honest list of gaps is worth more than a clean one.
+## Not enforced
 
-- **Rule 4's blind spot.** The check does not follow calls into helpers.
-- **`Handler.Run(ctx interface{})`.** A command dispatched with the wrong
-  context type returns nil and does nothing, silently. Ten commands open with
-  that assertion. Nothing would notice a dispatch path that stopped working —
-  which is how the mention path stayed dead long enough to be deleted.
-- **Reply errors.** Twenty-seven ignored `Followup*`/`Respond*` calls in
-  `internal/command`. Consistent, and consistently unchecked.
+Known gaps. An honest list is worth more than a clean one.
+
+- **Rule 4 does not follow calls** into helpers invoked under the lock.
+- **`Handler.Run(ctx interface{})`** returns nil on a context-type mismatch, so
+  a command dispatched wrongly succeeds and does nothing. Ten commands open
+  with that assertion, and nothing would report a dispatch path that stopped
+  working.
+- **Reply errors** are ignored at 27 call sites in `internal/command`.
+  Consistent, and consistently unchecked.
 - **`kkdai`'s `init()`** rewrites a third-party package's global for the whole
-  process on import. The library offers no narrower knob; an embedder gets no
-  warning.
-- **A UDP write that fails with anything but a closed socket.** disgo logs it
-  and keeps pulling, so a whole track can drain into a socket delivering
-  nothing while everything above reports normal playback. Melodix cannot
-  observe it. The log bridge names it `voice_audio_send_failed` so it can at
-  least be counted, and that is a mitigation, not a fix.
+  process on import. The library offers no narrower knob.
+- **A UDP write failing with anything but a closed socket** is logged by disgo
+  and ignored, so a track can drain into a socket delivering nothing while
+  everything above reports normal playback. Melodix cannot observe it. The log
+  bridge names it `voice_audio_send_failed`, which is a mitigation, not a fix.
 
 ## Adding a rule
 
-A rule that cannot name its enforcement does not belong here yet. Write the
-check first — it is usually twenty lines of reading your own source — then
-*verify the check fails* when you reintroduce the shape it forbids. Every check
-above was confirmed that way, and the first version of rule 4's did not catch
-the very defect it was written for.
+A rule that cannot name its enforcement does not belong here yet.
+
+Write the check first — it is usually twenty lines of reading your own source
+— then **verify it fails** when you reintroduce the shape it forbids. Every
+check above was confirmed that way, and rule 4's first version did not catch
+the defect it was written for.

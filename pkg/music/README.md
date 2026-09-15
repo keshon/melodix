@@ -28,7 +28,7 @@ flowchart TD
   J --> F
   I -- instant fail (first read) --> K["Advance parserIndex"]
   K --> F
-  I -- voice transport error --> L["ReopenAfterTransportFailure()"]
+  I -- voice transport error --> L["RequestReopen()"]
   L --> F
   I -- other error --> M["Stop track + PlayNext()"]
   M --> E
@@ -84,12 +84,16 @@ Performed by `Player.PlayNext()`:
 
 - If something is playing, stop it.
 - Pop the next track from the queue.
-- Create `stream.RecoveryStream(track)` and call `rs.Open(seek=0)`.
+- Create `stream.NewRecoveryStream(track)` and call `rs.Start(seek=0)`, which
+  returns an `OpenInfo` describing what actually opened. `Start` may be called
+  once, before anything reads; every later open happens on the reading
+  goroutine (see Ownership below).
 - If open fails for all parsers, skip the track and try the next.
 
 ### 4) Open stream (choose parser)
 
-Performed inside `RecoveryStream.Open(seek)`:
+Performed inside `RecoveryStream.open(seek)`, reached from `Start` once and
+from `ReadPacket` thereafter:
 
 - Starting at `parserIndex`, iterate through `track.SourceInfo.AvailableParsers`.
 - For each parser:
@@ -151,7 +155,9 @@ The sink drives the read loop via `AudioSink.Stream(reader, stopCh)`:
 - On normal completion: the track ends → player advances to the next track.
 - On `stream.ErrVoiceTransport` (Discord transport issues):
   - the player can invalidate/rejoin the sink (hard) or retry without rejoin (soft mode)
-  - then calls `rs.ReopenAfterTransportFailure()` to reopen media at the current seek
+  - then calls `rs.RequestReopen()`, which asks the reading goroutine to reopen
+    media at the current seek rather than reopening it from the player's own
+    goroutine -- see Ownership below
 - On user stop/skip: playback stops cleanly.
 
 ### Discord / UI: errors and `PlayerStatus`
