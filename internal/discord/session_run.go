@@ -159,8 +159,8 @@ func (b *Bot) startHealthWatcher(
 			notifyUnhealthy()
 		},
 		watchdog.WSSilenceOptions{
-			SettleDelay: 15 * time.Second,
-			Tick:        10 * time.Second,
+			SettleDelay:      15 * time.Second,
+			Tick:             10 * time.Second,
 			LastHeartbeatAck: session.LastHeartbeatAck,
 		},
 	).Run(ctx)
