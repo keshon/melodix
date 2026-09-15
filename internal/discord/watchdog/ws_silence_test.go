@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-func ackAt(t time.Time) func() (time.Time, bool) {
-	return func() (time.Time, bool) { return t, true }
+func ackAt(t time.Time) func() time.Time {
+	return func() time.Time { return t }
 }
 
 func readyTrackerAt(lastWS time.Time) *Tracker {
@@ -94,33 +94,30 @@ func TestWSSilenceWaitsUntilReady(t *testing.T) {
 	}
 }
 
-// A wedged session mutex is the failure that once cost 22 hours of silent
-// downtime: the ACK source could not answer, so the watcher that existed to
-// report the dead gateway blocked instead. It must now decide without one.
-func TestWSSilenceTriggersWhenHeartbeatAckCannotBeRead(t *testing.T) {
+// A session that has connected but never been acknowledged has no staleness
+// to measure, so the decision falls to gateway silence alone -- and a gateway
+// that has said nothing for three minutes is dead whether or not it ever
+// acknowledged anything.
+func TestWSSilenceDecidesOnSilenceWhenNothingWasEverAcked(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	watcher := NewWSSilence(
 		readyTrackerAt(now.Add(-3*time.Minute)),
 		2*time.Minute,
 		nil,
 		nil,
-		WSSilenceOptions{LastHeartbeatAck: func() (time.Time, bool) { return time.Time{}, false }},
+		WSSilenceOptions{LastHeartbeatAck: ackAt(time.Time{})},
 	)
 
 	meta, unhealthy := watcher.unhealthyMeta(now)
 	if !unhealthy {
-		t.Fatal("session whose heartbeat ACK could not be read was healthy")
-	}
-	if !meta.SessionLockWedged {
-		t.Fatal("SessionLockWedged = false, want true so the log says why")
+		t.Fatal("a gateway silent for three minutes was called healthy")
 	}
 	if meta.SinceLastWS != 3*time.Minute {
 		t.Fatalf("SinceLastWS = %s, want 3m", meta.SinceLastWS)
 	}
 }
 
-// The unreadable-ACK path must not swallow the healthy case: an ACK source
-// that answers keeps deciding on staleness as before.
+// An ACK source that answers keeps deciding on staleness as before.
 func TestWSSilenceKeepsSessionHealthyWhenAckIsReadable(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	watcher := NewWSSilence(

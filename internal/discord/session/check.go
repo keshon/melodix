@@ -23,15 +23,15 @@ type CheckResult struct {
 	CommandsGuild string
 }
 
-// Check opens a disgo gateway with the real token, waits for READY, reads back
-// what it can see, and disconnects. It registers nothing and sends nothing.
+// Check opens a gateway with the real token, waits for READY, reads back what
+// it can see, and disconnects. It registers nothing and sends nothing.
 //
-// This exists because everything else in the migration is a rewrite that only
-// a live run can judge. A compile proves the disgo code type-checks against
-// disgo; it proves nothing about the token, the intents, whether READY
-// arrives, or whether REST authenticates -- and those are exactly the failures
-// that would otherwise surface for the first time after the whole command
-// layer had been ported onto them.
+// A compile proves nothing about the token, the intents, whether READY
+// arrives, or whether REST authenticates. Those fail at connect time or not at
+// all, and the ones involving intents fail in ways that look like something
+// else: a gateway refusing the connection outright, or a bot that connects
+// and then cannot answer a command because something it needed was never sent
+// to it.
 func Check(ctx context.Context, token string, log zerolog.Logger) (CheckResult, error) {
 	var result CheckResult
 

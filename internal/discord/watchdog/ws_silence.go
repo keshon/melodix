@@ -10,11 +10,6 @@ type WSSilenceMeta struct {
 	SinceLastHeartbeatAck time.Duration
 	HeartbeatLatency      time.Duration
 	Timeout               time.Duration
-	// SessionLockWedged reports that the heartbeat ACK could not be read at
-	// all, rather than that it was read and found stale. Nothing releases a
-	// wedged session mutex, so the watcher treats it as terminal instead of
-	// waiting for a staleness threshold that will never be evaluated.
-	SessionLockWedged bool
 }
 
 // WSSilence restarts a session when the gateway receive loop appears silent.
@@ -24,7 +19,6 @@ type WSSilenceMeta struct {
 // - ticks every tick interval
 // - does nothing until tracker reports ready
 // - triggers unhealthy when both dispatch traffic and heartbeat ACKs are stale
-// - triggers unhealthy when the ACK cannot be read at all
 // - preserves dispatch-only behavior when no heartbeat ACK source is configured
 type WSSilence struct {
 	tracker     *Tracker
@@ -33,19 +27,25 @@ type WSSilence struct {
 	tick        time.Duration
 
 	heartbeatLatency func() time.Duration
-	lastHeartbeatAck func() (time.Time, bool)
+	lastHeartbeatAck func() time.Time
 	onUnhealthy      func(meta WSSilenceMeta)
 }
 
 type WSSilenceOptions struct {
 	SettleDelay time.Duration
 	Tick        time.Duration
-	// LastHeartbeatAck reads the session's last heartbeat ACK, reporting false
-	// when it could not complete the read. A source that can block forever
-	// must return false rather than wait: this watcher is the thing that
-	// notices a dead gateway, so blocking it blinds the bot instead of
-	// delaying it.
-	LastHeartbeatAck func() (time.Time, bool)
+	// LastHeartbeatAck reads the session's last heartbeat ACK, or the zero
+	// time before the first one arrives. It must not block: this watcher is
+	// the thing that notices a dead gateway, so a source that can wait
+	// forever blinds the bot rather than delaying it.
+	//
+	// It used to be able to answer "I could not read it", because the
+	// discordgo fork held the session lock across gateway reads carrying no
+	// deadline and a black-holed socket parked every reader -- a read that
+	// might never return, which the watcher treated as terminal. disgo
+	// delivers the ack as an event, so there is no lock to wedge and no
+	// failure to report.
+	LastHeartbeatAck func() time.Time
 }
 
 func NewWSSilence(tracker *Tracker, timeout time.Duration, heartbeatLatency func() time.Duration, onUnhealthy func(meta WSSilenceMeta), opts WSSilenceOptions) *WSSilence {
@@ -78,14 +78,7 @@ func (w *WSSilence) unhealthyMeta(now time.Time) (WSSilenceMeta, bool) {
 
 	var sinceHeartbeatAck time.Duration
 	if w.lastHeartbeatAck != nil {
-		lastAck, ok := w.lastHeartbeatAck()
-		if !ok {
-			return WSSilenceMeta{
-				SinceLastWS:       sinceWS,
-				Timeout:           w.timeout,
-				SessionLockWedged: true,
-			}, true
-		}
+		lastAck := w.lastHeartbeatAck()
 		if !lastAck.IsZero() {
 			if now.Before(lastAck) {
 				sinceHeartbeatAck = 0

@@ -109,17 +109,17 @@ func (s *Session) Close(ctx context.Context) {
 	s.client.Close(ctx)
 }
 
-// LastHeartbeatAck reports when the gateway last acknowledged a heartbeat, and
-// whether it ever has.
+// LastHeartbeatAck reports when the gateway last acknowledged a heartbeat, or
+// the zero time before the first one arrives.
 //
-// The bool is false only before the first ack, where a staleness check would
-// otherwise read a zero time as "very stale" and restart a session that has
-// merely just connected. Unlike the discordgo equivalent it cannot fail to
-// answer, so there is no wedged-lock case for a caller to handle.
-func (s *Session) LastHeartbeatAck() (time.Time, bool) {
+// Unlike the discordgo equivalent it cannot fail to answer: that one had to be
+// read behind the lock discordgo also held across gateway reads with no
+// deadline, so a black-holed socket parked every reader and the call itself
+// could hang. disgo delivers the ack as an event.
+func (s *Session) LastHeartbeatAck() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.lastHeartbeatAck, !s.lastHeartbeatAck.IsZero()
+	return s.lastHeartbeatAck
 }
 
 // Latency is the round trip to the gateway.

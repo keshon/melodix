@@ -35,7 +35,16 @@ func (g *Guard) Acquire(ctx context.Context) error {
 	}
 }
 
-// Release frees one execution slot. Safe to call even if no slot is held.
+// Release frees the slot the caller holds. Pair it with a successful Acquire
+// and nothing else: every Acquire in this package is followed by a deferred
+// Release, and the two are two lines apart.
+//
+// The non-blocking read is not politeness towards an unpaired Release. It
+// cannot tell one apart from a real one -- an unpaired Release frees somebody
+// else's slot, silently raising the cap by one for as long as the process
+// lives -- and blocking instead would deadlock the caller rather than report
+// the bug. What it does buy is that Release on an unconfigured guard, which is
+// the state between sessions, is a no-op rather than a hang.
 func (g *Guard) Release() {
 	if g == nil || g.sem == nil {
 		return

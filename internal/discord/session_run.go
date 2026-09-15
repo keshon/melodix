@@ -161,16 +161,7 @@ func (b *Bot) startHealthWatcher(
 		watchdog.WSSilenceOptions{
 			SettleDelay: 15 * time.Second,
 			Tick:        10 * time.Second,
-			// The watchdog reads a false here as "the ACK could not be read
-			// at all", which for the fork meant a mutex nobody would release
-			// and was treated as terminal. disgo records the ACK as an event,
-			// so the read cannot fail and this is always true. A session that
-			// has not been ACKed yet reports the zero time, which the watchdog
-			// already handles by deciding on gateway silence alone.
-			LastHeartbeatAck: func() (time.Time, bool) {
-				ack, _ := session.LastHeartbeatAck()
-				return ack, true
-			},
+			LastHeartbeatAck: session.LastHeartbeatAck,
 		},
 	).Run(ctx)
 }

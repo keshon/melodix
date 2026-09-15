@@ -16,7 +16,11 @@ type Config struct {
 	StoragePath           string   `env:"STORAGE_PATH" envDefault:"./data/store"` // directory the datastore owns (WAL + snapshots)
 	DeveloperID           string   `env:"DEVELOPER_ID"`
 	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"false"`
-	VoiceReadyDelayMs     int      `env:"VOICE_READY_DELAY_MS" envDefault:"500"` // VoiceReadyDelayMs is the delay in ms after joining VC before sending opus (discordgo op 4 race). Default 500.
+	// VoiceReadyDelayMs waits after joining a voice channel before asking
+	// whether the channel uses end-to-end encryption. The protocol version is
+	// not known until SELECT_PROTOCOL_ACK arrives, and before that the answer
+	// cannot tell "no encryption here" from "not asked yet".
+	VoiceReadyDelayMs int `env:"VOICE_READY_DELAY_MS" envDefault:"500"`
 
 	// CommandParallelism limits how many command handlers run at once,
 	// across every guild. Commands within one guild run one at a time

@@ -43,7 +43,7 @@ func main() {
 	// -readme regenerates README.md from the command registry as a dev step
 	// (run from the repo root); the bot never writes files at runtime.
 	genReadme := flag.Bool("readme", false, "regenerate README.md from the command registry and exit")
-	checkDisgo := flag.Bool("check-disgo", false, "connect with disgo, report what it sees, and exit without registering or sending anything")
+	checkConn := flag.Bool("check", false, "connect, report what the gateway sees, and exit without registering or sending anything")
 	flag.Parse()
 	if *genReadme {
 		log := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
@@ -72,8 +72,8 @@ func main() {
 		log.Fatal().Msg("config_missing_token")
 	}
 
-	if *checkDisgo {
-		runDisgoCheck(rootCtx, cfg, log)
+	if *checkConn {
+		runConnectionCheck(rootCtx, cfg, log)
 		return
 	}
 
@@ -158,13 +158,19 @@ func registerCommands(bot *discord.Bot, log zerolog.Logger) {
 	cmdadapter.Register(&history.History{Bot: bot}, mw...)
 }
 
-// runDisgoCheck connects with disgo and reports what it can see. It registers
-// nothing and sends nothing, which is the point: it is the only part of the
-// migration that can be judged without having ported anything onto it.
-func runDisgoCheck(ctx context.Context, cfg *config.Config, log zerolog.Logger) {
+// runConnectionCheck connects and reports what it can see, registering
+// nothing and sending nothing.
+//
+// It was written to judge the disgo migration before anything had been ported
+// onto it, and that reason has expired. This one has not: a compile proves
+// nothing about the token, the intents, whether READY arrives, or whether REST
+// authenticates -- and narrowing the gateway intents is exactly the kind of
+// change whose failure mode is a gateway that refuses the connection, or a
+// bot that connects and then cannot answer a command.
+func runConnectionCheck(ctx context.Context, cfg *config.Config, log zerolog.Logger) {
 	res, err := session.Check(ctx, cfg.DiscordToken, log)
 	if err != nil {
-		log.Error().Err(err).Msg("disgo_check_failed")
+		log.Error().Err(err).Msg("connection_check_failed")
 		os.Exit(1)
 	}
 	log.Info().
@@ -173,5 +179,5 @@ func runDisgoCheck(ctx context.Context, cfg *config.Config, log zerolog.Logger) 
 		Dur("latency", res.Latency).
 		Int("existing_commands", res.Commands).
 		Str("commands_guild", res.CommandsGuild).
-		Msg("disgo_check_ok")
+		Msg("connection_check_ok")
 }

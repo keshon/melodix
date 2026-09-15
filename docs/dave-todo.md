@@ -1,7 +1,13 @@
 # DAVE: what was wrong, and what is left
 
-Working document, 14 September 2026. It records what was measured, what is
-still a guess, and which decisions are open. Delete it when the work lands.
+Working document, 14 September 2026, kept for what it measured rather than
+for what it planned. Its own instruction was to delete it once the work
+landed; the measurements are still the only record of how any of this was
+diagnosed, so it stays until somebody decides otherwise.
+
+Two things in it have since moved and are corrected in place: the frame hold,
+and the recovery timeout. Everything under [What is left](#what-is-left) is
+still open.
 
 Background: [issue #11](https://github.com/keshon/melodix/issues/11) — a bot
 that joins a voice channel, plays nothing, and is disconnected a few seconds
@@ -21,7 +27,12 @@ order of how the work happened:
 - `LOG_LEVEL` reaching the Discord library, and named close codes — the
   diagnostics without which none of the findings below were readable.
 - Holding frames rather than sending them unencrypted, in both of the ways an
-  epoch dies.
+  epoch dies. That hold lived in the fork's send loop and did not survive the
+  move to disgo, which owns the send loop now and never asks. It was restored
+  at the one point on the pull-model path that is ours,
+  `frameProvider.ProvideOpusFrame`, with the same predicate and a budget past
+  which the track ends rather than holding forever. See
+  `internal/discord/voice/sink/dave_hold_test.go`.
 - `godave.Callbacks` over the connection's senders, receivers keyed by user,
   and the session moved behind `godave.Session`.
 - `Session.DAVESessionCreate`, so the implementation is the caller's choice.
@@ -238,9 +249,8 @@ choosing a different implementation is still a constructor change in melodix.
 - The opcode 12 handler is still there and has never fired in any run
   observed. Harmless, and cheap insurance if some guild or gateway version
   sends it.
-- `daveRecoveryTimeout` on the spike branch is set to 5s against dave-go's 15s
-  default, and has never been observed firing. The current branch does not set
-  it at all and uses the library default.
+- `daveRecoveryTimeout` is set to 5s against dave-go's 15s default, and has
+  never been observed firing. `sink.DaveRecoveryTimeout` carries the reasoning.
 - The vendored fork had three pre-existing `go vet` failures in `restapi.go`
   and `restapi_test.go` that needed `-vet=off` to test inside it. It has since
   been deleted, along with the CI step and the conventions skip that existed

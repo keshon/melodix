@@ -98,7 +98,7 @@ default and can be left alone until you actually need it:
 | `INIT_SLASH_COMMANDS`     | Set to `true` to register slash commands on every startup. | `false`                 |
 | `DEVELOPER_ID`            | Your Discord user ID, for developer-only commands.          | (none)                  |
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave on sight.      | (none)                  |
-| `VOICE_READY_DELAY_MS`    | Delay after joining a voice channel before sending Opus (avoids an OP4 race). | `500` |
+| `VOICE_READY_DELAY_MS`    | Delay after joining a voice channel before asking whether it uses end-to-end encryption. The protocol version is not known until `SELECT_PROTOCOL_ACK` arrives, and before that the answer cannot tell "no encryption here" from "not asked yet". | `500` |
 | `WS_SILENCE_TIMEOUT`      | How long without events or heartbeat ACKs before the gateway is treated as unhealthy. | `2m`  |
 | `DISCORD_UNHEALTHY_MODE`  | What to do when unhealthy: `restart-session`, `restart-voice`, or `ignore`. | `restart-session` |
 | `DISCORD_UNHEALTHY_GRACE` | Under `restart-session`, ignore the first N unhealthy signals in the window below (sinks still get invalidated). | `0` |
