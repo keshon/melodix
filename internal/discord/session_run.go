@@ -7,9 +7,8 @@ import (
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/snowflake/v2"
+	disgovoice "github.com/disgoorg/disgo/voice"
 	"github.com/keshon/command"
-	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/cmdlogger"
@@ -19,15 +18,12 @@ import (
 	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/discord/watchdog"
-	musicsink "github.com/keshon/melodix/pkg/music/sink"
 )
 
 // clientConn is the live disgo connection.
 type clientConn struct {
-	client     *bot.Client
-	dave       *sink.DaveRegistry
-	voiceDelay time.Duration
-	log        zerolog.Logger
+	client *bot.Client
+	dave   *sink.DaveRegistry
 }
 
 var _ conn = clientConn{}
@@ -36,14 +32,9 @@ func (c clientConn) API() cmdadapter.BotAPI {
 	return reply.NewSessionAPI(c.client)
 }
 
-// NewSinkProvider builds the audio path on disgo's voice manager.
-func (c clientConn) NewSinkProvider(guildID string) musicsink.Provider {
-	gid, err := snowflake.Parse(guildID)
-	if err != nil {
-		c.log.Error().Str("guild_id", guildID).Err(err).Msg("voice_guild_id_invalid")
-		return deadSinkProvider{}
-	}
-	return sink.NewProvider(c.client.VoiceManager, c.dave, gid, c.voiceDelay, c.log)
+// VoiceResources hands out this session's voice manager and DAVE registry.
+func (c clientConn) VoiceResources() (disgovoice.Manager, *sink.DaveRegistry) {
+	return c.client.VoiceManager, c.dave
 }
 
 // RunSession opens one Discord session and blocks until ctx is cancelled or
@@ -94,12 +85,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	syncer = cmdsync.NewSyncer(client, command.DefaultRegistry, b.log)
 	logger = cmdlogger.NewLogger(client, b.storage, b.log)
 
-	b.setConn(clientConn{
-		client:     client,
-		dave:       dave,
-		voiceDelay: time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond,
-		log:        b.log,
-	})
+	b.setConn(clientConn{client: client, dave: dave})
 	defer b.clearConn()
 
 	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(b.cfg.CommandTimeout, b.cfg.CommandParallelism)})

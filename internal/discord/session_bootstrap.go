@@ -3,10 +3,15 @@ package discord
 import (
 	"context"
 	"errors"
+	"time"
+
+	disgovoice "github.com/disgoorg/disgo/voice"
+	"github.com/disgoorg/snowflake/v2"
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
 	"github.com/keshon/melodix/internal/discord/voice"
+	"github.com/keshon/melodix/internal/discord/voice/sink"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
@@ -65,13 +70,26 @@ func (b *Bot) sessionAPI() cmdadapter.BotAPI {
 	return c.API()
 }
 
-// newSinkProvider builds the audio path for one guild on the live connection.
-// A guild that asks between sessions gets a provider that cannot join, which
-// is the same answer it got from a nil session before.
+// newSinkProvider builds the audio path for one guild. The provider outlives
+// every session, like the player that will hold it, and reaches the live one
+// through voiceResources on each acquisition.
 func (b *Bot) newSinkProvider(guildID string) musicsink.Provider {
-	c := b.currentConn()
-	if c == nil {
+	gid, err := snowflake.Parse(guildID)
+	if err != nil {
+		b.log.Error().Str("guild_id", guildID).Err(err).Msg("voice_guild_id_invalid")
 		return deadSinkProvider{}
 	}
-	return c.NewSinkProvider(guildID)
+	delay := time.Duration(b.cfg.VoiceReadyDelayMs) * time.Millisecond
+	return sink.NewProvider(b.voiceResources, gid, delay, b.log)
+}
+
+// voiceResources reaches the live session's voice manager and DAVE registry;
+// ok is false between sessions, which is a normal state rather than a failure.
+func (b *Bot) voiceResources() (disgovoice.Manager, *sink.DaveRegistry, bool) {
+	c := b.currentConn()
+	if c == nil {
+		return nil, nil, false
+	}
+	manager, dave := c.VoiceResources()
+	return manager, dave, manager != nil
 }

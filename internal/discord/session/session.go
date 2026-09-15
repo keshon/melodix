@@ -146,9 +146,27 @@ type logWriter struct {
 }
 
 func (w logWriter) Write(p []byte) (int, error) {
-	w.log.Info().Str("raw", strings.TrimRight(string(p), "\n")).Msg("disgo_log")
+	line := strings.TrimRight(string(p), "\n")
+	if strings.Contains(line, audioSendFailure) {
+		// Not a fix, and should not be mistaken for one. disgo logs a UDP
+		// write failure that is not a closed socket and carries on pulling at
+		// 50Hz, so a whole track can be drained into a socket delivering
+		// nothing while everything above reports normal playback. Melodix
+		// cannot observe that error any other way and cannot act on it at all
+		// -- so it is at least given a name worth counting and alerting on,
+		// rather than being one line of library prose among thousands.
+		w.log.Error().Str("raw", line).Msg("voice_audio_send_failed")
+		return len(p), nil
+	}
+	w.log.Info().Str("raw", line).Msg("disgo_log")
 	return len(p), nil
 }
+
+// audioSendFailure is disgo's own wording for a UDP write it could not make
+// and did not act on (voice/audio_sender.go, handleErr). Matched as text
+// because it reaches us as text: the sender logs it and returns, so there is
+// no error value anywhere for melodix to catch.
+const audioSendFailure = "failed to send audio"
 
 // slogLevel maps the app's configured level onto disgo's, so LOG_LEVEL reaches
 // the library rather than the library deciding for itself.

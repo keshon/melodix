@@ -3,9 +3,11 @@ package sink
 import (
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/disgoorg/disgo/voice"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/stream"
 	"github.com/rs/zerolog"
@@ -27,11 +29,28 @@ type daveGate interface {
 // vendored fork this replaced worked the other way round, which is why the
 // warm-up and dead-air handling lives in the provider here.
 type Sink struct {
-	conn voice.Conn
-	dave daveGate
-	log  zerolog.Logger
+	conn    voice.Conn
+	manager voice.Manager
+	guildID snowflake.ID
+	dave    daveGate
+	log     zerolog.Logger
 }
 
+// Stream feeds the track to the connection and returns when it ends, when stop
+// is closed, or when the transport underneath dies.
+//
+// That last case is why this does more than wait. disgo's contract offers one
+// signal for a connection going away under a running track --
+// OpusFrameProvider.Close -- and v0.19.6 never calls it: closing an audio
+// sender cancels its goroutine and nothing else, and closing a connection does
+// not touch the sender at all. So a bot that was kicked, moved, or whose voice
+// websocket dropped stopped being asked for frames and was never told, and
+// this blocked forever: the track never ended, the queue never advanced, and
+// the status message said "Now Playing" until someone typed /stop.
+//
+// The two questions below are what melodix can ask instead, and between them
+// they cover every way the connection dies: the sender has stopped pulling, or
+// the connection this sink was built on is no longer the guild's.
 func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	provider := &frameProvider{
 		r:          r,
@@ -41,6 +60,7 @@ func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 		now:        time.Now,
 		done:       make(chan error, 1),
 	}
+	provider.markPull()
 
 	d.conn.SetOpusFrameProvider(provider)
 	// Dropping the provider releases the reader with it. The sender goroutine
@@ -48,12 +68,53 @@ func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 	// closes, which is disgo's own lifecycle and not ours to shorten.
 	defer d.conn.SetOpusFrameProvider(nil)
 
-	select {
-	case err := <-provider.done:
-		return err
-	case <-stop:
-		return stream.ErrPlaybackStopped
+	watch := time.NewTicker(transportCheckInterval)
+	defer watch.Stop()
+
+	for {
+		select {
+		case err := <-provider.done:
+			return err
+		case <-stop:
+			return stream.ErrPlaybackStopped
+		case <-watch.C:
+			if reason := d.transportDead(provider); reason != "" {
+				// Ends the provider too, so a sender still holding it cannot
+				// keep draining the track into a socket nobody is listening to.
+				provider.finish(stream.ErrVoiceTransport)
+				d.log.Warn().
+					Str("guild_id", d.guildID.String()).
+					Str("reason", reason).
+					Msg("voice_transport_lost")
+				return stream.ErrVoiceTransport
+			}
+		}
 	}
+}
+
+// transportDead names how the connection died, or "" while it is alive.
+func (d *Sink) transportDead(provider *frameProvider) string {
+	// The manager is the only authority on whether a connection is still the
+	// guild's: disgo removes one on a voice websocket close it cannot resume
+	// from, and on closing the client, neither of which it reports. Compared
+	// by identity rather than by reading the connection's own channel field,
+	// which the gateway goroutine writes without a lock.
+	if d.manager != nil && d.manager.GetConn(d.guildID) != d.conn {
+		return "conn_no_longer_registered"
+	}
+
+	// A live sender asks for a frame every 20ms. Silence past the budget means
+	// the sender goroutine is gone -- which is what a UDP write failing with a
+	// closed socket does to it, quietly. A pull that is simply taking a long
+	// time is the sender waiting on us, not the transport dying, so a pull in
+	// flight counts as alive however long it runs.
+	if provider.pulling.Load() {
+		return ""
+	}
+	if time.Since(provider.lastPullAt()) > transportSilence {
+		return "sender_stopped_pulling"
+	}
+	return ""
 }
 
 // frameProvider feeds an opus.Reader to disgo's audio sender and reports
@@ -65,8 +126,9 @@ func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 // one value it reads as "nothing to send", after which it sends its silence
 // frames and stops speaking. The real error goes to Stream over done instead.
 //
-// Every field but done is owned by the sender goroutine, which is the only
-// caller of ProvideOpusFrame and calls it one frame at a time.
+// Every field but done, ended, pulling and lastPull is owned by the sender
+// goroutine, which is the only caller of ProvideOpusFrame and calls it one
+// frame at a time. Those four are how Stream watches it from outside.
 type frameProvider struct {
 	r    opus.Reader
 	stop <-chan struct{}
@@ -81,9 +143,29 @@ type frameProvider struct {
 	done   chan error
 	once   sync.Once
 	primed bool
+
+	// ended stops a sender that has not noticed yet from consuming any more of
+	// the track. Without it, a provider Stream has already given up on keeps
+	// being asked for frames until disgo gets round to dropping it, and every
+	// one of those is a packet the next attempt will not play.
+	ended atomic.Bool
+	// pulling is true while the sender is inside ProvideOpusFrame, and
+	// lastPull is when it was last there. Between them they say whether the
+	// sender is alive, without mistaking a slow read for a dead socket.
+	pulling  atomic.Bool
+	lastPull atomic.Int64
 }
 
 func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
+	p.pulling.Store(true)
+	defer func() {
+		p.markPull()
+		p.pulling.Store(false)
+	}()
+
+	if p.ended.Load() {
+		return nil, io.EOF
+	}
 	if stopped(p.stop) {
 		p.finish(stream.ErrPlaybackStopped)
 		return nil, io.EOF
@@ -119,6 +201,9 @@ func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 	}
 	return packet, nil
 }
+
+func (p *frameProvider) markPull()             { p.lastPull.Store(time.Now().UnixNano()) }
+func (p *frameProvider) lastPullAt() time.Time { return time.Unix(0, p.lastPull.Load()) }
 
 // holdExpired starts the hold clock on the first withheld frame and reports
 // whether the hold has outlasted its budget.
@@ -165,14 +250,16 @@ func (p *frameProvider) prime() ([]byte, error) {
 	return nil, nil
 }
 
-// Close is disgo dropping the provider, which happens when the connection goes
-// away under a running track. That is the transport failing rather than the
-// track ending, so it is reported as such and the player's recovery decides
-// what to do. A Close after the track already ended is absorbed by once.
+// Close is disgo dropping the provider. v0.19.6 never calls it, which is why
+// Stream watches the transport itself rather than waiting here; it is kept
+// because the interface has it and a future version may honour it. Dropping a
+// provider under a running track is the transport failing rather than the
+// track ending, so that is what it reports.
 func (p *frameProvider) Close() {
 	p.finish(stream.ErrVoiceTransport)
 }
 
 func (p *frameProvider) finish(err error) {
+	p.ended.Store(true)
 	p.once.Do(func() { p.done <- err })
 }

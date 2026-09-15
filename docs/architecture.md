@@ -385,6 +385,15 @@ There are three distinct failure classes here, each with its own mechanism:
    loop, and since the voice service outlives individual sessions, queues and
    players survive reconnects — sinks just get invalidated and re-acquired.
 
+   What makes that true rather than merely intended is that a sink provider
+   holds nothing belonging to a session. A voice manager belongs to one
+   `bot.Client` and closes over that client's gateway; a DAVE registry is
+   built fresh per session. A provider that kept either went on using a
+   gateway that had been shut, which fails instantly and forever — and no
+   invalidation helped, because what had gone stale was the thing that makes
+   connections rather than a connection. Providers resolve both per
+   acquisition, so the one memoized per guild is now safe to keep.
+
    One watchdog, where the vendored discordgo fork needed two. That fork held
    the session write lock across gateway reads carrying no deadline, so a
    wedged session parked every reader — which in server-domme once meant 22
@@ -561,12 +570,18 @@ is the failure this section exists to prevent.
   specifically to catch locking regressions. Fakes swap the registry via
   `stream.SetRegistry` (same pattern as `pkg/music/stream/recovery_test.go`)
   and stub the sink provider.
-- `internal/discord/voice/sink/dave_hold_test.go` pins down the half of the
-  send contract that a library swap can silently delete: while the guild's
-  DAVE session reports it has no live epoch, the frame provider withholds
-  frames instead of emitting ones nothing can protect, without consuming the
-  packets it is holding; and a hold that never resolves ends the track as a
-  transport failure rather than leaving a silent "Now Playing" forever.
+- `internal/discord/voice/sink/` carries the parts of the send contract a
+  library swap can silently delete, because nothing about them is visible to
+  a compiler. `dave_hold_test.go`: while the guild's DAVE session reports it
+  has no live epoch, the frame provider withholds frames rather than emitting
+  ones nothing can protect, and without consuming the packets it is holding —
+  and a hold that never resolves ends the track rather than leaving a silent
+  "Now Playing" forever. `transport_test.go` runs disgo's real audio sender
+  against a stub socket and asserts that a closed socket, or a connection the
+  manager no longer knows about, ends the track as `ErrVoiceTransport` — the
+  wedge, where the track never ended and the queue never advanced.
+  `provider_test.go` swaps the session underneath a live provider and asserts
+  the next join uses the new one.
 - Manual smoke checklist, which needs a real guild: a `/play` multi-track
   batch, checking the status message updates on every auto-advance; `/play`
   while already playing, which should give "Track(s) Added"; `/next`;

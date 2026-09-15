@@ -27,6 +27,11 @@ type APIGetter func() cmdadapter.BotAPI
 // SinkProviderFactory builds the audio path for one guild. It is supplied by
 // whatever is holding the connection -- the service itself does not know which
 // library carries the packets, and does not need to.
+//
+// What it returns lives as long as the guild's player does, and reaches the
+// live session itself. Caching one here used to be the bug: the provider was
+// built on a session, the cache outlived the session, and a guild that had
+// played once before a reconnect could never play again.
 type SinkProviderFactory func(guildID string) musicsink.Provider
 
 // UserVoiceState is where a user is connected, in the shape a caller needs to

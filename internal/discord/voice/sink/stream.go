@@ -32,6 +32,20 @@ const voiceJoinTimeout = 15 * time.Second
 // mistaken for a broken handshake.
 const daveReadyTimeout = 10 * time.Second
 
+// How often a running track asks whether its transport is still there, and how
+// long the audio sender may go without asking for a frame before the answer is
+// no.
+//
+// The sender asks every 20ms, so any silence at all is already abnormal; half
+// a second is a margin for a scheduler that lost the goroutine for a moment,
+// not a diagnosis. Erring long is cheap -- the cost of noticing late is a
+// second of silence -- while erring short would tear down a healthy connection
+// on a busy host, which is expensive and self-inflicting.
+const (
+	transportCheckInterval = 250 * time.Millisecond
+	transportSilence       = 500 * time.Millisecond
+)
+
 func stopped(stop <-chan struct{}) bool {
 	select {
 	case <-stop:

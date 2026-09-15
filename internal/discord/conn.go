@@ -1,7 +1,10 @@
 package discord
 
 import (
+	disgovoice "github.com/disgoorg/disgo/voice"
+
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/voice/sink"
 	musicsink "github.com/keshon/melodix/pkg/music/sink"
 )
 
@@ -16,8 +19,10 @@ type conn interface {
 	// API is the neutral surface over this connection.
 	API() cmdadapter.BotAPI
 
-	// NewSinkProvider builds a guild's audio path on this connection.
-	NewSinkProvider(guildID string) musicsink.Provider
+	// VoiceResources are the parts of this session a voice connection is built
+	// from. They are handed out rather than built into anything, because both
+	// die with the session and the things that need them do not.
+	VoiceResources() (disgovoice.Manager, *sink.DaveRegistry)
 }
 
 // connHolder boxes the interface so it can live in an atomic.Value, which
@@ -43,10 +48,14 @@ func (b *Bot) currentConn() conn {
 	return holder.c
 }
 
-// deadSinkProvider is what a guild gets when it asks for an audio path while
-// there is no connection. Returning an error on use rather than nil keeps the
-// player's own recovery in charge: it already knows what to do with a sink it
-// could not acquire, and a nil provider would panic instead.
+// deadSinkProvider is what a guild gets when its id is not a snowflake, which
+// means nothing about this guild will ever work. Returning an error on use
+// rather than nil keeps the player's own recovery in charge: it already knows
+// what to do with a sink it could not acquire, and a nil provider would panic
+// instead.
+//
+// Having no session is not this: a real provider answers that itself, and
+// starts working again when a session comes back.
 type deadSinkProvider struct{}
 
 var _ musicsink.Provider = deadSinkProvider{}
