@@ -157,7 +157,10 @@ func (c *Search) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 		Color:       reply.EmbedColor,
 		Footer:      "Pick a number to queue it",
 	}
-	return slashCtx.FollowupEphemeralWithButtons(embed, cmdadapter.ActionRow{Buttons: buttons})
+	return slashCtx.FollowupWith(cmdadapter.Reply{
+		Embed: embed, Ephemeral: true,
+		Buttons: []cmdadapter.ActionRow{{Buttons: buttons}},
+	})
 }
 
 // Component handles a click on one of the chooser's buttons.

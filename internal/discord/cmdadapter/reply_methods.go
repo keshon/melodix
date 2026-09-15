@@ -1,7 +1,6 @@
 package cmdadapter
 
 import (
-	"io"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -43,18 +42,18 @@ func ackDeferred(r Responder, log zerolog.Logger, ephemeral bool) error {
 	return reported(log, "defer", r.AckDeferred(ephemeral))
 }
 
-func respondEmbed(r Responder, log zerolog.Logger, embed *Embed, ephemeral bool) error {
+func respond(r Responder, log zerolog.Logger, rep Reply) error {
 	if r == nil {
 		return nil
 	}
-	return reported(log, "respond", r.RespondEmbed(embed, ephemeral))
+	return reported(log, "respond", r.Respond(rep))
 }
 
-func followupEmbed(r Responder, log zerolog.Logger, embed *Embed, ephemeral bool) error {
+func followup(r Responder, log zerolog.Logger, rep Reply) error {
 	if r == nil {
 		return nil
 	}
-	return reported(log, "followup", r.FollowupEmbed(embed, ephemeral))
+	return reported(log, "followup", r.Followup(rep))
 }
 
 func editResponse(r Responder, log zerolog.Logger, content string) error {
@@ -93,20 +92,20 @@ func (c *SlashInteractionContext) DeferEphemeral() error {
 }
 
 func (c *SlashInteractionContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, c.AppLog, e, false)
+	return respond(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: false})
 }
 
 func (c *SlashInteractionContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, c.AppLog, e, true)
+	return respond(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: true})
 }
 
 // Followup is what answers a deferred interaction.
 func (c *SlashInteractionContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, c.AppLog, e, false)
+	return followup(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: false})
 }
 
 func (c *SlashInteractionContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, c.AppLog, e, true)
+	return followup(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: true})
 }
 
 // EditResponseText replaces the original reply with plain text, which is the
@@ -115,32 +114,18 @@ func (c *SlashInteractionContext) EditResponseText(content string) error {
 	return editResponse(c.Responder, c.AppLog, content)
 }
 
-// RespondEphemeralText answers the caller with plain content. See Responder
-// for why this is not the same as an embed carrying the same string.
-func (c *SlashInteractionContext) RespondEphemeralText(content string) error {
-	if c.Responder == nil {
-		return nil
-	}
-	return c.Responder.RespondText(content, true)
+// RespondWith and FollowupWith are the same two answers as above for a reply
+// that is not simply an embed -- plain content, an attachment, a row of
+// buttons, or any combination. The four methods above are shorthands for the
+// two shapes almost every command wants, kept because fifty-seven call sites
+// reading Respond(embed) rather than Respond(Reply{Embed: embed}) is worth
+// four method names.
+func (c *SlashInteractionContext) RespondWith(rep Reply) error {
+	return respond(c.Responder, c.AppLog, rep)
 }
 
-// RespondEphemeralWithFile answers the caller with an embed and an attachment
-// only they can see. The reader is consumed during the call, so the caller
-// keeps ownership of closing it.
-func (c *SlashInteractionContext) RespondEphemeralWithFile(embed *Embed, r io.Reader, fileName string) error {
-	if c.Responder == nil {
-		return nil
-	}
-	return c.Responder.RespondEmbedWithFile(embed, r, fileName)
-}
-
-// FollowupEphemeralWithButtons answers a deferred interaction with controls
-// attached. Only the caller sees them, which is what makes a chooser private.
-func (c *SlashInteractionContext) FollowupEphemeralWithButtons(embed *Embed, rows ...ActionRow) error {
-	if c.Responder == nil {
-		return nil
-	}
-	return c.Responder.FollowupEmbedWithComponents(embed, rows)
+func (c *SlashInteractionContext) FollowupWith(rep Reply) error {
+	return followup(c.Responder, c.AppLog, rep)
 }
 
 // Latency is the round trip to Discord's gateway, which is what a ping
@@ -179,19 +164,19 @@ func (c *ComponentInteractionContext) DeferEphemeral() error {
 }
 
 func (c *ComponentInteractionContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, c.AppLog, e, false)
+	return respond(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: false})
 }
 
 func (c *ComponentInteractionContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, c.AppLog, e, true)
+	return respond(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: true})
 }
 
 func (c *ComponentInteractionContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, c.AppLog, e, false)
+	return followup(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: false})
 }
 
 func (c *ComponentInteractionContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, c.AppLog, e, true)
+	return followup(c.Responder, c.AppLog, Reply{Embed: e, Ephemeral: true})
 }
 
 func (c *ComponentInteractionContext) EditResponseText(content string) error {

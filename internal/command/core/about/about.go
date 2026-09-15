@@ -59,7 +59,9 @@ func (c *About) Run(context *cmdadapter.SlashInteractionContext) error {
 		defer f.Close()
 		imageName := filepath.Base(imagePath)
 		embed.ImageURL = "attachment://" + imageName
-		return context.RespondEphemeralWithFile(embed, f, imageName)
+		return context.RespondWith(cmdadapter.Reply{
+			Embed: embed, File: f, FileName: imageName, Ephemeral: true,
+		})
 	}
 
 	return context.RespondEphemeral(embed)

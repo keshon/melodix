@@ -2,7 +2,6 @@ package reply
 
 import (
 	"errors"
-	"io"
 	"sync"
 	"time"
 
@@ -163,80 +162,57 @@ func (s *responseState) takePending() bool {
 	return true
 }
 
-func (r *Responder) RespondEmbed(embed *cmdadapter.Embed, ephemeral bool) error {
-	err := r.event.CreateMessage(discord.MessageCreate{
-		Embeds: Embeds(embed),
-		Flags:  ephemeralFlags(ephemeral),
-	})
-	if err == nil {
-		r.markAnswered()
-		return nil
+// create turns a Reply into the message disgo sends. One place decides what a
+// reply's fields mean, so Respond and Followup cannot disagree about it.
+func create(rep cmdadapter.Reply) discord.MessageCreate {
+	msg := discord.MessageCreate{
+		Content: rep.Text,
+		Flags:   ephemeralFlags(rep.Ephemeral),
 	}
-	if alreadyAcknowledged(err) {
-		// An already-public deferred response cannot be turned ephemeral by
-		// editing it, so an ephemeral answer becomes an ephemeral followup.
-		if ephemeral {
-			return r.FollowupEmbed(embed, true)
-		}
-		return r.editResponse(discord.MessageUpdate{Embeds: &[]discord.Embed{Embed(embed)}})
+	if rep.Embed != nil {
+		msg.Embeds = Embeds(rep.Embed)
 	}
-	return err
+	if rep.File != nil {
+		msg.Files = []*discord.File{discord.NewFile(rep.FileName, "", rep.File)}
+	}
+	if len(rep.Buttons) > 0 {
+		msg.Components = Components(rep.Buttons)
+	}
+	return msg
 }
 
-func (r *Responder) RespondText(content string, ephemeral bool) error {
-	err := r.event.CreateMessage(discord.MessageCreate{
-		Content: content,
-		Flags:   ephemeralFlags(ephemeral),
-	})
+// Respond answers the interaction itself.
+//
+// The recovery below is why this is worth writing once. An interaction that
+// has already been acknowledged cannot be answered again, and what to do
+// instead depends on what was asked for: an ephemeral reply becomes an
+// ephemeral followup, because a response that went out public cannot be made
+// private by editing it; a public one edits the response that is already
+// there. Getting that wrong shows the wrong people the reply, and it used to
+// be written out separately for each shape of message.
+func (r *Responder) Respond(rep cmdadapter.Reply) error {
+	msg := create(rep)
+	err := r.event.CreateMessage(msg)
 	if err == nil {
 		r.markAnswered()
 		return nil
 	}
-	if alreadyAcknowledged(err) {
-		if ephemeral {
-			_, ferr := r.followup(discord.MessageCreate{
-				Content: content,
-				Flags:   discord.MessageFlagEphemeral,
-			})
-			return ferr
-		}
-		return r.EditResponseText(content)
+	if !alreadyAcknowledged(err) {
+		return err
 	}
-	return err
-}
-
-func (r *Responder) RespondEmbedWithFile(embed *cmdadapter.Embed, src io.Reader, fileName string) error {
-	create := discord.MessageCreate{
-		Embeds: Embeds(embed),
-		Flags:  discord.MessageFlagEphemeral,
-		Files:  []*discord.File{discord.NewFile(fileName, "", src)},
-	}
-	err := r.event.CreateMessage(create)
-	if err == nil {
-		r.markAnswered()
-		return nil
-	}
-	if alreadyAcknowledged(err) {
-		_, ferr := r.followup(create)
+	if rep.Ephemeral || rep.File != nil || len(rep.Buttons) > 0 {
+		_, ferr := r.followup(msg)
 		return ferr
 	}
-	return err
+	if rep.Embed != nil {
+		return r.editResponse(discord.MessageUpdate{Embeds: &[]discord.Embed{Embed(rep.Embed)}})
+	}
+	return r.EditResponseText(rep.Text)
 }
 
-func (r *Responder) FollowupEmbed(embed *cmdadapter.Embed, ephemeral bool) error {
-	_, err := r.followup(discord.MessageCreate{
-		Embeds: Embeds(embed),
-		Flags:  ephemeralFlags(ephemeral),
-	})
-	return err
-}
-
-func (r *Responder) FollowupEmbedWithComponents(embed *cmdadapter.Embed, rows []cmdadapter.ActionRow) error {
-	_, err := r.followup(discord.MessageCreate{
-		Embeds:     Embeds(embed),
-		Components: Components(rows),
-		Flags:      discord.MessageFlagEphemeral,
-	})
+// Followup posts beside an answer already given.
+func (r *Responder) Followup(rep cmdadapter.Reply) error {
+	_, err := r.followup(create(rep))
 	return err
 }
 
@@ -267,7 +243,7 @@ func (r *Responder) ReplaceMessage(embed *cmdadapter.Embed) error {
 	if r.component == nil {
 		// Not a component interaction; the nearest honest thing is a plain
 		// answer rather than silently doing nothing.
-		return r.RespondEmbed(embed, false)
+		return r.Respond(cmdadapter.Reply{Embed: embed})
 	}
 	err := r.component.UpdateMessage(discord.MessageUpdate{
 		Embeds:     &[]discord.Embed{Embed(embed)},

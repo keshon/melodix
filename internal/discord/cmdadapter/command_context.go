@@ -100,7 +100,7 @@ func respondEphemeral(r Responder, log zerolog.Logger, msg string) error {
 	if r == nil {
 		return nil
 	}
-	return reported(log, "respond_ephemeral", r.RespondEmbed(&Embed{Description: msg}, true))
+	return reported(log, "respond_ephemeral", r.Respond(Reply{Embed: &Embed{Description: msg}, Ephemeral: true}))
 }
 
 // replyInChannel is the fallback for the two contexts Discord offers no

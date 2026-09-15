@@ -115,7 +115,7 @@ func TestBothInteractionContextsUseTheCarriedPermissions(t *testing.T) {
 // one of these looks like once the interaction it was answering has expired.
 type failingResponder struct{ Responder }
 
-func (failingResponder) RespondEmbed(*Embed, bool) error {
+func (failingResponder) Respond(Reply) error {
 	return errors.New("40060: interaction has already been acknowledged")
 }
 func (failingResponder) AckDeferred(bool) error { return errors.New("10062: unknown interaction") }

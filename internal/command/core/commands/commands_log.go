@@ -39,5 +39,5 @@ func RunCmdLog(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage)
 	}
 
 	msg := codeLeftBlockWrapper + "\n" + builder.String() + codeRightBlockWrapper
-	return ctx.RespondEphemeralText(msg)
+	return ctx.RespondWith(cmdadapter.Reply{Text: msg, Ephemeral: true})
 }

@@ -35,5 +35,7 @@ func runExportData(ctx *cmdadapter.SlashInteractionContext, storage storage.Stor
 	}
 
 	fileName := fmt.Sprintf("%s_database_dump.json", guildID)
-	return ctx.RespondEphemeralWithFile(embed, bytes.NewReader(jsonBytes), fileName)
+	return ctx.RespondWith(cmdadapter.Reply{
+		Embed: embed, File: bytes.NewReader(jsonBytes), FileName: fileName, Ephemeral: true,
+	})
 }

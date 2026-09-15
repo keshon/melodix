@@ -68,7 +68,7 @@ func (b *Bot) runGuardedInteraction(
 		if r == nil {
 			return
 		}
-		_ = r.RespondEmbed(&cmdadapter.Embed{Description: msg}, true)
+		_ = r.Respond(cmdadapter.Reply{Embed: &cmdadapter.Embed{Description: msg}, Ephemeral: true})
 	}
 
 	// A command that answered through a followup, or by editing a message it
@@ -130,7 +130,7 @@ func (b *Bot) dispatchInteraction(
 
 	b.log.Warn().Str("kind", kind).Str("command", name).Msg("command_refused_shutting_down")
 	if r != nil {
-		_ = r.RespondEmbed(&cmdadapter.Embed{Description: "Bot is shutting down."}, true)
+		_ = r.Respond(cmdadapter.Reply{Embed: &cmdadapter.Embed{Description: "Bot is shutting down."}, Ephemeral: true})
 	}
 }
 

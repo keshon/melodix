@@ -1,7 +1,6 @@
 package cmdadapter
 
 import (
-	"io"
 	"testing"
 	"time"
 )
@@ -88,14 +87,9 @@ func (*countingAPI) EmbedColor() int                               { return 0 }
 
 type stubResponder struct{}
 
-func (stubResponder) AckDeferred(bool) error                               { return nil }
-func (stubResponder) RespondEmbed(*Embed, bool) error                      { return nil }
-func (stubResponder) RespondText(string, bool) error                       { return nil }
-func (stubResponder) RespondEmbedWithFile(*Embed, io.Reader, string) error { return nil }
-func (stubResponder) FollowupEmbed(*Embed, bool) error                     { return nil }
-func (stubResponder) FollowupEmbedWithComponents(*Embed, []ActionRow) error {
-	return nil
-}
+func (stubResponder) AckDeferred(bool) error { return nil }
+func (stubResponder) Respond(Reply) error    { return nil }
+func (stubResponder) Followup(Reply) error   { return nil }
 func (stubResponder) AnswerEmbedMessage(*Embed) (string, string, error) {
 	return "", "", nil
 }

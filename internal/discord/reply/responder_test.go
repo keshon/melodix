@@ -3,10 +3,14 @@ package reply
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/rest"
+
+	"github.com/keshon/melodix/internal/discord/cmdadapter"
 )
 
 // The placeholder is only removed when the caller saw nothing in its place.
@@ -124,6 +128,64 @@ func TestAlreadyAcknowledgedIsMatchedByCode(t *testing.T) {
 	} {
 		if alreadyAcknowledged(err) {
 			t.Errorf("%s: treated as an acknowledged interaction", name)
+		}
+	}
+}
+
+// One create for every shape of reply, so Respond and Followup cannot disagree
+// about what a field means -- which is the failure a method per combination
+// invites, and the reason there is no longer one.
+func TestAReplyBecomesTheMessageItDescribes(t *testing.T) {
+	embed := &cmdadapter.Embed{Description: "body"}
+
+	for name, tc := range map[string]struct {
+		in   cmdadapter.Reply
+		want func(discord.MessageCreate) error
+	}{
+		"embed": {
+			cmdadapter.Reply{Embed: embed},
+			func(m discord.MessageCreate) error {
+				if len(m.Embeds) != 1 || m.Flags != 0 {
+					return fmt.Errorf("embeds=%d flags=%d", len(m.Embeds), m.Flags)
+				}
+				return nil
+			},
+		},
+		"ephemeral text": {
+			cmdadapter.Reply{Text: "hello", Ephemeral: true},
+			func(m discord.MessageCreate) error {
+				if m.Content != "hello" || m.Flags != discord.MessageFlagEphemeral {
+					return fmt.Errorf("content=%q flags=%d", m.Content, m.Flags)
+				}
+				if len(m.Embeds) != 0 {
+					return fmt.Errorf("an embed appeared from nowhere")
+				}
+				return nil
+			},
+		},
+		"attachment": {
+			cmdadapter.Reply{Embed: embed, File: strings.NewReader("x"), FileName: "a.txt"},
+			func(m discord.MessageCreate) error {
+				if len(m.Files) != 1 || m.Files[0].Name != "a.txt" {
+					return fmt.Errorf("files=%d", len(m.Files))
+				}
+				return nil
+			},
+		},
+		"buttons": {
+			cmdadapter.Reply{Embed: embed, Buttons: []cmdadapter.ActionRow{{
+				Buttons: []cmdadapter.Button{{Label: "go", CustomID: "search:yt:1"}},
+			}}},
+			func(m discord.MessageCreate) error {
+				if len(m.Components) != 1 {
+					return fmt.Errorf("components=%d", len(m.Components))
+				}
+				return nil
+			},
+		},
+	} {
+		if err := tc.want(create(tc.in)); err != nil {
+			t.Errorf("%s: %v", name, err)
 		}
 	}
 }

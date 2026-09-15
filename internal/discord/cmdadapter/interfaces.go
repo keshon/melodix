@@ -15,26 +15,20 @@ import (
 // itself; a single receiver is the only shape both can satisfy, and taking
 // the pair as parameters is what made this interface discordgo's.
 //
-// ephemeral is a parameter rather than a second method because every caller
-// that has one has both, and the pair of names doubled an interface that is
-// already the widest thing here.
+// A reply is one value rather than a method per shape. There are four things
+// a reply can carry -- an embed, plain content, an attachment, a row of
+// buttons -- crossed with whether only the caller sees it, and naming the
+// combinations is how an interface of six methods becomes one of sixteen.
+// Adding a fifth thing should cost a field, not another five names.
 type Responder interface {
 	AckDeferred(ephemeral bool) error
-	RespondEmbed(embed *Embed, ephemeral bool) error
 
-	// RespondText answers with plain content rather than an embed. The
-	// difference is not cosmetic: content is capped at 2000 characters where
-	// an embed description takes 4096, and a caller that sized its output to
-	// one limit must not silently be given the other.
-	RespondText(content string, ephemeral bool) error
+	// Respond is the interaction's own answer, the one that replaces a
+	// deferred placeholder.
+	Respond(Reply) error
 
-	RespondEmbedWithFile(embed *Embed, r io.Reader, fileName string) error
-	FollowupEmbed(embed *Embed, ephemeral bool) error
-
-	// FollowupEmbedWithComponents answers a deferred interaction with controls
-	// attached. It is ephemeral: only the caller should be able to press the
-	// buttons of a chooser they asked for.
-	FollowupEmbedWithComponents(embed *Embed, rows []ActionRow) error
+	// Followup is a message posted beside an answer already given.
+	Followup(Reply) error
 
 	// AnswerEmbedMessage makes the embed the interaction's own answer and
 	// reports where it landed, so a caller that means to edit it later can
@@ -72,6 +66,28 @@ type Responder interface {
 	// Calling this when the interaction was answered normally does nothing,
 	// so the dispatcher can call it unconditionally.
 	ResolveDeferred() error
+}
+
+// Reply is what a command wants said back.
+//
+// Set Embed or Text, not both: content is capped at 2000 characters where an
+// embed description takes 4096, and a caller that sized its output to one
+// limit must not silently be given the other.
+type Reply struct {
+	Embed *Embed
+	Text  string
+
+	// Ephemeral hides the reply from everyone but the caller.
+	Ephemeral bool
+
+	// File is an attachment. The reader is consumed during the call, so the
+	// caller keeps ownership of closing it.
+	File     io.Reader
+	FileName string
+
+	// Buttons are the controls attached to the reply. A chooser sends these
+	// ephemerally so only the person who asked can press them.
+	Buttons []ActionRow
 }
 
 // SessionAPI is what a command asks of the connection rather than of one
