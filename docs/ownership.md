@@ -8,9 +8,11 @@ the rules live here, and each one names what enforces it — because a rule
 enforced only by review is a rule that gets broken by whoever is next in a
 hurry.
 
-Every rule below exists because its absence produced a real defect. The
-forensic detail is in `docs/audit_2026-09-15_*`; this document is the rules
-themselves.
+Every rule below exists because its absence produced a real defect, found by
+an audit of the voice and playback layers in September 2026. That
+investigation lives in the history rather than in `docs/` — `git show 8b190be`
+is where it landed, and the commits between it and here are the fixes. This
+document is the rules.
 
 ## Enforcement grades
 
