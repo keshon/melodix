@@ -23,13 +23,6 @@ func WithUserPermissionCheck() command.Middleware {
 			if cc == nil {
 				return c.Run(ctx, inv)
 			}
-			// A reaction has never been permission-checked here. Whether it
-			// should be is a real question -- it is a user action like any
-			// other -- but it is a change in who can run what, so it is not
-			// one to make while moving code around.
-			if _, isReaction := inv.Data.(*cmdadapter.MessageReactionContext); isReaction {
-				return c.Run(ctx, inv)
-			}
 			// No guild means no roles to check against, and an unidentifiable
 			// caller means the answer would be about nobody.
 			if cc.GuildID() == "" || cc.UserID() == cmdadapter.UnknownUserID {

@@ -6,17 +6,6 @@ import (
 	"time"
 )
 
-// Message commands are deliberately kept out of the audit log. Expressing that
-// as "no logger to reach" rather than a branch in the middleware means there
-// is no code path that could later be written to log them by accident.
-func TestMessageContextIsNotAudited(t *testing.T) {
-	c := &MessageContext{}
-
-	if c.AuditLogger() != nil {
-		t.Fatal("a message command reached an audit logger")
-	}
-}
-
 // Some refusals are only worth saying quietly. A command group is usually
 // disabled to keep it out of a channel, so a public notice every time somebody
 // trips over it puts back the noise the admin was removing.
@@ -29,11 +18,6 @@ func TestCanReplyPrivatelyOnlyWhereItIsTrue(t *testing.T) {
 	withoutResponder := &SlashInteractionContext{}
 	if withoutResponder.CanReplyPrivately() {
 		t.Error("slash interaction with no responder claims a private reply")
-	}
-
-	message := &MessageContext{}
-	if message.CanReplyPrivately() {
-		t.Error("a plain message claims a private reply; Discord offers none")
 	}
 }
 
@@ -75,8 +59,6 @@ func TestEveryContextIsACommandContext(t *testing.T) {
 		_ CommandContext = (*SlashInteractionContext)(nil)
 		_ CommandContext = (*ComponentInteractionContext)(nil)
 		_ CommandContext = (*MessageApplicationCommandContext)(nil)
-		_ CommandContext = (*MessageContext)(nil)
-		_ CommandContext = (*MessageReactionContext)(nil)
 	)
 }
 

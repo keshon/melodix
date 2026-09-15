@@ -149,11 +149,6 @@ type ContextMenuProvider interface {
 	ContextDefinition() *SlashCommand
 }
 
-// ReactionProvider is implemented by commands triggered by a message reaction.
-type ReactionProvider interface {
-	ReactionDefinition() string
-}
-
 // ComponentInteractionHandler is implemented by commands that handle message
 // components (buttons/selects) whose customID matches the command name.
 type ComponentInteractionHandler interface {

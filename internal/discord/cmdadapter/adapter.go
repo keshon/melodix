@@ -49,15 +49,7 @@ func (a *Adapter) ContextDefinition() *SlashCommand {
 var (
 	_ SlashProvider       = (*Adapter)(nil)
 	_ ContextMenuProvider = (*Adapter)(nil)
-	_ ReactionProvider    = (*Adapter)(nil)
 )
-
-func (a *Adapter) ReactionDefinition() string {
-	if rp, ok := a.Cmd.(ReactionProvider); ok {
-		return rp.ReactionDefinition()
-	}
-	return ""
-}
 
 // SkipAuditLog reports whether the wrapped command opted out of the audit log.
 //

@@ -15,11 +15,7 @@ func ConfigFromInvocation(inv *command.Invocation) *config.Config {
 		return v.Config
 	case *ComponentInteractionContext:
 		return v.Config
-	case *MessageReactionContext:
-		return v.Config
 	case *MessageApplicationCommandContext:
-		return v.Config
-	case *MessageContext:
 		return v.Config
 	default:
 		return nil
