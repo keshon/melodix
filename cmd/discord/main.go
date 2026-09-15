@@ -4,7 +4,6 @@ package main
 import (
 	"context"
 	"flag"
-	"math/rand/v2"
 	"os"
 	"os/signal"
 	"sync"
@@ -96,22 +95,26 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		var backoff restartBackoff
 		for {
 			var lastErr error
+			started := time.Now()
 			if err := bot.RunSession(rootCtx); err != nil {
 				lastErr = err
 				log.Error().Err(err).Msg("discord_session_end")
 			}
+			ranFor := time.Since(started)
 
 			select {
 			case <-rootCtx.Done():
 				return
 			default:
-				delay := 5 * time.Second
-				if discord.IsSessionUnhealthyError(lastErr) {
-					delay = time.Duration(rand.IntN(200)) * time.Millisecond
-				}
-				log.Warn().Dur("delay", delay).Msg("discord_session_restart")
+				delay := backoff.next(ranFor, discord.IsSessionUnhealthyError(lastErr))
+				log.Warn().
+					Dur("delay", delay).
+					Dur("ran_for", ranFor).
+					Int("consecutive_failures", backoff.failures).
+					Msg("discord_session_restart")
 				timer := time.NewTimer(delay)
 				select {
 				case <-rootCtx.Done():

@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -60,9 +59,7 @@ type Options struct {
 func New(opts Options) (*Session, error) {
 	s := &Session{log: opts.Log.With().Str("component", "disgo").Logger()}
 
-	logger := slog.New(slog.NewTextHandler(logWriter{log: s.log, frames: &frameCounter{}}, &slog.HandlerOptions{
-		Level: slogLevel(s.log.GetLevel()),
-	}))
+	logger := slog.New(&bridge{log: s.log, frames: &frameCounter{}})
 
 	listeners := []bot.EventListener{
 		bot.NewListenerFunc(s.onHeartbeatAck),
@@ -164,128 +161,3 @@ const botCaches = cache.FlagGuilds |
 	cache.FlagRoles |
 	cache.FlagMembers |
 	cache.FlagVoiceStates
-
-// logWriter turns disgo's slog output into one zerolog event per line, the
-// same shape attachDiscordgoLogger gives the fork: the library's own text is a
-// field rather than the event name, so every line stays greppable under one
-// name.
-type logWriter struct {
-	log zerolog.Logger
-	// frames aggregates the one line dave-go emits per encrypted frame; nil
-	// lets those lines through individually.
-	frames *frameCounter
-}
-
-func (w logWriter) Write(p []byte) (int, error) {
-	line := strings.TrimRight(string(p), "\n")
-	if w.frames != nil && strings.Contains(line, frameEncrypted) {
-		w.frames.count(w.log, line)
-		return len(p), nil
-	}
-	if strings.Contains(line, audioSendFailure) {
-		// Not a fix, and should not be mistaken for one. disgo logs a UDP
-		// write failure that is not a closed socket and carries on pulling at
-		// 50Hz, so a whole track can be drained into a socket delivering
-		// nothing while everything above reports normal playback. Melodix
-		// cannot observe that error any other way and cannot act on it at all
-		// -- so it is at least given a name worth counting and alerting on,
-		// rather than being one line of library prose among thousands.
-		w.log.Error().Str("raw", line).Msg("voice_audio_send_failed")
-		return len(p), nil
-	}
-	w.log.Info().Str("raw", line).Msg("disgo_log")
-	return len(p), nil
-}
-
-// audioSendFailure is disgo's own wording for a UDP write it could not make
-// and did not act on (voice/audio_sender.go, handleErr). Matched as text
-// because it reaches us as text: the sender logs it and returns, so there is
-// no error value anywhere for melodix to catch.
-const audioSendFailure = "failed to send audio"
-
-// frameEncrypted is dave-go's per-frame debug line. It is one line per 20ms of
-// audio -- fifty a second, six and a half thousand in a two-minute track --
-// and at LOG_LEVEL=debug it buries everything else in the file and everything
-// else on the console.
-//
-// It is not noise, though. Whether a frame went out under the live epoch,
-// under the previous one, or with no encryption at all is the only visible
-// answer to "can the people in this channel actually hear this", and that
-// question has already been wrong twice here. So it is counted, not dropped.
-// Matched on the phrase rather than on the whole formatted field, because the
-// surrounding format has already changed once in this project's own logs.
-const frameEncrypted = "frame encrypted"
-
-// frameSummaryEvery bounds how often the tally is reported: long enough that a
-// track produces a handful of lines rather than thousands, short enough that a
-// re-key window still shows up as one of them.
-const frameSummaryEvery = 30 * time.Second
-
-// frameCounter turns dave-go's per-frame line into a periodic tally.
-//
-// It counts only what that line actually says. A frame sent with no
-// encryption at all is not in here, because dave-go's passthrough path logs
-// nothing -- it increments State().Stats.PassthroughFrames and returns. That
-// case is what the send-path hold in voicesink exists to prevent, and it is
-// the session's own stat to answer for, not this bridge's to guess at.
-type frameCounter struct {
-	mu       sync.Mutex
-	total    int
-	retained int
-	since    time.Time
-}
-
-func (c *frameCounter) count(log zerolog.Logger, line string) {
-	c.mu.Lock()
-	if c.since.IsZero() {
-		c.since = time.Now()
-	}
-	c.total++
-	if strings.Contains(line, "retained=true") {
-		c.retained++
-	}
-	window := time.Since(c.since)
-	if window < frameSummaryEvery {
-		c.mu.Unlock()
-		return
-	}
-	total, retained := c.total, c.retained
-	c.total, c.retained, c.since = 0, 0, time.Time{}
-	c.mu.Unlock()
-
-	// under_previous_epoch is the one worth watching. dave-go keeps the
-	// previous epoch's send key for ten seconds after a re-key, deliberately,
-	// so listeners who have not processed the transition yet keep hearing
-	// audio -- but it skips that when the new epoch added a member, because
-	// somebody who was never in the old epoch holds none of its keys and
-	// would hear nothing for the whole window. A count that stays high across
-	// a join is that skip having failed.
-	log.Info().
-		Int("frames", total).
-		Int("under_previous_epoch", retained).
-		Dur("window", window).
-		Msg("voice_frames_encrypted")
-}
-
-// slogLevel maps the app's configured level onto disgo's, so LOG_LEVEL reaches
-// the library rather than the library deciding for itself.
-func slogLevel(l zerolog.Level) slog.Level {
-	switch l {
-	case zerolog.TraceLevel, zerolog.DebugLevel:
-		return slog.LevelDebug
-	case zerolog.InfoLevel:
-		return slog.LevelInfo
-	case zerolog.WarnLevel:
-		return slog.LevelWarn
-	default:
-		return slog.LevelError
-	}
-}
-
-// SlogLogger is the app logger in the shape disgo's own subsystems take, for
-// callers that configure one (the voice manager) outside New.
-func SlogLogger(log zerolog.Logger) *slog.Logger {
-	return slog.New(slog.NewTextHandler(logWriter{log: log}, &slog.HandlerOptions{
-		Level: slogLevel(log.GetLevel()),
-	}))
-}
