@@ -55,14 +55,20 @@ type RecoveryStream struct {
 	// runs on the playback goroutine.
 	closed atomic.Bool
 
+	// reopenRequested is a transport reopen asked for from outside, served by
+	// whichever goroutine drives ReadPacket. See RequestReopen.
+	reopenRequested atomic.Bool
+
 	// buffered is the anti-skip view handed to the sink; see Packets.
 	buffered *opus.BufferedReader
 
-	// mu guards reader and cleanup — the only fields Close touches while the
-	// read-ahead producer may still be running. Every other field belongs to the
-	// producer goroutine alone, and Close reaches them only after Wait proves it
-	// has exited. The lock is never held across a blocking read or a parser
-	// Open, so a stalled source cannot block teardown.
+	// mu guards reader and cleanup — the only fields another goroutine touches
+	// while the read-ahead producer may still be running. Every other field
+	// belongs to the producer goroutine alone: Close reaches them only after
+	// Wait proves it has exited, and a transport reopen arrives as a request
+	// the producer serves rather than as a call into this stream. The lock is
+	// never held across a blocking read or a parser Open, so a stalled source
+	// cannot block teardown.
 	mu sync.Mutex
 
 	fromCache     bool          // the active stream is served from the track cache
@@ -198,6 +204,18 @@ func (rs *RecoveryStream) abortCache() {
 // the current position.
 func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 	for {
+		// A transport reopen is a request, not a call: every field it touches
+		// belongs to this goroutine, so this is where it is served. Skipped
+		// once the stream is closing, so a reopen cannot open a source that
+		// Close has already stopped waiting for.
+		if rs.reopenRequested.Swap(false) && !rs.closed.Load() {
+			rs.closeCurrent()
+			if _, err := rs.Open(rs.seekSec); err != nil {
+				rs.abortCache()
+				return nil, err
+			}
+		}
+
 		rs.mu.Lock()
 		reader := rs.reader
 		rs.mu.Unlock()
@@ -218,6 +236,13 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 				}
 			}
 			return pkt, nil
+		}
+
+		// A read that failed because a reopen tore the source down underneath
+		// it is not the media failing. Go back to the top and serve it, rather
+		// than spending a parser's recovery budget on a voice reconnect.
+		if rs.reopenRequested.Load() {
+			continue
 		}
 
 		// "Instant fail": errored on the very first read.
@@ -372,13 +397,31 @@ func (rs *RecoveryStream) reopen(cause error) error {
 	return err
 }
 
-// ReopenAfterTransportFailure reopens the media stream at the current position
-// (e.g. after a Discord voice reconnect); does not count against parser
-// recovery.
-func (rs *RecoveryStream) ReopenAfterTransportFailure() error {
-	rs.closeCurrent()
-	_, err := rs.Open(rs.seekSec)
-	return err
+// RequestReopen asks for the media stream to be reopened at the current
+// position, which is what a Discord voice reconnect needs: the source has been
+// sitting idle across the outage and may not survive being picked up again.
+// It does not count against parser recovery.
+//
+// It is a request rather than a reopen because the caller is the playback
+// goroutine and the fields a reopen writes -- the parser index, the position,
+// the retry counts, the cache writer -- belong to whichever goroutine is
+// driving the reads. With the anti-skip buffer configured that is a different
+// goroutine, still reading, and calling Open from here raced every one of
+// them. The producer serves the request on its next pass and the outcome
+// arrives the way every other recovery's does: through the packets.
+//
+// The only thing done to the stream from here is closing the source the
+// request is replacing, which is what unblocks a producer parked in a read on
+// it. Only that source: by the time this runs the producer may already have
+// served the request, and closing what it opened would tear down the stream
+// this call exists to restore.
+func (rs *RecoveryStream) RequestReopen() {
+	rs.reopenRequested.Store(true)
+
+	rs.mu.Lock()
+	replacing := rs.reader
+	rs.mu.Unlock()
+	rs.closeReader(replacing)
 }
 
 // setActive installs the freshly opened stream under the lock Close also takes.
@@ -398,6 +441,27 @@ func (rs *RecoveryStream) closeCurrent() {
 
 	// Outside the lock: tearing a socket down can block, and a producer parked
 	// in ReadPacket is unblocked by exactly this call.
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+// closeReader closes the active stream only if it is still the one the caller
+// meant, so a teardown raced by a reopen cannot close the reopen's work.
+func (rs *RecoveryStream) closeReader(reader opus.Reader) {
+	if reader == nil {
+		return
+	}
+	rs.mu.Lock()
+	if rs.reader != reader {
+		rs.mu.Unlock()
+		return
+	}
+	cleanup := rs.cleanup
+	rs.cleanup = nil
+	rs.reader = nil
+	rs.mu.Unlock()
+
 	if cleanup != nil {
 		cleanup()
 	}

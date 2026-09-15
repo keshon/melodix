@@ -610,10 +610,11 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 				p.sinkProvider.InvalidateSink()
 			}
 
-			if reopenErr := rs.ReopenAfterTransportFailure(); reopenErr != nil {
-				p.markPlaybackFailed(track, failedSnapshot, guildID, fmt.Errorf("player: voice transport failed, could not reopen stream: %w", reopenErr))
-				return fmt.Errorf("player: voice transport failed, could not reopen stream: %w", reopenErr)
-			}
+			// Asked for, not done here: the goroutine reading packets owns the
+			// stream's state and serves this on its next pass. A reopen that
+			// fails arrives the way every other media failure does, as a read
+			// error on the next Stream, and is handled below.
+			rs.RequestReopen()
 			if attempt == maxVoiceTransportAttempts {
 				p.markPlaybackFailed(track, failedSnapshot, guildID, err)
 				return err
