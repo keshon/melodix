@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/voice"
-	"github.com/disgoorg/godave"
 	"github.com/disgoorg/snowflake/v2"
 	davesession "github.com/thomas-vilte/dave-go/session"
 )
@@ -97,9 +96,7 @@ func (r *DaveRegistry) ManagerOptions(logger *slog.Logger) []voice.ManagerConfig
 					r.put(guildID, s)
 				}),
 			)
-			opts = append(opts, voice.WithConnDaveSessionCreateFunc(
-				godave.SessionCreateFunc(create),
-			))
+			opts = append(opts, voice.WithConnDaveSessionCreateFunc(create))
 			return voice.NewConn(guildID, userID, stateUpdate, removeConn, opts...)
 		}),
 	}

@@ -103,15 +103,6 @@ func respondEphemeral(r Responder, log zerolog.Logger, msg string) error {
 	return reported(log, "respond_ephemeral", r.Respond(Reply{Embed: &Embed{Description: msg}, Ephemeral: true}))
 }
 
-// replyInChannel is the fallback for the two contexts Discord offers no
-// ephemeral reply for.
-func replyInChannel(api SessionAPI, channelID, msg string) error {
-	if api == nil {
-		return nil
-	}
-	return api.SendChannelMessage(channelID, msg)
-}
-
 // --- SlashInteractionContext ---
 
 func (c *SlashInteractionContext) GuildID() string         { return c.Invoker.GuildID }

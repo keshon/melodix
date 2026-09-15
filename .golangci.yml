@@ -17,12 +17,20 @@ linters:
   settings:
     errcheck:
       exclude-functions:
-        # Best-effort Discord UI replies: a failed followup is logged or ignored
-        # by design (the interaction may already be gone).
-        - github.com/keshon/melodix/internal/discord/reply.FollowupEmbedEphemeral
-        - github.com/keshon/melodix/internal/discord/reply.FollowupEmbed
-        - github.com/keshon/melodix/internal/discord/reply.FollowupEphemeral
-        - github.com/keshon/melodix/internal/discord/reply.RespondEmbedEphemeral
+        # Best-effort Discord UI replies. By the time one of these fails the
+        # interaction it was answering is gone, so a command has nothing left to
+        # do about it -- which is why adapter's helpers log the failure once,
+        # centrally, and hand the error back for the few callers that do want
+        # it. See the note above `reported` in adapter/reply_methods.go.
+        #
+        # Named by receiver, because these are methods. The entries here used to
+        # name package-level functions in internal/discord/reply; that package
+        # was renamed and the helpers reshaped into methods, and the exclusions
+        # were left pointing at paths that no longer resolve -- which silently
+        # unexcluded all 28 call sites at once.
+        - (*github.com/keshon/melodix/internal/discord/adapter.SlashInteractionContext).FollowupEphemeral
+        - (*github.com/keshon/melodix/internal/discord/adapter.ComponentInteractionContext).FollowupEphemeral
+        - (github.com/keshon/melodix/internal/discord/adapter.Interaction).FollowupEphemeral
         # Idiomatic deferred cleanup where the error has no consumer.
         - (io.Closer).Close
         - (io.ReadCloser).Close
@@ -42,3 +50,12 @@ linters:
 formatters:
   enable:
     - gofmt
+
+issues:
+  # Report every finding, not the first three of each kind. The default caps at
+  # max-same-issues: 3, which is how a run that had 28 unchecked replies
+  # reported 8 -- fixing exactly what CI printed would have left twenty behind
+  # and gone red again on the next push. This set is curated to pass clean, so
+  # a truncated count is never the useful number.
+  max-same-issues: 0
+  max-issues-per-linter: 0
