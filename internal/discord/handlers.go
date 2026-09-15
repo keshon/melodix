@@ -9,7 +9,7 @@ import (
 	"github.com/keshon/command"
 
 	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/cmdlogger"
+	"github.com/keshon/melodix/internal/discord/cmdaudit"
 	"github.com/keshon/melodix/internal/discord/cmdsync"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
@@ -92,7 +92,7 @@ func (b *Bot) onGuildJoin(e *events.GuildJoin, syncer *cmdsync.Syncer) {
 func (b *Bot) onApplicationCommand(
 	e *events.ApplicationCommandInteractionCreate,
 	syncer *cmdsync.Syncer,
-	logger *cmdlogger.Logger,
+	recorder *cmdaudit.Recorder,
 ) {
 	name := e.Data.CommandName()
 	c := command.DefaultRegistry.Get(name)
@@ -116,7 +116,7 @@ func (b *Bot) onApplicationCommand(
 	inv := &command.Invocation{Data: &cmdadapter.SlashInteractionContext{
 		Invoker: who, Responder: responder, API: api,
 		Arguments: reply.SlashArguments(data),
-		Storage:   b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
+		Storage:   b.storage, Config: b.cfg, Audit: recorder, AppLog: b.log,
 		Syncer: syncer,
 	}}
 
@@ -126,7 +126,7 @@ func (b *Bot) onApplicationCommand(
 }
 
 // onComponentInteraction dispatches a click on a message component.
-func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, logger *cmdlogger.Logger) {
+func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, recorder *cmdaudit.Recorder) {
 	customID := e.Data.CustomID()
 	b.log.Debug().Str("custom_id", customID).Msg("component_interaction")
 
@@ -158,7 +158,7 @@ func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, logge
 			Responder:   responder,
 			API:         reply.NewSessionAPI(e.Client()),
 			ComponentID: customID,
-			Storage:     b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
+			Storage:     b.storage, Config: b.cfg, Audit: recorder, AppLog: b.log,
 		})
 	})
 }

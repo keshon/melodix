@@ -95,6 +95,7 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `internal/discord/voice/voicesink` | Joins a voice channel and forwards a track's Opus packets to it (no encode); holds frames the transport cannot protect |
 | `internal/discord/cmdadapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
 | `internal/discord/cmdsync` | Per-guild slash-command diff sync (create/edit/delete) |
+| `internal/discord/cmdaudit` | The audit trail: who ran what, where, persisted — distinct from the diagnostic log |
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
 | `internal/discord/cmdqueue` | How commands get scheduled: one FIFO lane per guild, drained off the gateway read goroutine so a guild's commands stay ordered and never overlap, plus the global cap on how many run at once across every guild |
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |

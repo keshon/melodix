@@ -42,7 +42,7 @@ func logInvocation(log zerolog.Logger, cmdName string, inv *command.Invocation) 
 	if cc == nil {
 		return
 	}
-	logger := cc.AuditLogger()
+	logger := cc.AuditLog()
 	if logger == nil {
 		return
 	}

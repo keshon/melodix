@@ -9,7 +9,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/keshon/command"
 
-	"github.com/keshon/melodix/internal/discord/cmdlogger"
+	"github.com/keshon/melodix/internal/discord/cmdaudit"
 	"github.com/keshon/melodix/internal/discord/cmdsync"
 	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/discord/voice/voicesink"
@@ -24,11 +24,11 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	notifyUnhealthy := b.makeSessionUnhealthyNotifier(disconnected)
 
 	// Built before the session opens so nothing is missed between connecting
-	// and wiring. The syncer and logger need the client, which does not exist
+	// and wiring. The syncer and recorder need the client, which does not exist
 	// yet, so they are filled in once it does.
 	var (
-		syncer *cmdsync.Syncer
-		logger *cmdlogger.Logger
+		syncer   *cmdsync.Syncer
+		recorder *cmdaudit.Recorder
 	)
 
 	dave := voicesink.NewDaveRegistry()
@@ -48,10 +48,10 @@ func (b *Bot) RunSession(ctx context.Context) error {
 				b.onGuildJoin(e, syncer)
 			}),
 			bot.NewListenerFunc(func(e *events.ApplicationCommandInteractionCreate) {
-				b.onApplicationCommand(e, syncer, logger)
+				b.onApplicationCommand(e, syncer, recorder)
 			}),
 			bot.NewListenerFunc(func(e *events.ComponentInteractionCreate) {
-				b.onComponentInteraction(e, logger)
+				b.onComponentInteraction(e, recorder)
 			}),
 		},
 	})
@@ -61,7 +61,7 @@ func (b *Bot) RunSession(ctx context.Context) error {
 
 	client := session.Client()
 	syncer = cmdsync.NewSyncer(client, command.DefaultRegistry, b.log)
-	logger = cmdlogger.NewLogger(client, b.storage, b.log)
+	recorder = cmdaudit.NewRecorder(client, b.storage, b.log)
 
 	b.setConn(&conn{client: client, dave: dave})
 	defer b.clearConn()

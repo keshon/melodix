@@ -27,7 +27,7 @@ type SlashInteractionContext struct {
 	Args    []string
 	Storage *storage.Storage
 	Config  *config.Config
-	Logger  Logger
+	Audit   AuditLog
 	AppLog  zerolog.Logger
 	Syncer  CommandSyncer
 }
@@ -43,6 +43,6 @@ type ComponentInteractionContext struct {
 
 	Storage *storage.Storage
 	Config  *config.Config
-	Logger  Logger
+	Audit   AuditLog
 	AppLog  zerolog.Logger
 }

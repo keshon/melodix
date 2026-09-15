@@ -43,9 +43,9 @@ type CommandContext interface {
 	// channel every time somebody trips over it.
 	CanReplyPrivately() bool
 
-	// AuditLogger persists who ran what, or nil where an invocation is
+	// AuditLog persists who ran what, or nil where an invocation is
 	// deliberately not audited.
-	AuditLogger() Logger
+	AuditLog() AuditLog
 
 	// Store is the guild datastore, or nil for contexts built without one.
 	// Named Store rather than Storage because the context types carry a field
@@ -118,7 +118,7 @@ func (c *SlashInteractionContext) GuildID() string         { return c.Invoker.Gu
 func (c *SlashInteractionContext) ChannelID() string       { return c.Invoker.ChannelID }
 func (c *SlashInteractionContext) UserID() string          { return c.Invoker.UserID }
 func (c *SlashInteractionContext) Username() string        { return c.Invoker.Username }
-func (c *SlashInteractionContext) AuditLogger() Logger     { return c.Logger }
+func (c *SlashInteractionContext) AuditLog() AuditLog      { return c.Audit }
 func (c *SlashInteractionContext) Store() *storage.Storage { return c.Storage }
 func (c *SlashInteractionContext) MemberPermissions() (int64, error) {
 	return memberPermissions(c.API, c.Invoker)
@@ -134,7 +134,7 @@ func (c *ComponentInteractionContext) GuildID() string         { return c.Invoke
 func (c *ComponentInteractionContext) ChannelID() string       { return c.Invoker.ChannelID }
 func (c *ComponentInteractionContext) UserID() string          { return c.Invoker.UserID }
 func (c *ComponentInteractionContext) Username() string        { return c.Invoker.Username }
-func (c *ComponentInteractionContext) AuditLogger() Logger     { return c.Logger }
+func (c *ComponentInteractionContext) AuditLog() AuditLog      { return c.Audit }
 func (c *ComponentInteractionContext) Store() *storage.Storage { return c.Storage }
 func (c *ComponentInteractionContext) MemberPermissions() (int64, error) {
 	return memberPermissions(c.API, c.Invoker)

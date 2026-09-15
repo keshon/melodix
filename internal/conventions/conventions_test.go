@@ -479,9 +479,9 @@ func exportedStringConsts(t *testing.T, dir string) map[string]string {
 }
 
 // TestLibraryStaysDiscordFree holds the boundary that makes the library
-// reusable and the CLI possible: the engine knows nothing about Discord. It
-// carries no baseline because a single import would undo the property — there
-// is nothing to ratchet toward. Imports are read from the AST rather than
+// reusable and the CLI possible: the engine knows nothing about Discord. A
+// single import undoes the property, so there is nothing to be lenient about.
+// Imports are read from the AST rather than
 // matched in text, so a module path inside an ordinary string cannot trip it
 // and an aliased import cannot hide from it.
 func TestLibraryStaysDiscordFree(t *testing.T) {
@@ -515,9 +515,8 @@ func TestLibraryStaysDiscordFree(t *testing.T) {
 
 // TestDiscordStaysBehindTheAdapter holds the boundary the disgo migration is
 // being done behind: one package names the client library, and everything
-// above it speaks cmdadapter's neutral types. It carries no baseline for the
-// same reason as the check above — a single import outside the adapter undoes
-// the property, so there is nothing to ratchet toward.
+// above it speaks cmdadapter's neutral types. Absolute for the same reason as
+// the check above: a single import outside the adapter undoes the property.
 //
 // This catches an import, which is the cheap half. The expensive half is a
 // context struct handing out a library value through a field, which no import

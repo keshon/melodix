@@ -133,8 +133,11 @@ type CommandSyncer interface {
 	SyncGuildCommands(guildID string) error
 }
 
-// Logger persists command invocations (implemented by cmdlogger).
-type Logger interface {
+// AuditLog persists who ran what. It is not a logger: the log every package
+// writes diagnostics to is zerolog, carried separately as AppLog, and having
+// both called Logger is how a reader ends up looking for command history in
+// the wrong place.
+type AuditLog interface {
 	LogCommand(guildID, channelID, userID, username, commandName string) error
 }
 
