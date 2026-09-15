@@ -243,6 +243,16 @@ func (p *Provider) release(target string) {
 		p.forgetLocked(nil)
 		return
 	}
+	if manager.GetConn(p.guildID) != p.openedConn {
+		// disgo has already taken it, which it does without telling anyone.
+		// Closing it again would spend the close budget waiting on a gateway
+		// that is not there, and this path runs on a command worker -- so it
+		// would be the caller's wait, not a background one. The DAVE session
+		// still has to go: nothing else will close it.
+		p.log.Info().Str("guild_id", p.guildID.String()).Msg("voice_conn_already_gone")
+		p.forgetLocked(dave)
+		return
+	}
 	p.releaseLocked(manager, dave)
 }
 

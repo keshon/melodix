@@ -36,7 +36,7 @@ func TestRecoveryStreamDoesNotWriteTheCallersTrack(t *testing.T) {
 	before := *track
 
 	rs := NewRecoveryStream(track)
-	if _, err := rs.Open(0); err != nil {
+	if _, err := rs.Start(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	if _, err := rs.ReadPacket(); err != nil { // p1 dies on first read, p2 takes over
@@ -46,7 +46,7 @@ func TestRecoveryStreamDoesNotWriteTheCallersTrack(t *testing.T) {
 	if !reflect.DeepEqual(*track, before) {
 		t.Fatalf("the caller's track was written:\n before %+v\n after  %+v", before, *track)
 	}
-	if got := rs.Track(); got.Title != "from p2" || !got.Passthrough {
+	if got := rs.track.Clone(); got.Title != "from p2" || !got.Passthrough {
 		t.Fatalf("the stream's own copy did not take the parser's writes: %+v", got)
 	}
 }
@@ -75,7 +75,7 @@ func TestOpenInfoCarriesWhatTheParserLearned(t *testing.T) {
 	var confirmed []OpenInfo
 	rs.SetOnParserConfirmed(func(info OpenInfo) { confirmed = append(confirmed, info) })
 
-	opened, err := rs.Open(0)
+	opened, err := rs.Start(0)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -112,5 +112,33 @@ func TestOpenInfoApplyKeepsWhatTheParserDidNotKnow(t *testing.T) {
 	}
 	if track.CurrentParser != "p2" || track.Passthrough {
 		t.Fatalf("what the stream does know must win: %+v", *track)
+	}
+}
+
+// Opening a stream that is already being read is the defect this package was
+// refactored to remove: it rewrites the parser index, the position, the retry
+// counts and the cache writer under whoever is reading them, and one of those
+// is a map the runtime does not survive a concurrent write to.
+//
+// It is now unreachable from outside the package -- open is unexported -- and
+// the one exported door refuses to be walked through twice. The test is for
+// the refusal; the unexporting is what the compiler enforces.
+func TestAStreamCannotBeStartedTwice(t *testing.T) {
+	orig := SetRegistry(map[string]parsers.Streamer{
+		"p1": fakeStreamer{open: func(*parsers.Track, float64) (opus.Reader, func(), error) {
+			return &pktReader{pkts: [][]byte{{0xAA}}}, func() {}, nil
+		}},
+	})
+	defer SetRegistry(orig)
+
+	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}}}
+	rs := NewRecoveryStream(track)
+	defer rs.Close()
+
+	if _, err := rs.Start(0); err != nil {
+		t.Fatalf("first Start: %v", err)
+	}
+	if _, err := rs.Start(0); err == nil {
+		t.Fatal("a second Start was performed rather than refused")
 	}
 }

@@ -59,6 +59,9 @@ type RecoveryStream struct {
 	// whichever goroutine drives ReadPacket. See RequestReopen.
 	reopenRequested atomic.Bool
 
+	// started guards Start against being called twice. See Start.
+	started atomic.Bool
+
 	// buffered is the anti-skip view handed to the sink; see Packets.
 	buffered *opus.BufferedReader
 
@@ -99,12 +102,33 @@ func (rs *RecoveryStream) SetOnParserConfirmed(fn func(info OpenInfo)) {
 	rs.onParserConfirmed = fn
 }
 
-// Open acquires the packet stream for the current parser, advancing through the
+// Start acquires the packet stream for the first time. It may be called once,
+// before anything is reading, and that is the whole of this stream's exported
+// write surface: everything after it happens on the goroutine pulling packets,
+// including recovery and the transport reopen RequestReopen asks for.
+//
+// A second call is refused rather than performed. Opening a stream that is
+// already being read rewrites the parser index, the position, the retry counts
+// and the cache writer under whoever is reading them -- one of which is a map,
+// which the runtime does not survive. That was a real defect here, and this is
+// what stops it being expressible from outside the package.
+func (rs *RecoveryStream) Start(seek float64) (OpenInfo, error) {
+	if rs.started.Swap(true) {
+		return OpenInfo{}, errors.New("stream: already started")
+	}
+	return rs.open(seek)
+}
+
+// open acquires the packet stream for the current parser, advancing through the
 // track's parser list past any that fail or exhausted their recovery budget. A
-// successful Open is NOT proof that audio will flow: the ffmpeg-backed parsers
+// successful open is NOT proof that audio will flow: the ffmpeg-backed parsers
 // only spawn a process here, so a CDN 403 surfaces later, on the first read.
 // confirmOpen is where a parser is known to be playing.
-func (rs *RecoveryStream) Open(seek float64) (OpenInfo, error) {
+//
+// Callers: Start, once, before there is a reader; and the reader itself, from
+// ReadPacket. Nothing else, ever -- every field it writes belongs to whoever
+// is reading.
+func (rs *RecoveryStream) open(seek float64) (OpenInfo, error) {
 	// Cache-first: serve a completed blob for this track if one exists (shared
 	// across guilds). A miss or open failure falls through to the parser list.
 	if activeCache != nil && !rs.cacheDisabled {
@@ -210,7 +234,7 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 		// Close has already stopped waiting for.
 		if rs.reopenRequested.Swap(false) && !rs.closed.Load() {
 			rs.closeCurrent()
-			if _, err := rs.Open(rs.seekSec); err != nil {
+			if _, err := rs.open(rs.seekSec); err != nil {
 				rs.abortCache()
 				return nil, err
 			}
@@ -255,7 +279,7 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 				rs.cacheDisabled = true
 				rs.fromCache = false
 				rs.closeCurrent()
-				if _, reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
+				if _, reopenErr := rs.open(rs.seekSec); reopenErr != nil {
 					rs.abortCache()
 					return nil, err
 				}
@@ -266,7 +290,7 @@ func (rs *RecoveryStream) ReadPacket() ([]byte, error) {
 			rs.log.Warn().Str("parser", rs.curParser).Err(err).Msg("immediate_failure_switching_parser")
 			rs.closeCurrent()
 			rs.parserIndex++
-			if _, reopenErr := rs.Open(rs.seekSec); reopenErr != nil {
+			if _, reopenErr := rs.open(rs.seekSec); reopenErr != nil {
 				rs.abortCache()
 				return nil, err
 			}
@@ -393,7 +417,7 @@ func (rs *RecoveryStream) reopen(cause error) error {
 		// lose by waiting.
 		time.Sleep(liveReopenBackoff)
 	}
-	_, err := rs.Open(seek)
+	_, err := rs.open(seek)
 	return err
 }
 
@@ -511,10 +535,11 @@ func (rs *RecoveryStream) Close() error {
 	return nil
 }
 
-// Track returns a copy of the track this stream is playing, including what
-// the active parser filled in at open time. A copy, because the original is
-// the producer goroutine's to write.
-func (rs *RecoveryStream) Track() parsers.Track { return rs.track.Clone() }
-
-// Parser returns the current parser key.
-func (rs *RecoveryStream) Parser() string { return rs.curParser }
+// There is deliberately no exported accessor for what this stream is playing.
+//
+// Copying the answer out is not enough: the read itself races the producer,
+// which rewrites both of those fields on every parser switch. What a stream
+// has learned leaves through Start's return and the OpenInfo the confirmation
+// callback carries -- values, handed over at moments when there is exactly one
+// writer. Those are the only doors, and having only one kind of door is the
+// point.

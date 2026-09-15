@@ -59,6 +59,7 @@ func (u *stubUDP) Open(context.Context, string, int, uint32) (string, int, error
 type stubConn struct {
 	udp    *stubUDP
 	sender voice.AudioSender
+	closed atomic.Bool
 }
 
 func newStubConn() *stubConn {
@@ -86,7 +87,7 @@ func (c *stubConn) UserIDBySSRC(uint32) snowflake.ID                       { ret
 func (c *stubConn) SetSpeaking(context.Context, voice.SpeakingFlags) error { return nil }
 func (c *stubConn) SetOpusFrameReceiver(voice.OpusFrameReceiver)           {}
 func (c *stubConn) SetEventHandlerFunc(voice.EventHandlerFunc)             {}
-func (c *stubConn) Close(context.Context)                                  {}
+func (c *stubConn) Close(context.Context)                                  { c.closed.Store(true) }
 func (c *stubConn) HandleVoiceStateUpdate(gateway.EventVoiceStateUpdate)   {}
 func (c *stubConn) HandleVoiceServerUpdate(gateway.EventVoiceServerUpdate) {}
 func (c *stubConn) Open(context.Context, snowflake.ID, bool, bool) error {

@@ -199,3 +199,38 @@ func TestASinkCarriesTheCurrentSessionsResources(t *testing.T) {
 		t.Fatal("the sink kept the dead session's manager")
 	}
 }
+
+// "Are we connected" is a question only the manager can answer, on the way out
+// as well as on the way in. Releasing a connection disgo has already taken
+// would spend the close budget waiting on a gateway that is not there -- and
+// that wait belongs to whoever ran /stop.
+func TestReleasingAConnTheLibraryAlreadyTookDoesNotCloseIt(t *testing.T) {
+	sessions := &swappable{}
+	live := newSession("live")
+	sessions.set(live)
+
+	provider := newTestProviderFor(sessions)
+	if _, err := provider.Sink("42"); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	opened := live.manager.GetConn(testGuild).(*stubConn)
+
+	live.manager.drop() // a voice websocket close disgo could not resume from
+
+	provider.ReleaseSink("42")
+
+	if opened.closed.Load() {
+		t.Fatal("closed a connection the library had already taken")
+	}
+	if got := live.manager.removes.Load(); got != 0 {
+		t.Fatalf("removed it from the manager %d times; it was never there", got)
+	}
+	// And the provider has let go, so the next track rejoins rather than
+	// handing back a sink over something nobody owns.
+	if _, err := provider.Sink("42"); err != nil {
+		t.Fatalf("rejoin: %v", err)
+	}
+	if got := live.manager.creates.Load(); got != 2 {
+		t.Fatalf("joins = %d, want a fresh one", got)
+	}
+}

@@ -30,6 +30,18 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// maxPerLane bounds how deep one key's lane may get.
+//
+// A queue with no bound trades a blocked gateway for a backlog, which is not
+// obviously better: an interaction is answerable for fifteen minutes and a
+// lane is served one command at a time, so past some depth the queue is
+// holding work whose right to reply has expired. Refusing at the door is a
+// message the caller can read; running forty minutes late is not.
+//
+// Sized for a person mashing a button rather than for load: nobody types this
+// many commands into one guild meaning all of them.
+const maxPerLane = 64
+
 // Queue holds one FIFO lane per key, each drained by at most one goroutine.
 type Queue struct {
 	log zerolog.Logger
@@ -60,8 +72,9 @@ func New(log zerolog.Logger) *Queue {
 }
 
 // Submit queues fn to run on key's lane, after everything already queued
-// there. It returns immediately; ok is false once the queue is closed, which
-// means fn will not run and the caller still owes somebody an answer.
+// there. It returns immediately; ok is false when the queue is closed or the
+// lane is full, and in both cases fn will not run and the caller still owes
+// somebody an answer.
 func (q *Queue) Submit(key string, fn func()) (ok bool) {
 	if fn == nil {
 		return false
@@ -77,6 +90,10 @@ func (q *Queue) Submit(key string, fn func()) (ok bool) {
 	if !found {
 		l = &lane{}
 		q.lanes[key] = l
+	}
+	if len(l.pending) >= maxPerLane {
+		q.log.Warn().Str("lane", key).Int("depth", len(l.pending)).Msg("command_lane_full")
+		return false
 	}
 	l.pending = append(l.pending, fn)
 	if !l.draining {

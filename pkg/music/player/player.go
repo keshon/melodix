@@ -551,7 +551,7 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 
 	rs := stream.NewRecoveryStreamWithLogger(track, p.log)
 	rs.SetOnParserConfirmed(func(info stream.OpenInfo) { p.onParserConfirmed(gen, info) })
-	info, err := rs.Open(0)
+	info, err := rs.Start(0)
 	if err != nil {
 		p.log.Error().Err(err).Msg("stream_open_failed")
 		p.mu.Lock()

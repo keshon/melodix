@@ -46,7 +46,7 @@ func TestRequestReopenDoesNotRaceTheReadAheadProducer(t *testing.T) {
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
 	rs := NewRecoveryStream(track)
-	if _, err := rs.Open(0); err != nil {
+	if _, err := rs.Start(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 
@@ -103,7 +103,7 @@ func TestCloseDuringPendingReopenDoesNotHang(t *testing.T) {
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
 	rs := NewRecoveryStream(track)
-	if _, err := rs.Open(0); err != nil {
+	if _, err := rs.Start(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	_ = rs.Packets()
@@ -141,7 +141,7 @@ func TestRepeatedReopensDoNotExhaustParserRecovery(t *testing.T) {
 	}
 	rs := NewRecoveryStream(track)
 	defer rs.Close()
-	if _, err := rs.Open(0); err != nil {
+	if _, err := rs.Start(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 
@@ -179,7 +179,7 @@ func TestReopenResumesAtTheCurrentPosition(t *testing.T) {
 	}
 	rs := NewRecoveryStream(track)
 	defer rs.Close()
-	if _, err := rs.Open(0); err != nil {
+	if _, err := rs.Start(0); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 

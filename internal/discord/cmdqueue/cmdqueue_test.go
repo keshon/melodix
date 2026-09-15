@@ -37,9 +37,9 @@ func TestOneGuildRunsOneCommandAtATime(t *testing.T) {
 	var live, peak atomic.Int64
 	var wg sync.WaitGroup
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < maxPerLane/2; i++ {
 		wg.Add(1)
-		q.Submit("g1", func() {
+		if !q.Submit("g1", func() {
 			defer wg.Done()
 			n := live.Add(1)
 			for {
@@ -50,7 +50,9 @@ func TestOneGuildRunsOneCommandAtATime(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond)
 			live.Add(-1)
-		})
+		}) {
+			t.Fatalf("submit %d refused below the lane's bound", i)
+		}
 	}
 
 	wg.Wait()
@@ -61,23 +63,40 @@ func TestOneGuildRunsOneCommandAtATime(t *testing.T) {
 }
 
 // Arrival order within a guild is the order the user typed them in.
+//
+// The lane is held shut while they are queued, so this tests the order they
+// come out in rather than the order a race happened to produce.
 func TestOneGuildKeepsArrivalOrder(t *testing.T) {
 	q := newTestQueue()
+	release := make(chan struct{})
+	blocked := make(chan struct{})
+	if !q.Submit("g1", func() { close(blocked); <-release }) {
+		t.Fatal("submit refused")
+	}
+	<-blocked
+
 	var mu sync.Mutex
 	var seen []int
 	var wg sync.WaitGroup
 
-	for i := 0; i < 100; i++ {
+	const queued = maxPerLane - 1 // one slot is the blocker's
+	for i := 0; i < queued; i++ {
 		wg.Add(1)
-		q.Submit("g1", func() {
+		if !q.Submit("g1", func() {
 			defer wg.Done()
 			mu.Lock()
 			seen = append(seen, i)
 			mu.Unlock()
-		})
+		}) {
+			t.Fatalf("submit %d refused below the lane's bound", i)
+		}
 	}
+	close(release)
 	wg.Wait()
 
+	if len(seen) != queued {
+		t.Fatalf("%d commands ran, want %d", len(seen), queued)
+	}
 	for i, got := range seen {
 		if got != i {
 			t.Fatalf("command %d ran in position %d", got, i)
@@ -208,4 +227,31 @@ func timeoutCtx(t *testing.T, d time.Duration) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), d)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// A lane with no bound trades a blocked gateway for a backlog holding work
+// whose right to reply has expired. Refusing at the door is a message the
+// caller can read.
+func TestALaneRefusesRatherThanGrowWithoutBound(t *testing.T) {
+	q := newTestQueue()
+	release := make(chan struct{})
+	defer close(release)
+	blocked := make(chan struct{})
+	q.Submit("g1", func() { close(blocked); <-release })
+	<-blocked
+
+	accepted := 0
+	for i := 0; i < maxPerLane*2; i++ {
+		if q.Submit("g1", func() {}) {
+			accepted++
+		}
+	}
+	if accepted != maxPerLane {
+		t.Fatalf("accepted %d queued commands, want the lane's bound of %d", accepted, maxPerLane)
+	}
+
+	// A different guild is unaffected: the bound is per lane, not global.
+	if !q.Submit("g2", func() {}) {
+		t.Fatal("one guild filling its lane refused another guild's command")
+	}
 }
