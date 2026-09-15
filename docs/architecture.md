@@ -561,9 +561,12 @@ is the failure this section exists to prevent.
   specifically to catch locking regressions. Fakes swap the registry via
   `stream.SetRegistry` (same pattern as `pkg/music/stream/recovery_test.go`)
   and stub the sink provider.
-- `internal/discord/voice/sink/sink_discord_test.go` pins down the Opus-send
-  contract: stop unblocks a stalled send, and a stalled or closed channel
-  produces `ErrVoiceTransport`.
+- `internal/discord/voice/sink/dave_hold_test.go` pins down the half of the
+  send contract that a library swap can silently delete: while the guild's
+  DAVE session reports it has no live epoch, the frame provider withholds
+  frames instead of emitting ones nothing can protect, without consuming the
+  packets it is holding; and a hold that never resolves ends the track as a
+  transport failure rather than leaving a silent "Now Playing" forever.
 - Manual smoke checklist, which needs a real guild: a `/play` multi-track
   batch, checking the status message updates on every auto-advance; `/play`
   while already playing, which should give "Track(s) Added"; `/next`;

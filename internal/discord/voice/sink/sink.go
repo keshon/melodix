@@ -3,12 +3,21 @@ package sink
 import (
 	"io"
 	"sync"
+	"time"
 
 	"github.com/disgoorg/disgo/voice"
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/stream"
 	"github.com/rs/zerolog"
 )
+
+// daveGate is the part of a guild's DAVE session the send path consults:
+// whether this frame may go out, or must be held until the MLS group has an
+// epoch to encrypt it under. *davesession.Session satisfies it; a nil gate
+// means no session was built, which is a channel without E2EE.
+type daveGate interface {
+	ShouldHoldFrames() bool
+}
 
 // Sink forwards a track's Opus packets to a voice connection.
 //
@@ -19,11 +28,19 @@ import (
 // warm-up and dead-air handling lives in the provider here.
 type Sink struct {
 	conn voice.Conn
+	dave daveGate
 	log  zerolog.Logger
 }
 
 func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
-	provider := &frameProvider{r: r, stop: stop, done: make(chan error, 1)}
+	provider := &frameProvider{
+		r:          r,
+		stop:       stop,
+		dave:       d.dave,
+		holdBudget: daveReadyTimeout,
+		now:        time.Now,
+		done:       make(chan error, 1),
+	}
 
 	d.conn.SetOpusFrameProvider(provider)
 	// Dropping the provider releases the reader with it. The sender goroutine
@@ -47,9 +64,19 @@ func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
 // reported once per 20ms for as long as the connection lived; io.EOF is the
 // one value it reads as "nothing to send", after which it sends its silence
 // frames and stops speaking. The real error goes to Stream over done instead.
+//
+// Every field but done is owned by the sender goroutine, which is the only
+// caller of ProvideOpusFrame and calls it one frame at a time.
 type frameProvider struct {
 	r    opus.Reader
 	stop <-chan struct{}
+
+	// dave gates the send path; see holdExpired. nil means no encryption is
+	// expected on this channel, so nothing is ever held.
+	dave       daveGate
+	holdBudget time.Duration
+	holdSince  time.Time
+	now        func() time.Time
 
 	done   chan error
 	once   sync.Once
@@ -61,6 +88,17 @@ func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 		p.finish(stream.ErrPlaybackStopped)
 		return nil, io.EOF
 	}
+
+	// Before the reader is touched: a held frame must not consume a packet,
+	// or the hold would be heard as a gap rather than as a pause.
+	if p.dave != nil && p.dave.ShouldHoldFrames() {
+		if p.holdExpired() {
+			p.finish(stream.ErrVoiceTransport)
+			return nil, io.EOF
+		}
+		return nil, nil
+	}
+	p.holdSince = time.Time{}
 
 	if !p.primed {
 		p.primed = true
@@ -80,6 +118,30 @@ func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 		return nil, io.EOF
 	}
 	return packet, nil
+}
+
+// holdExpired starts the hold clock on the first withheld frame and reports
+// whether the hold has outlasted its budget.
+//
+// A frame is withheld because the guild's MLS group has no epoch to encrypt
+// it under. dave-go's Encrypt forwards a frame unmodified rather than failing
+// when no ratchet is selectable, and disgo's send path never asks, so a
+// provider that does not gate here puts frames with no end-to-end layer on a
+// channel Discord has marked encrypted -- which receivers expecting E2EE drop,
+// and which is heard as silence. This is the fork's per-frame hold, restored
+// at the one point on the disgo send path that melodix owns.
+//
+// The budget exists because a hold nobody ends is worse than a track that
+// does: silence with a live "Now Playing" is the wedge this whole layer is
+// meant not to have. Expiring reports transport failure, which the player's
+// recovery already knows how to rejoin from.
+func (p *frameProvider) holdExpired() bool {
+	now := p.now()
+	if p.holdSince.IsZero() {
+		p.holdSince = now
+		return false
+	}
+	return now.Sub(p.holdSince) > p.holdBudget
 }
 
 // prime drains the leading packets and returns the first audible one, or nil

@@ -66,7 +66,7 @@ func (p *Provider) Sink(target string) (musicsink.AudioSink, error) {
 	defer p.mu.Unlock()
 
 	if p.conn != nil && p.currentChannelID == target {
-		return &Sink{conn: p.conn, log: p.log}, nil
+		return &Sink{conn: p.conn, dave: p.gate(), log: p.log}, nil
 	}
 	if p.conn != nil {
 		p.releaseLocked()
@@ -90,11 +90,33 @@ func (p *Provider) Sink(target string) (musicsink.AudioSink, error) {
 		return nil, err
 	}
 
-	return &Sink{conn: conn, log: p.log}, nil
+	return &Sink{conn: conn, dave: p.gate(), log: p.log}, nil
+}
+
+// gate is the guild's DAVE session as the send path's hold gate, or nil when
+// no session was built. The nil is returned explicitly rather than by
+// assigning the pointer, so a missing session is a nil interface rather than
+// a non-nil one wrapping a nil receiver.
+//
+// It is resolved per acquisition rather than held on the Provider, because a
+// session belongs to one voice connection and a rejoin builds a new one.
+func (p *Provider) gate() daveGate {
+	s := p.dave.Session(p.guildID)
+	if s == nil {
+		return nil
+	}
+	return s
 }
 
 // awaitEncryption blocks until the connection may send, which on a channel
 // using end-to-end encryption means until the MLS group has an epoch.
+//
+// This is a join-time check, not the safety mechanism: readiness is not a
+// property of joining but of the current epoch, and it is lost again on every
+// re-key. What keeps unprotected frames off the wire is the per-frame gate in
+// frameProvider. What this still buys is failing a join into a channel whose
+// encryption never comes up at all, rather than starting a track that would
+// spend its whole budget held.
 //
 // The gate is ShouldHoldFrames rather than Ready, because Ready never becomes
 // true on a channel that has no E2EE at all and waiting on it there would
