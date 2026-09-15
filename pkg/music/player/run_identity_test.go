@@ -1,0 +1,197 @@
+package player
+
+import (
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/keshon/melodix/pkg/music/opus"
+	"github.com/keshon/melodix/pkg/music/parsers"
+	"github.com/keshon/melodix/pkg/music/sink"
+	"github.com/keshon/melodix/pkg/music/sources"
+)
+
+// countingSink reports how many runs are inside Stream at once, which is the
+// invariant a playback engine has that nothing in its type system states: two
+// runs streaming into one voice connection is two tracks fighting over the
+// same 20ms clock.
+type countingSink struct {
+	live atomic.Int64
+	peak atomic.Int64
+}
+
+func (s *countingSink) Stream(r opus.Reader, stop <-chan struct{}) error {
+	live := s.live.Add(1)
+	for {
+		if peak := s.peak.Load(); live > peak {
+			if s.peak.CompareAndSwap(peak, live) {
+				break
+			}
+			continue
+		}
+		break
+	}
+	defer s.live.Add(-1)
+
+	for {
+		select {
+		case <-stop:
+			return nil
+		default:
+		}
+		if _, err := r.ReadPacket(); err != nil {
+			return nil
+		}
+	}
+}
+
+// blockingProvider's ReleaseSink takes as long as leaving a real voice channel
+// can: the gateway is waited on, and the usual reason a channel is being left
+// is that it stopped answering.
+type blockingProvider struct {
+	sink        sink.AudioSink
+	releasing   chan struct{}
+	unblock     chan struct{}
+	releaseOnce sync.Once
+}
+
+func (p *blockingProvider) Sink(string) (sink.AudioSink, error) { return p.sink, nil }
+func (p *blockingProvider) InvalidateSink()                     {}
+
+func (p *blockingProvider) ReleaseSink(string) {
+	p.releaseOnce.Do(func() {
+		close(p.releasing)
+		<-p.unblock
+	})
+}
+
+// A stop that is leaving a voice channel must not take the rest of the guild
+// with it. Under serial gateway dispatch the caller blocked behind this lock
+// was every command in every guild.
+func TestSlowReleaseSinkDoesNotBlockTheRestOfThePlayer(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"plays": pacedStreamer("t", 2000)})
+
+	provider := &blockingProvider{
+		sink:      &fakeSink{block: true},
+		releasing: make(chan struct{}),
+		unblock:   make(chan struct{}),
+	}
+	p := New(provider, nil)
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{testTrack("t1", "plays")}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := p.PlayNext("chan"); err != nil {
+		t.Fatalf("play: %v", err)
+	}
+
+	stopped := make(chan struct{})
+	go func() { _ = p.Stop(true); close(stopped) }()
+
+	select {
+	case <-provider.releasing:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop never reached ReleaseSink")
+	}
+
+	// Stop is now parked inside the provider. Everything else must still work.
+	answered := make(chan struct{})
+	go func() {
+		_ = p.Queue()
+		_, _ = p.CurrentTrack()
+		_ = p.IsPlaying()
+		_ = p.ChannelID()
+		close(answered)
+	}()
+
+	select {
+	case <-answered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the player held its lock across a voice disconnect")
+	}
+
+	close(provider.unblock)
+	<-stopped
+}
+
+// The interleaving M-04 described: a stop waits for a run that ends naturally,
+// the completion chain starts the next track while it waits, and the stop then
+// resets state belonging to a run it never asked about.
+func TestStopDoesNotResetANewerRun(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"plays": pacedStreamer("t", 4000)})
+
+	counter := &countingSink{}
+	p := New(newFakeProvider(counter), nil)
+	tracks := make([]sources.TrackInfo, 0, 8)
+	for i := 0; i < 8; i++ {
+		tracks = append(tracks, testTrack("t", "plays"))
+	}
+	if err := p.EnqueueTrackInfos(tracks); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := p.PlayNext(""); err != nil {
+		t.Fatalf("play: %v", err)
+	}
+
+	// Skip repeatedly, which is what puts a Stop and a natural track end in the
+	// same window.
+	for i := 0; i < 40; i++ {
+		_ = p.Stop(false)
+		if err := p.PlayNext(""); err != nil {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	_ = p.Stop(true)
+	waitFor(t, 5*time.Second, func() bool { return counter.live.Load() == 0 })
+
+	if peak := counter.peak.Load(); peak > 1 {
+		t.Fatalf("%d runs streamed into one sink at once", peak)
+	}
+	if playing, _ := p.CurrentTrack(); playing.Title != "" {
+		t.Fatalf("a track is current after Stop(true): %q", playing.Title)
+	}
+	if p.IsPlaying() {
+		t.Fatal("the player reports playing after Stop(true)")
+	}
+}
+
+// A run that has been superseded must not clear the state of the one that
+// superseded it, which is what leaves audio playing that the player believes
+// is not.
+func TestASupersededRunDoesNotClearTheCurrentOne(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"plays": pacedStreamer("t", 4000)})
+
+	p := New(newFakeProvider(&fakeSink{block: true}), nil)
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{
+		testTrack("first", "plays"),
+		testTrack("second", "plays"),
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := p.PlayNext(""); err != nil {
+		t.Fatalf("play first: %v", err)
+	}
+
+	p.mu.Lock()
+	stale := p.gen
+	p.mu.Unlock()
+
+	if err := p.PlayNext(""); err != nil {
+		t.Fatalf("play second: %v", err)
+	}
+
+	// The older run's goroutine, arriving late.
+	p.clearIfCurrent(stale)
+
+	if !p.IsPlaying() {
+		t.Fatal("a finished run cleared the run that replaced it")
+	}
+	if track, ok := p.CurrentTrack(); !ok || track.SourceInfo.Title != "second" {
+		t.Fatalf("current track is %+v, want the newer run's", track)
+	}
+	_ = p.Stop(true)
+}
+
+var _ parsers.Streamer = fakeStreamer{}

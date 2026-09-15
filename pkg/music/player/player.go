@@ -1,6 +1,16 @@
 // Package player provides a queue-based playback engine with pluggable sinks
 // and resolvers. It is the Discord-free half of playback: one Player drives one
 // target (a guild's voice channel, or the CLI's speaker).
+//
+// Two rules hold everywhere in here, and both are load-bearing enough to state
+// rather than leave to the reader:
+//
+//   - p.mu is never held across I/O. It guards state, and the things a player
+//     calls out to -- joining a voice channel, leaving one, opening a stream --
+//     are bounded in tens of seconds, not microseconds. Capture what the call
+//     needs under the lock, release it, then make the call.
+//   - A run resets only its own state, checked against p.gen. A run that is
+//     finishing may no longer be the run in charge.
 package player
 
 import (
@@ -102,6 +112,13 @@ type Player struct {
 	playNextMu sync.Mutex
 	// currTrack is the track being opened or actively playing (nil when idle).
 	currTrack *parsers.Track
+	// gen names the current playback run. Everything a run owns -- currTrack,
+	// the stop/done channels, the playing flags -- is reset by comparing
+	// against this rather than by assuming the run that is finishing is still
+	// the one in charge. It is the difference between "stop the track" and
+	// "stop whatever is playing", and at a track boundary those are not the
+	// same track.
+	gen int64
 	// queue holds tracks waiting to play (FIFO).
 	queue []parsers.Track
 
@@ -351,16 +368,25 @@ func (p *Player) PlayNext(target string) error {
 // capped at 10s so a wedged sink cannot block a stop forever, then mints fresh
 // per-run channels. Idempotent: stopOnce means a second Stop during teardown is
 // harmless.
+//
+// The wait is why this stops the run it was called for rather than whatever is
+// playing when it gets the lock back. Up to ten seconds pass in the middle, and
+// a natural track end during them is enough for the completion chain to have
+// dequeued the next track and started it -- at which point clearing "the"
+// current track would leave a run producing audio that the player believes is
+// idle, with no channel anyone can still signal. So phase two checks it is
+// still talking about the same run.
 func (p *Player) Stop(disconnect bool) error {
 	p.log.Info().Bool("disconnect", disconnect).Msg("stop_called")
 
-	var doneCh chan struct{}
 	p.mu.Lock()
-	doneCh = p.playbackDone
+	stopping := p.gen
+	doneCh := p.playbackDone
 	p.stopOnce.Do(func() {
 		close(p.stopPlayback)
 	})
 	target := p.target
+	provider := p.sinkProvider
 	p.mu.Unlock()
 
 	if p.IsPlaying() && doneCh != nil {
@@ -373,15 +399,25 @@ func (p *Player) Stop(disconnect bool) error {
 	}
 
 	p.mu.Lock()
+	current := p.gen
+	if current != stopping {
+		p.mu.Unlock()
+		p.log.Info().Int64("stopping", stopping).Int64("current", current).
+			Msg("stop_superseded_by_newer_run")
+		p.emitStatus(StatusStopped)
+		return nil
+	}
+
 	p.playing = false
 	p.starting = false
 	p.currTrack = nil
 
+	release := false
 	if disconnect {
 		p.log.Info().Msg("disconnect_and_clear_queue")
 		p.queue = nil
 		p.target = ""
-		p.sinkProvider.ReleaseSink(target)
+		release = true
 	}
 
 	p.stopPlayback = make(chan struct{})
@@ -389,6 +425,13 @@ func (p *Player) Stop(disconnect bool) error {
 	p.stopOnce = sync.Once{}
 	p.emitStatus(StatusStopped)
 	p.mu.Unlock()
+
+	// Outside the lock: leaving a voice channel waits on the voice gateway,
+	// and the usual reason one is being left is that it has stopped answering.
+	// Held here, that wait was every other command in the guild's wait too.
+	if release {
+		provider.ReleaseSink(target)
+	}
 
 	p.log.Info().Msg("stop_finished")
 	return nil
@@ -454,7 +497,33 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 		Int("queue_len", len(p.Queue())).
 		Msg("playback_preparing")
 
+	// At most one run is live at a time, and this is the one place that can
+	// make it true. Stop only stops the run it was called for, which at a
+	// track boundary is not necessarily the one still playing -- so a caller
+	// that stopped "the current track" and then started another may have
+	// stopped neither, and two runs would then be feeding one voice
+	// connection from two 20ms clocks.
+	//
+	// Both halves are free in the ordinary case: an auto-advance arrives here
+	// with the previous run already finished, and a skip arrives with Stop
+	// having waited for it. The cost is paid only where the overlap is real.
 	p.mu.Lock()
+	p.stopOnce.Do(func() { close(p.stopPlayback) })
+	previousDone := p.playbackDone
+	previousLive := p.playing || p.starting
+	p.mu.Unlock()
+
+	if previousLive && previousDone != nil {
+		select {
+		case <-previousDone:
+		case <-time.After(runHandoverTimeout):
+			p.log.Warn().Msg("start_timeout_waiting_previous_run")
+		}
+	}
+
+	p.mu.Lock()
+	p.gen++
+	gen := p.gen
 	p.stopPlayback = make(chan struct{})
 	p.playbackDone = make(chan struct{})
 	p.stopOnce = sync.Once{}
@@ -466,7 +535,7 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	p.mu.Unlock()
 
 	rs := stream.NewRecoveryStreamWithLogger(track, p.log)
-	rs.SetOnParserConfirmed(func(info stream.OpenInfo) { p.onParserConfirmed(track, info) })
+	rs.SetOnParserConfirmed(func(info stream.OpenInfo) { p.onParserConfirmed(gen, info) })
 	info, err := rs.Open(0)
 	if err != nil {
 		p.log.Error().Err(err).Msg("stream_open_failed")
@@ -510,7 +579,7 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	// queue. On an empty queue PlayNext returns ErrNoTracksInQueue and the
 	// Stop(true) below releases the sink.
 	go func() {
-		if err := p.runPlayback(track, rs, stopCh, doneCh); err != nil {
+		if err := p.runPlayback(gen, track, rs, stopCh, doneCh); err != nil {
 			p.log.Warn().Str("title", track.Title).Err(err).Msg("playback_error")
 			if errors.Is(err, ErrSinkUnavailable) {
 				return
@@ -539,15 +608,20 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	return nil
 }
 
+// runHandoverTimeout bounds how long a starting track waits for the previous
+// run to let go. Same budget as Stop's, and for the same reason: a wedged sink
+// must not be able to stop the next track from ever starting.
+const runHandoverTimeout = 10 * time.Second
+
 // maxVoiceTransportAttempts bounds sink rejoin plus Opus transport retries for
 // one track (Discord gateway/voice). Distinct from RecoveryStream's media
 // recovery, which counts parser attempts, not transport ones.
 const maxVoiceTransportAttempts = 3
 
-// runPlayback streams to the sink. track, stopCh and doneCh belong to this run
-// alone: track must be the run's own pointer, because reading p.currTrack here
-// could observe a newer run's track if this goroutine is scheduled late.
-func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, stopCh, doneCh chan struct{}) error {
+// runPlayback streams to the sink. gen, track, stopCh and doneCh belong to this
+// run alone: reading any of them off the player here could observe a newer
+// run's, if this goroutine is scheduled late.
+func (p *Player) runPlayback(gen int64, track *parsers.Track, rs *stream.RecoveryStream, stopCh, doneCh chan struct{}) error {
 	defer rs.Close()
 	defer close(doneCh)
 
@@ -581,7 +655,7 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 			p.log.Warn().Int("attempt", attempt).Int("max", maxVoiceTransportAttempts).Err(err).Msg("sink_get_failed")
 			p.sinkProvider.InvalidateSink()
 			if attempt == maxVoiceTransportAttempts {
-				p.markPlaybackFailed(track, failedSnapshot, guildID, errors.Join(ErrSinkUnavailable, fmt.Errorf("player: get sink: %w", err)))
+				p.markPlaybackFailed(gen, failedSnapshot, guildID, errors.Join(ErrSinkUnavailable, fmt.Errorf("player: get sink: %w", err)))
 				return errors.Join(ErrSinkUnavailable, fmt.Errorf("player: get sink: %w", err))
 			}
 			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
@@ -593,7 +667,7 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 			break
 		}
 		if errors.Is(err, stream.ErrPlaybackStopped) {
-			p.clearIfCurrent(track)
+			p.clearIfCurrent(gen)
 			p.log.Info().Msg("playback_stopped_by_user")
 			p.emitStatus(StatusStopped)
 			return err
@@ -616,7 +690,7 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 			// error on the next Stream, and is handled below.
 			rs.RequestReopen()
 			if attempt == maxVoiceTransportAttempts {
-				p.markPlaybackFailed(track, failedSnapshot, guildID, err)
+				p.markPlaybackFailed(gen, failedSnapshot, guildID, err)
 				return err
 			}
 			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
@@ -626,12 +700,12 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 	}
 
 	if err != nil {
-		p.markPlaybackFailed(track, failedSnapshot, guildID, err)
+		p.markPlaybackFailed(gen, failedSnapshot, guildID, err)
 		p.log.Warn().Err(err).Msg("playback_finished_error")
 		return fmt.Errorf("player: playback error: %w", err)
 	}
 
-	p.clearIfCurrent(track)
+	p.clearIfCurrent(gen)
 
 	p.log.Info().Msg("playback_stopped")
 	p.emitStatus(StatusStopped)
@@ -648,16 +722,16 @@ func (p *Player) runPlayback(track *parsers.Track, rs *stream.RecoveryStream, st
 // previous parser opened, then died on its first read) re-emits StatusPlaying
 // the Now Playing embed stops naming a parser that never played.
 // Called from the playback goroutine; must not be called with p.mu held.
-func (p *Player) onParserConfirmed(track *parsers.Track, info stream.OpenInfo) {
+func (p *Player) onParserConfirmed(gen int64, info stream.OpenInfo) {
 	parser := info.Parser
 	p.mu.Lock()
-	if p.currTrack != track {
+	if p.gen != gen || p.currTrack == nil {
 		p.mu.Unlock() // a newer run owns the player; this stream is being torn down
 		return
 	}
 	// The player is this Track's only writer, and this is the lock that makes
 	// that true: the callback arrives on the goroutine reading packets.
-	info.Apply(track)
+	info.Apply(p.currTrack)
 	// Compare against what the UI was told, not against the previous confirmation:
 	// when the announced parser dies on its first read, the first confirmation
 	// is already a different parser and still needs a redraw.
@@ -670,7 +744,7 @@ func (p *Player) onParserConfirmed(track *parsers.Track, info stream.OpenInfo) {
 	if record {
 		p.recorded = true
 	}
-	confirmed := track.Clone()
+	confirmed := p.currTrack.Clone()
 	p.mu.Unlock()
 
 	if record {
@@ -716,12 +790,12 @@ func (p *Player) emitPlaybackError(err error) {
 	p.emitStatus(StatusError)
 }
 
-// clearIfCurrent resets playing state only if track is still the current one,
-// so a stale run's goroutine cannot clobber the state of a newer run that has
+// clearIfCurrent resets playing state only if gen is still the current run, so
+// a run that is finishing cannot clobber the state of a newer one that has
 // already started.
-func (p *Player) clearIfCurrent(track *parsers.Track) {
+func (p *Player) clearIfCurrent(gen int64) {
 	p.mu.Lock()
-	if p.currTrack == track {
+	if p.gen == gen {
 		p.playing = false
 		p.currTrack = nil
 	}
@@ -730,8 +804,8 @@ func (p *Player) clearIfCurrent(track *parsers.Track) {
 
 // markPlaybackFailed clears playing state, records the user-visible error and
 // notifies Discord when that callback is wired.
-func (p *Player) markPlaybackFailed(track *parsers.Track, failedSnapshot parsers.Track, guildID string, playbackErr error) {
-	p.clearIfCurrent(track)
+func (p *Player) markPlaybackFailed(gen int64, failedSnapshot parsers.Track, guildID string, playbackErr error) {
+	p.clearIfCurrent(gen)
 	if playbackErr == nil {
 		return
 	}
