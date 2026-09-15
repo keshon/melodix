@@ -6,8 +6,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// The three kinds of invocation, each carrying what a command may ask of it
-// and nothing that names a library. Session and Event used to sit at the top of
+// The two kinds of invocation, each carrying what a command may ask of it and
+// nothing that names a library. Session and Event used to sit at the top of
 // every one of these; what replaced them is Invoker for the questions whose
 // answers are fixed, Responder for what can be said back, and API for what
 // must be asked of the connection.
@@ -40,17 +40,6 @@ type ComponentInteractionContext struct {
 	// ComponentID identifies which component was used -- the button's own id,
 	// set when the message was built.
 	ComponentID string
-
-	Storage *storage.Storage
-	Config  *config.Config
-	Logger  Logger
-	AppLog  zerolog.Logger
-}
-
-type MessageApplicationCommandContext struct {
-	Invoker   Invoker
-	Responder Responder
-	API       SessionAPI
 
 	Storage *storage.Storage
 	Config  *config.Config

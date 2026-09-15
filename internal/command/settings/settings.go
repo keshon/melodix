@@ -35,11 +35,7 @@ func (c *SettingsCommand) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *SettingsCommand) Run(ctx interface{}) error {
-	context, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *SettingsCommand) Run(context *cmdadapter.SlashInteractionContext) error {
 
 	st := context.Storage
 

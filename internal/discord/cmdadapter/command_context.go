@@ -146,21 +146,3 @@ func (c *ComponentInteractionContext) ReplyEphemeral(msg string) error {
 // CustomID identifies which component was used -- the button's own id, set
 // when the message was built.
 func (c *ComponentInteractionContext) CustomID() string { return c.ComponentID }
-
-// --- MessageApplicationCommandContext ---
-
-func (c *MessageApplicationCommandContext) GuildID() string   { return c.Invoker.GuildID }
-func (c *MessageApplicationCommandContext) ChannelID() string { return c.Invoker.ChannelID }
-func (c *MessageApplicationCommandContext) UserID() string    { return c.Invoker.UserID }
-func (c *MessageApplicationCommandContext) Username() string  { return c.Invoker.Username }
-func (c *MessageApplicationCommandContext) AuditLogger() Logger {
-	return c.Logger
-}
-func (c *MessageApplicationCommandContext) Store() *storage.Storage { return c.Storage }
-func (c *MessageApplicationCommandContext) MemberPermissions() (int64, error) {
-	return memberPermissions(c.API, c.Invoker)
-}
-func (c *MessageApplicationCommandContext) CanReplyPrivately() bool { return c.Responder != nil }
-func (c *MessageApplicationCommandContext) ReplyEphemeral(msg string) error {
-	return respondEphemeral(c.Responder, msg)
-}

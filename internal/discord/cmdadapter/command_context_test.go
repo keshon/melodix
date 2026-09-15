@@ -58,7 +58,6 @@ func TestEveryContextIsACommandContext(t *testing.T) {
 	var (
 		_ CommandContext = (*SlashInteractionContext)(nil)
 		_ CommandContext = (*ComponentInteractionContext)(nil)
-		_ CommandContext = (*MessageApplicationCommandContext)(nil)
 	)
 }
 
@@ -68,7 +67,6 @@ func TestEveryInteractionContextIsAnInteraction(t *testing.T) {
 	var (
 		_ Interaction = (*SlashInteractionContext)(nil)
 		_ Interaction = (*ComponentInteractionContext)(nil)
-		_ Interaction = (*MessageApplicationCommandContext)(nil)
 	)
 }
 

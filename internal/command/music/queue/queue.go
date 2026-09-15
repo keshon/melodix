@@ -28,11 +28,7 @@ func (c *Queue) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Queue) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *Queue) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)

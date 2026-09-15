@@ -2,6 +2,7 @@ package discord
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -104,23 +105,20 @@ func (b *Bot) onApplicationCommand(
 	api := reply.NewSessionAPI(e.Client())
 	who := interactionInvoker(e)
 
-	var inv *command.Invocation
-	switch data := e.Data.(type) {
-	case discord.SlashCommandInteractionData:
-		inv = &command.Invocation{Data: &cmdadapter.SlashInteractionContext{
-			Invoker: who, Responder: responder, API: api,
-			Arguments: reply.SlashArguments(data),
-			Storage:   b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
-			Syncer: syncer,
-		}}
-	case discord.MessageCommandInteractionData:
-		inv = &command.Invocation{Data: &cmdadapter.MessageApplicationCommandContext{
-			Invoker: who, Responder: responder, API: api,
-			Storage: b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
-		}}
-	default:
+	// Slash only. A context-menu registration would need a command that
+	// declares one, and nothing has ever declared one here.
+	data, ok := e.Data.(discord.SlashCommandInteractionData)
+	if !ok {
+		b.log.Warn().Str("command", name).Str("kind", fmt.Sprintf("%T", e.Data)).
+			Msg("interaction_kind_unhandled")
 		return
 	}
+	inv := &command.Invocation{Data: &cmdadapter.SlashInteractionContext{
+		Invoker: who, Responder: responder, API: api,
+		Arguments: reply.SlashArguments(data),
+		Storage:   b.storage, Config: b.cfg, Logger: logger, AppLog: b.log,
+		Syncer: syncer,
+	}}
 
 	b.dispatchInteraction(who, responder, "slash", name, func(cmdCtx context.Context) error {
 		return c.Run(cmdCtx, inv)

@@ -143,12 +143,6 @@ type SlashProvider interface {
 	SlashDefinition() *SlashCommand
 }
 
-// ContextMenuProvider is implemented by commands that expose a context-menu
-// definition.
-type ContextMenuProvider interface {
-	ContextDefinition() *SlashCommand
-}
-
 // ComponentInteractionHandler is implemented by commands that handle message
 // components (buttons/selects) whose customID matches the command name.
 type ComponentInteractionHandler interface {
@@ -187,5 +181,5 @@ type Handler interface {
 	Meta
 	Name() string
 	Description() string
-	Run(ctx interface{}) error
+	Run(ctx *SlashInteractionContext) error
 }

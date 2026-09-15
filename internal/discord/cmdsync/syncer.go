@@ -172,20 +172,6 @@ func declarationOf(c command.Command) *cmdadapter.SlashCommand {
 		}
 	}
 
-	if menu, ok := root.(cmdadapter.ContextMenuProvider); ok {
-		if def := menu.ContextDefinition(); def != nil {
-			// A context-menu command that did not say which menu it belongs
-			// to means the message menu, which is what this has always
-			// assumed.
-			if def.Type == cmdadapter.ChatInputCommand {
-				copied := *def
-				copied.Type = cmdadapter.MessageMenuCommand
-				return &copied
-			}
-			return def
-		}
-	}
-
 	return nil
 }
 

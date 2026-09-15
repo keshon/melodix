@@ -92,11 +92,7 @@ func (c *Search) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Search) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *Search) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 	query := strings.TrimSpace(slashCtx.StringOption("query"))
 	wanted := slashCtx.StringOption("source")
 	searcher, tag, err := c.pick(wanted)

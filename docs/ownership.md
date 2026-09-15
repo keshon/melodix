@@ -196,10 +196,6 @@ from its delivery.
 Known gaps. An honest list is worth more than a clean one.
 
 - **Rule 4 does not follow calls** into helpers invoked under the lock.
-- **`Handler.Run(ctx interface{})`** returns nil on a context-type mismatch, so
-  a command dispatched wrongly succeeds and does nothing. Ten commands open
-  with that assertion, and nothing would report a dispatch path that stopped
-  working.
 - **Reply errors** are ignored at 27 call sites in `internal/command`.
   Consistent, and consistently unchecked.
 - **`kkdai`'s `init()`** rewrites a third-party package's global for the whole

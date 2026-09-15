@@ -28,11 +28,7 @@ func (c *Next) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Next) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *Next) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	guildID := slashCtx.GuildID()
 

@@ -24,11 +24,7 @@ func (c *Stop) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Stop) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *Stop) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to defer response: %w", err)

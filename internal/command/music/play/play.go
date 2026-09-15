@@ -61,11 +61,7 @@ func (c *Play) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Play) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *Play) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	store := slashCtx.Storage
 

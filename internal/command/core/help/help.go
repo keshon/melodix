@@ -40,11 +40,7 @@ func (c *Help) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Help) Run(ctx interface{}) error {
-	context, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *Help) Run(context *cmdadapter.SlashInteractionContext) error {
 
 	if err := context.DeferEphemeral(); err != nil {
 		context.AppLog.Error().Err(err).Msg("help_defer_failed")

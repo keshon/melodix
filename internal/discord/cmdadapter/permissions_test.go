@@ -83,10 +83,10 @@ func TestAnInvocationWithoutPermissionsStillAsks(t *testing.T) {
 	}
 }
 
-// The three interaction contexts all reach the same helper, so all three have
-// to benefit. Missing one means a context menu or a button click still fails
-// where a slash command does not.
-func TestEveryInteractionContextUsesTheCarriedPermissions(t *testing.T) {
+// Both interaction contexts reach the same helper, so both have to benefit:
+// missing one means a button click still fails where a slash command does
+// not.
+func TestBothInteractionContextsUseTheCarriedPermissions(t *testing.T) {
 	who := Invoker{
 		GuildID: "g1", ChannelID: "c1", UserID: "u1",
 		Permissions: 0x20, PermissionsKnown: true,
@@ -95,7 +95,6 @@ func TestEveryInteractionContextUsesTheCarriedPermissions(t *testing.T) {
 	for name, ctx := range map[string]interface{ MemberPermissions() (int64, error) }{
 		"slash":     &SlashInteractionContext{API: &coldCacheAPI{}, Invoker: who},
 		"component": &ComponentInteractionContext{API: &coldCacheAPI{}, Invoker: who},
-		"menu":      &MessageApplicationCommandContext{API: &coldCacheAPI{}, Invoker: who},
 	} {
 		got, err := ctx.MemberPermissions()
 		if err != nil {

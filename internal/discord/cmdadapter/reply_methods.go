@@ -196,44 +196,6 @@ func (c *ComponentInteractionContext) ReplaceMessage(embed *Embed) error {
 	return c.Responder.ReplaceMessage(embed)
 }
 
-// --- MessageApplicationCommandContext ---
-
-func (c *MessageApplicationCommandContext) Defer() error {
-	return ackDeferred(c.Responder, false)
-}
-
-func (c *MessageApplicationCommandContext) DeferEphemeral() error {
-	return ackDeferred(c.Responder, true)
-}
-
-func (c *MessageApplicationCommandContext) Respond(e *Embed) error {
-	return respondEmbed(c.Responder, e, false)
-}
-
-func (c *MessageApplicationCommandContext) RespondEphemeral(e *Embed) error {
-	return respondEmbed(c.Responder, e, true)
-}
-
-func (c *MessageApplicationCommandContext) Followup(e *Embed) error {
-	return followupEmbed(c.Responder, e, false)
-}
-
-func (c *MessageApplicationCommandContext) FollowupEphemeral(e *Embed) error {
-	return followupEmbed(c.Responder, e, true)
-}
-
-func (c *MessageApplicationCommandContext) EditResponseText(content string) error {
-	return editResponse(c.Responder, content)
-}
-
-func (c *MessageApplicationCommandContext) CanJoinVoice(channelID string) (bool, error) {
-	return canJoinVoice(c.API, channelID)
-}
-
-func (c *MessageApplicationCommandContext) AnswerEmbedMessage(embed *Embed) (string, string, error) {
-	return answerEmbedMessage(c.Responder, embed)
-}
-
 // Interaction is what a shared helper needs from an invocation, whichever kind
 // of interaction it arrived as.
 //

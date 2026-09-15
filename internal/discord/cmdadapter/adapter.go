@@ -2,6 +2,7 @@ package cmdadapter
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/keshon/command"
 )
@@ -16,8 +17,21 @@ func (a *Adapter) Group() string            { return a.Cmd.Group() }
 func (a *Adapter) Category() string         { return a.Cmd.Category() }
 func (a *Adapter) UserPermissions() []int64 { return a.Cmd.UserPermissions() }
 
+// Run hands the invocation to the command, and is the only place the shape of
+// an invocation is checked.
+//
+// It used to pass inv.Data as an interface{} for each command to assert on
+// itself, and every one of them returned nil when the assertion failed. A
+// command dispatched with the wrong kind of invocation therefore succeeded and
+// did nothing, ten times over, with nothing logged -- which is how two
+// dispatch paths stayed dead here long enough to be deleted rather than
+// noticed. Now the mismatch is one error, in one place.
 func (a *Adapter) Run(ctx context.Context, inv *command.Invocation) error {
-	return a.Cmd.Run(inv.Data)
+	slash, ok := inv.Data.(*SlashInteractionContext)
+	if !ok {
+		return fmt.Errorf("cmdadapter: %s was dispatched with a %T, not a slash interaction", a.Name(), inv.Data)
+	}
+	return a.Cmd.Run(slash)
 }
 
 // SlashDefinition forwards the declaration in the form the interface declares
@@ -36,20 +50,10 @@ func (a *Adapter) SlashDefinition() *SlashCommand {
 	return nil
 }
 
-func (a *Adapter) ContextDefinition() *SlashCommand {
-	if cp, ok := a.Cmd.(ContextMenuProvider); ok {
-		return cp.ContextDefinition()
-	}
-	return nil
-}
-
 // Compile-time proof that the Adapter is what cmdsync looks for. Without
 // these, the only thing standing between a changed signature and a guild
 // losing all of its commands is a runtime type assertion that fails quietly.
-var (
-	_ SlashProvider       = (*Adapter)(nil)
-	_ ContextMenuProvider = (*Adapter)(nil)
-)
+var _ SlashProvider = (*Adapter)(nil)
 
 // SkipAuditLog reports whether the wrapped command opted out of the audit log.
 //

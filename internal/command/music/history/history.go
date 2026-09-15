@@ -55,11 +55,7 @@ const historyLinesPerPage = 15
 
 const historyFooterReplay = "replay with `/play <id>`."
 
-func (c *History) Run(ctx interface{}) error {
-	slashCtx, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *History) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	store := slashCtx.Storage
 

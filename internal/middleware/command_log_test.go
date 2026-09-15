@@ -15,12 +15,12 @@ import (
 // command changed its mind.
 type fakeCommand struct{}
 
-func (fakeCommand) Name() string             { return "fake" }
-func (fakeCommand) Description() string      { return "a stand-in command" }
-func (fakeCommand) Group() string            { return "test" }
-func (fakeCommand) Category() string         { return "test" }
-func (fakeCommand) UserPermissions() []int64 { return nil }
-func (fakeCommand) Run(any) error            { return nil }
+func (fakeCommand) Name() string                                  { return "fake" }
+func (fakeCommand) Description() string                           { return "a stand-in command" }
+func (fakeCommand) Group() string                                 { return "test" }
+func (fakeCommand) Category() string                              { return "test" }
+func (fakeCommand) UserPermissions() []int64                      { return nil }
+func (fakeCommand) Run(*cmdadapter.SlashInteractionContext) error { return nil }
 
 // unloggedCommand opts out; ordinaryCommand is the control.
 type unloggedCommand struct{ fakeCommand }

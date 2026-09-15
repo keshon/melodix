@@ -26,11 +26,7 @@ func (c *About) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *About) Run(ctx interface{}) error {
-	context, ok := ctx.(*cmdadapter.SlashInteractionContext)
-	if !ok {
-		return nil
-	}
+func (c *About) Run(context *cmdadapter.SlashInteractionContext) error {
 
 	info := buildinfo.Get()
 
