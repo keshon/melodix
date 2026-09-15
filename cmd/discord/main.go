@@ -18,7 +18,7 @@ import (
 	"github.com/keshon/melodix/internal/command/core/help"
 	"github.com/keshon/melodix/internal/command/core/maintenance"
 	"github.com/keshon/melodix/internal/command/settings"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 
 	"github.com/keshon/melodix/internal/command/music/history"
 	"github.com/keshon/melodix/internal/command/music/next"
@@ -146,16 +146,16 @@ func defaultMiddleware(log zerolog.Logger) []command.Middleware {
 
 func registerCommands(bot *discord.Bot, log zerolog.Logger) {
 	mw := defaultMiddleware(log)
-	cmdadapter.Register(&settings.SettingsCommand{}, mw...)
-	cmdadapter.Register(&about.About{}, mw...)
-	cmdadapter.Register(&help.Help{}, mw...)
-	cmdadapter.Register(&maintenance.Maintenance{}, mw...)
-	cmdadapter.Register(&play.Play{Bot: bot}, mw...)
-	cmdadapter.Register(&search.Search{Bot: bot}, mw...)
-	cmdadapter.Register(&next.Next{Bot: bot}, mw...)
-	cmdadapter.Register(&queue.Queue{Bot: bot}, mw...)
-	cmdadapter.Register(&stop.Stop{Bot: bot}, mw...)
-	cmdadapter.Register(&history.History{Bot: bot}, mw...)
+	adapter.Register(&settings.SettingsCommand{}, mw...)
+	adapter.Register(&about.About{}, mw...)
+	adapter.Register(&help.Help{}, mw...)
+	adapter.Register(&maintenance.Maintenance{}, mw...)
+	adapter.Register(&play.Play{Bot: bot}, mw...)
+	adapter.Register(&search.Search{Bot: bot}, mw...)
+	adapter.Register(&next.Next{Bot: bot}, mw...)
+	adapter.Register(&queue.Queue{Bot: bot}, mw...)
+	adapter.Register(&stop.Stop{Bot: bot}, mw...)
+	adapter.Register(&history.History{Bot: bot}, mw...)
 }
 
 // runConnectionCheck connects and reports what it can see, registering

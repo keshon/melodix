@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 import (
 	"testing"

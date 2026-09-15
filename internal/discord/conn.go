@@ -4,7 +4,7 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	disgovoice "github.com/disgoorg/disgo/voice"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/discord/voice/voicesink"
 	"github.com/keshon/melodix/pkg/music/sink"
@@ -23,7 +23,7 @@ type conn struct {
 }
 
 // API is the neutral surface over this connection.
-func (c *conn) API() cmdadapter.BotAPI {
+func (c *conn) API() adapter.BotAPI {
 	return reply.NewSessionAPI(c.client)
 }
 

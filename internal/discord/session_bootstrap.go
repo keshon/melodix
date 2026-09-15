@@ -9,8 +9,8 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/cmdqueue"
+	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/queue"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/discord/voice/voicesink"
 	"github.com/keshon/melodix/internal/storage"
@@ -36,7 +36,7 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 	// Between them they are the service's entire contact with the library
 	// underneath.
 	b.voice = voice.NewVoiceService(b.sessionAPI, b.newSinkProvider, cfg, storage, log)
-	b.commands = cmdqueue.New(log, cfg.CommandParallelism)
+	b.commands = queue.New(log, cfg.CommandParallelism)
 	b.setSessionContext(context.Background())
 	kkdai.SetLogger(log)
 	ffmpeg.SetLogger(log)
@@ -76,7 +76,7 @@ func IsSessionUnhealthyError(err error) bool {
 
 // sessionAPI is the neutral surface over the live connection, or nil when
 // there is none -- which is a normal state between restarts.
-func (b *Bot) sessionAPI() cmdadapter.BotAPI {
+func (b *Bot) sessionAPI() adapter.BotAPI {
 	c := b.currentConn()
 	if c == nil {
 		return nil

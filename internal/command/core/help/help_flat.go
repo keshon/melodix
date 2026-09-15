@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 func runHelpFlat() string {
@@ -14,7 +14,7 @@ func runHelpFlat() string {
 
 	var sb strings.Builder
 	for _, c := range all {
-		sb.WriteString(cmdadapter.FormatCommandWithSubcommands(c))
+		sb.WriteString(adapter.FormatCommandWithSubcommands(c))
 	}
 	return sb.String()
 }

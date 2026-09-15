@@ -3,22 +3,22 @@ package commands
 import (
 	"strings"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/storage"
 )
 
 // RunCmdLog shows recent command usage for the guild.
-func RunCmdLog(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage) error {
+func RunCmdLog(ctx *adapter.SlashInteractionContext, storage storage.Storage) error {
 	guildID := ctx.GuildID()
 
 	records, err := storage.CommandHistory(guildID)
 	if err != nil {
-		return ctx.RespondEphemeral(&cmdadapter.Embed{
+		return ctx.RespondEphemeral(&adapter.Embed{
 			Description: "Failed to fetch command logs: " + err.Error(),
 		})
 	}
 	if len(records) == 0 {
-		return ctx.RespondEphemeral(&cmdadapter.Embed{
+		return ctx.RespondEphemeral(&adapter.Embed{
 			Description: "No command logs found.",
 		})
 	}
@@ -39,5 +39,5 @@ func RunCmdLog(ctx *cmdadapter.SlashInteractionContext, storage storage.Storage)
 	}
 
 	msg := codeLeftBlockWrapper + "\n" + builder.String() + codeRightBlockWrapper
-	return ctx.RespondWith(cmdadapter.Reply{Text: msg, Ephemeral: true})
+	return ctx.RespondWith(adapter.Reply{Text: msg, Ephemeral: true})
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -17,7 +17,7 @@ import (
 func WithGroupAccessCheck() command.Middleware {
 	return func(c command.Command) command.Command {
 		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
-			cc := cmdadapter.ContextFromInvocation(inv)
+			cc := adapter.ContextFromInvocation(inv)
 			if cc == nil {
 				return c.Run(ctx, inv)
 			}
@@ -29,11 +29,11 @@ func WithGroupAccessCheck() command.Middleware {
 
 			// A component interaction is not run as a command: the check
 			// applies, and then it goes to the component handler instead.
-			if component, ok := inv.Data.(*cmdadapter.ComponentInteractionContext); ok {
+			if component, ok := inv.Data.(*adapter.ComponentInteractionContext); ok {
 				if disabledGroup(c, cc.GuildID(), cc.Store(), respond) {
 					return nil
 				}
-				if handler, ok := command.Root(c).(cmdadapter.ComponentInteractionHandler); ok {
+				if handler, ok := command.Root(c).(adapter.ComponentInteractionHandler); ok {
 					return handler.Component(component)
 				}
 				return nil
@@ -48,7 +48,7 @@ func WithGroupAccessCheck() command.Middleware {
 }
 
 func disabledGroup(c command.Command, guildID string, stor *storage.Storage, respond func(string)) bool {
-	meta, ok := command.Root(c).(cmdadapter.Meta)
+	meta, ok := command.Root(c).(adapter.Meta)
 	if !ok || meta.Group() == "" {
 		return false
 	}

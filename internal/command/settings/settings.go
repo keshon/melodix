@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/keshon/melodix/internal/command/core/commands"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/perm"
 
 	"github.com/keshon/melodix/internal/storage"
@@ -20,13 +20,13 @@ func (c *SettingsCommand) UserPermissions() []int64 {
 	return []int64{perm.Administrator}
 }
 
-func (c *SettingsCommand) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *SettingsCommand) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []cmdadapter.SlashOption{
+		Options: []adapter.SlashOption{
 			{
-				Type:        cmdadapter.OptionSubCommandGroup,
+				Type:        adapter.OptionSubCommandGroup,
 				Name:        "commands",
 				Description: "Command group management",
 				Options:     commands.CommandsSubcommandOptions(),
@@ -35,20 +35,20 @@ func (c *SettingsCommand) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *SettingsCommand) Run(context *cmdadapter.SlashInteractionContext) error {
+func (c *SettingsCommand) Run(context *adapter.SlashInteractionContext) error {
 
 	st := context.Storage
 
 	group, ok := context.FirstOption()
 	if !ok {
-		return context.RespondEphemeral(&cmdadapter.Embed{
+		return context.RespondEphemeral(&adapter.Embed{
 			Description: "No settings group provided.",
 		})
 	}
 
 	sub, ok := group.First()
 	if !ok {
-		return context.RespondEphemeral(&cmdadapter.Embed{
+		return context.RespondEphemeral(&adapter.Embed{
 			Description: "No subcommand provided.",
 		})
 	}
@@ -57,13 +57,13 @@ func (c *SettingsCommand) Run(context *cmdadapter.SlashInteractionContext) error
 	case "commands":
 		return runCommandsSettings(context, *st, context.Syncer, sub)
 	default:
-		return context.RespondEphemeral(&cmdadapter.Embed{
+		return context.RespondEphemeral(&adapter.Embed{
 			Description: fmt.Sprintf("Unknown settings group: %s", group.Name),
 		})
 	}
 }
 
-func runCommandsSettings(ctx *cmdadapter.SlashInteractionContext, st storage.Storage, syncer cmdadapter.CommandSyncer, sub cmdadapter.SlashArgument) error {
+func runCommandsSettings(ctx *adapter.SlashInteractionContext, st storage.Storage, syncer adapter.CommandSyncer, sub adapter.SlashArgument) error {
 	switch sub.Name {
 	case "log":
 		return commands.RunCmdLog(ctx, st)
@@ -74,7 +74,7 @@ func runCommandsSettings(ctx *cmdadapter.SlashInteractionContext, st storage.Sto
 	case "disable":
 		return commands.RunCmdDisable(ctx, st, syncer, sub)
 	default:
-		return ctx.RespondEphemeral(&cmdadapter.Embed{
+		return ctx.RespondEphemeral(&adapter.Embed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

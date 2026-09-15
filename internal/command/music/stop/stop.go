@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 type Stop struct {
@@ -17,14 +17,14 @@ func (c *Stop) Group() string            { return "music" }
 func (c *Stop) Category() string         { return "🎵 Music" }
 func (c *Stop) UserPermissions() []int64 { return []int64{} }
 
-func (c *Stop) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *Stop) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *Stop) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
+func (c *Stop) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to defer response: %w", err)
@@ -32,7 +32,7 @@ func (c *Stop) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	player := c.Bot.GetOrCreatePlayer(slashCtx.GuildID())
 	if player == nil {
-		_ = slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		_ = slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -42,7 +42,7 @@ func (c *Stop) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 		slashCtx.AppLog.Warn().Err(err).Msg("player_stop_failed")
 	}
 	stopMsg := "Playback stopped. Queue cleared."
-	if err := slashCtx.Followup(&cmdadapter.Embed{
+	if err := slashCtx.Followup(&adapter.Embed{
 		Description: "⏹️ " + stopMsg,
 	}); err != nil {
 		slashCtx.AppLog.Warn().Str("command", "stop").Err(err).Msg("followup_embed_failed")

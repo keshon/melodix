@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/rs/zerolog"
 )
 
-// auditSkipper is satisfied by cmdadapter.Adapter, which forwards the opt-out
-// declared by the command it wraps (see cmdadapter.Unlogged).
+// auditSkipper is satisfied by adapter.Adapter, which forwards the opt-out
+// declared by the command it wraps (see adapter.Unlogged).
 type auditSkipper interface {
 	SkipAuditLog() bool
 }
@@ -38,7 +38,7 @@ func WithCommandLogger(log zerolog.Logger) command.Middleware {
 // carries. A context with no logger is not audited, which is how message
 // commands stay out of the log.
 func logInvocation(log zerolog.Logger, cmdName string, inv *command.Invocation) {
-	cc := cmdadapter.ContextFromInvocation(inv)
+	cc := adapter.ContextFromInvocation(inv)
 	if cc == nil {
 		return
 	}

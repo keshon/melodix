@@ -8,10 +8,10 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/keshon/command"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/cmdaudit"
-	"github.com/keshon/melodix/internal/discord/cmdsync"
+	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/audit"
 	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/internal/discord/slashsync"
 )
 
 // interactionInvoker reads the caller off an interaction, once, so nothing
@@ -20,10 +20,10 @@ import (
 // A guild interaction carries Member, a direct message carries User, and
 // neither is guaranteed. Getting the order wrong means the audit log names the
 // wrong person, or nobody.
-func interactionInvoker(i discord.Interaction) cmdadapter.Invoker {
-	who := cmdadapter.Invoker{
-		UserID:   cmdadapter.UnknownUserID,
-		Username: cmdadapter.UnknownUsername,
+func interactionInvoker(i discord.Interaction) adapter.Invoker {
+	who := adapter.Invoker{
+		UserID:   adapter.UnknownUserID,
+		Username: adapter.UnknownUsername,
 	}
 	if gid := i.GuildID(); gid != nil {
 		who.GuildID = gid.String()
@@ -50,7 +50,7 @@ func interactionInvoker(i discord.Interaction) cmdadapter.Invoker {
 }
 
 // onReady fires on every successful connect/reconnect.
-func (b *Bot) onReady(e *events.Ready, syncer *cmdsync.Syncer) {
+func (b *Bot) onReady(e *events.Ready, syncer *slashsync.Syncer) {
 	for _, g := range e.Guilds {
 		guildID := g.ID.String()
 		if b.isGuildBlacklisted(guildID) {
@@ -70,7 +70,7 @@ func (b *Bot) onReady(e *events.Ready, syncer *cmdsync.Syncer) {
 }
 
 // onGuildJoin fires when the bot joins a new guild.
-func (b *Bot) onGuildJoin(e *events.GuildJoin, syncer *cmdsync.Syncer) {
+func (b *Bot) onGuildJoin(e *events.GuildJoin, syncer *slashsync.Syncer) {
 	guildID := e.Guild.ID.String()
 	b.log.Info().Str("guild_id", guildID).Str("guild_name", e.Guild.Name).Msg("guild_added")
 
@@ -91,8 +91,8 @@ func (b *Bot) onGuildJoin(e *events.GuildJoin, syncer *cmdsync.Syncer) {
 // onApplicationCommand dispatches slash and context-menu commands.
 func (b *Bot) onApplicationCommand(
 	e *events.ApplicationCommandInteractionCreate,
-	syncer *cmdsync.Syncer,
-	recorder *cmdaudit.Recorder,
+	syncer *slashsync.Syncer,
+	recorder *audit.Recorder,
 ) {
 	name := e.Data.CommandName()
 	c := command.DefaultRegistry.Get(name)
@@ -113,7 +113,7 @@ func (b *Bot) onApplicationCommand(
 			Msg("interaction_kind_unhandled")
 		return
 	}
-	inv := &command.Invocation{Data: &cmdadapter.SlashInteractionContext{
+	inv := &command.Invocation{Data: &adapter.SlashInteractionContext{
 		Invoker: who, Responder: responder, API: api,
 		Arguments: reply.SlashArguments(data),
 		Storage:   b.storage, Config: b.cfg, Audit: recorder, AppLog: b.log,
@@ -126,7 +126,7 @@ func (b *Bot) onApplicationCommand(
 }
 
 // onComponentInteraction dispatches a click on a message component.
-func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, recorder *cmdaudit.Recorder) {
+func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, recorder *audit.Recorder) {
 	customID := e.Data.CustomID()
 	b.log.Debug().Str("custom_id", customID).Msg("component_interaction")
 
@@ -142,7 +142,7 @@ func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, recor
 		return
 	}
 
-	handler, ok := command.Root(matched).(cmdadapter.ComponentInteractionHandler)
+	handler, ok := command.Root(matched).(adapter.ComponentInteractionHandler)
 	if !ok {
 		b.log.Warn().Str("command", matched.Name()).Msg("component_handler_missing")
 		return
@@ -153,7 +153,7 @@ func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, recor
 
 	b.dispatchInteraction(who, responder, "component", matched.Name(), func(cmdCtx context.Context) error {
 		_ = cmdCtx
-		return handler.Component(&cmdadapter.ComponentInteractionContext{
+		return handler.Component(&adapter.ComponentInteractionContext{
 			Invoker:     who,
 			Responder:   responder,
 			API:         reply.NewSessionAPI(e.Client()),

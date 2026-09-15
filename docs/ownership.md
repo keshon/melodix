@@ -199,7 +199,7 @@ Known gaps. An honest list is worth more than a clean one.
 - **Reply errors** are ignored at every call site in `internal/command`, which
   is defensible — the interaction is gone by the time one fails — but means no
   command can act on one. What was the actual defect, the silence, is fixed:
-  `cmdadapter` reports every failed reply as `reply_failed` before returning
+  `adapter` reports every failed reply as `reply_failed` before returning
   it.
 - **`kkdai`'s `init()`** rewrites a third-party package's global for the whole
   process on import. The library offers no narrower knob.

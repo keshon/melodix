@@ -7,7 +7,7 @@ import (
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/command/music/playback"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/keshon/melodix/pkg/music/sources/soundcloud"
@@ -51,7 +51,7 @@ func buttonID(source, payload string) (string, bool) {
 // The dispatcher reaches the click handler through this interface; asserting it
 // here turns a signature drift into a build failure rather than buttons that
 // quietly stop responding.
-var _ cmdadapter.ComponentInteractionHandler = (*Search)(nil)
+var _ adapter.ComponentInteractionHandler = (*Search)(nil)
 
 // Search offers a pick-one chooser for a query instead of /play's
 // take-the-first-hit. Radio is absent on purpose: a stream has nothing to rank.
@@ -68,22 +68,22 @@ func (c *Search) Group() string            { return "music" }
 func (c *Search) Category() string         { return "🎵 Music" }
 func (c *Search) UserPermissions() []int64 { return []int64{} }
 
-func (c *Search) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *Search) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []cmdadapter.SlashOption{
+		Options: []adapter.SlashOption{
 			{
-				Type:        cmdadapter.OptionString,
+				Type:        adapter.OptionString,
 				Name:        "query",
 				Description: "What to search for",
 				Required:    true,
 			},
 			{
-				Type:        cmdadapter.OptionString,
+				Type:        adapter.OptionString,
 				Name:        "source",
 				Description: "Where to search (YouTube by default)",
-				Choices: []cmdadapter.SlashChoice{
+				Choices: []adapter.SlashChoice{
 					{Name: "YouTube", Value: sources.YouTube},
 					{Name: "SoundCloud", Value: sources.SoundCloud},
 				},
@@ -92,18 +92,18 @@ func (c *Search) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Search) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
+func (c *Search) Run(slashCtx *adapter.SlashInteractionContext) error {
 	query := strings.TrimSpace(slashCtx.StringOption("query"))
 	wanted := slashCtx.StringOption("source")
 	searcher, tag, err := c.pick(wanted)
 	if err != nil {
-		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
+		return slashCtx.RespondEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("%v", err),
 		})
 	}
 	if query == "" {
-		return slashCtx.RespondEphemeral(&cmdadapter.Embed{
+		return slashCtx.RespondEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "A search query is required.",
 		})
@@ -117,7 +117,7 @@ func (c *Search) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	hits, err := searcher.Search(query, resultCount)
 	if err != nil {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🔎 Search",
 			Description: fmt.Sprintf("Nothing found for %q.", query),
 			Color:       reply.EmbedColor,
@@ -126,7 +126,7 @@ func (c *Search) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 	}
 
 	lines := make([]string, 0, len(hits))
-	buttons := make([]cmdadapter.Button, 0, len(hits))
+	buttons := make([]adapter.Button, 0, len(hits))
 	for _, h := range hits {
 		// The pick travels entirely in the button id, so choosing needs no
 		// server-side memory of what was offered: the chooser survives a bot
@@ -137,13 +137,13 @@ func (c *Search) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 		}
 		pos := len(lines) + 1
 		lines = append(lines, common.FormatSearchLine(pos, h.Title, h.URL, h.Author, h.Duration))
-		buttons = append(buttons, cmdadapter.Button{
+		buttons = append(buttons, adapter.Button{
 			Label:    fmt.Sprintf("%d", pos),
 			CustomID: id,
 		})
 	}
 	if len(buttons) == 0 {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🔎 Search",
 			Description: fmt.Sprintf("Nothing playable found for %q.", query),
 			Color:       reply.EmbedColor,
@@ -151,27 +151,27 @@ func (c *Search) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 		return nil
 	}
 
-	embed := &cmdadapter.Embed{
+	embed := &adapter.Embed{
 		Title:       "🔎 Search results",
 		Description: strings.Join(lines, "\n"),
 		Color:       reply.EmbedColor,
 		Footer:      "Pick a number to queue it",
 	}
-	return slashCtx.FollowupWith(cmdadapter.Reply{
+	return slashCtx.FollowupWith(adapter.Reply{
 		Embed: embed, Ephemeral: true,
-		Buttons: []cmdadapter.ActionRow{{Buttons: buttons}},
+		Buttons: []adapter.ActionRow{{Buttons: buttons}},
 	})
 }
 
 // Component handles a click on one of the chooser's buttons.
-func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) error {
+func (c *Search) Component(compCtx *adapter.ComponentInteractionContext) error {
 	source, payload, ok := parseButtonID(compCtx.CustomID())
 	if !ok {
 		return nil
 	}
 	if !knownSource(source) {
 		// A chooser from a future version, or a hand-crafted id.
-		return compCtx.RespondEphemeral(&cmdadapter.Embed{
+		return compCtx.RespondEphemeral(&adapter.Embed{
 			Title:       "🔎 Search",
 			Description: "This result is from a version of the bot that is no longer running. Run `/search` again.",
 			Color:       reply.EmbedColor,
@@ -180,7 +180,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	// Rewriting the chooser both acknowledges the click and takes the buttons
 	// away, so a result cannot be queued twice by pressing again.
-	if err := compCtx.ReplaceMessage(&cmdadapter.Embed{
+	if err := compCtx.ReplaceMessage(&adapter.Embed{
 		Title:       "🔎 Search",
 		Description: "Adding to the queue…",
 		Color:       reply.EmbedColor,
@@ -195,7 +195,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	url, err := c.trackURL(source, payload)
 	if err != nil {
-		compCtx.FollowupEphemeral(&cmdadapter.Embed{
+		compCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Could not look that track up again: %v", err),
 		})
@@ -204,7 +204,7 @@ func (c *Search) Component(compCtx *cmdadapter.ComponentInteractionContext) erro
 
 	tracks, err := c.Bot.ResolveTracks(target.GuildID, url, "", "")
 	if err != nil || len(tracks) == 0 {
-		compCtx.FollowupEphemeral(&cmdadapter.Embed{
+		compCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: fmt.Sprintf("Failed to resolve track: %v", err),
 		})

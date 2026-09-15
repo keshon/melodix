@@ -11,7 +11,7 @@ import (
 	"unicode"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 
 	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/rs/zerolog"
@@ -68,8 +68,8 @@ func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, lo
 	commands := registry.GetAll()
 
 	sort.Slice(commands, func(i, j int) bool {
-		metaI, _ := command.Root(commands[i]).(cmdadapter.Meta)
-		metaJ, _ := command.Root(commands[j]).(cmdadapter.Meta)
+		metaI, _ := command.Root(commands[i]).(adapter.Meta)
+		metaJ, _ := command.Root(commands[j]).(adapter.Meta)
 
 		catI := ""
 		catJ := ""
@@ -96,7 +96,7 @@ func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, lo
 	for _, c := range commands {
 		root := command.Root(c)
 
-		meta, _ := root.(cmdadapter.Meta)
+		meta, _ := root.(adapter.Meta)
 		cat := ""
 		if meta != nil {
 			cat = meta.Category()
@@ -154,7 +154,7 @@ func renderDiscordCommand(buf *bytes.Buffer, c command.Command) {
 
 	fmt.Fprintf(buf, "- **%s** — %s\n", display, c.Description())
 
-	sp, ok := c.(cmdadapter.SlashProvider)
+	sp, ok := c.(adapter.SlashProvider)
 	if !ok {
 		return
 	}
@@ -165,7 +165,7 @@ func renderDiscordCommand(buf *bytes.Buffer, c command.Command) {
 	}
 
 	var sub strings.Builder
-	cmdadapter.AppendSlashSubcommands(&sub, def.Name, def.Options, "")
+	adapter.AppendSlashSubcommands(&sub, def.Name, def.Options, "")
 	for _, line := range strings.Split(sub.String(), "\n") {
 		// Lines look like:  `/help category` - description
 		line = strings.TrimSpace(line)

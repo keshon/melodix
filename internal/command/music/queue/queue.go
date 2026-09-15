@@ -5,7 +5,7 @@ import (
 
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sources/youtube"
@@ -21,14 +21,14 @@ func (c *Queue) Group() string            { return "music" }
 func (c *Queue) Category() string         { return "🎵 Music" }
 func (c *Queue) UserPermissions() []int64 { return []int64{} }
 
-func (c *Queue) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *Queue) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *Queue) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
+func (c *Queue) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)
@@ -36,7 +36,7 @@ func (c *Queue) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	p := c.Bot.GetOrCreatePlayer(slashCtx.GuildID())
 	if p == nil {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -53,7 +53,7 @@ func (c *Queue) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 		nowPlaying = &current
 	}
 
-	embed := &cmdadapter.Embed{
+	embed := &adapter.Embed{
 		Title:       "🎵 Queue",
 		Description: common.FormatQueueBody(nowPlaying, upcoming),
 		Color:       reply.EmbedColor,

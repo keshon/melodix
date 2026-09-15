@@ -515,7 +515,7 @@ func TestLibraryStaysDiscordFree(t *testing.T) {
 
 // TestDiscordStaysBehindTheAdapter holds the boundary the disgo migration is
 // being done behind: one package names the client library, and everything
-// above it speaks cmdadapter's neutral types. Absolute for the same reason as
+// above it speaks adapter's neutral types. Absolute for the same reason as
 // the check above: a single import outside the adapter undoes the property.
 //
 // This catches an import, which is the cheap half. The expensive half is a
@@ -546,7 +546,7 @@ func TestDiscordStaysBehindTheAdapter(t *testing.T) {
 			for _, lib := range project.discordLibraries {
 				if strings.Contains(path, lib) {
 					t.Errorf("%s imports %q — only %s may name a Discord client "+
-						"library; reach it through cmdadapter's neutral types",
+						"library; reach it through adapter's neutral types",
 						f.path, path, project.discordAdapterPrefix)
 				}
 			}

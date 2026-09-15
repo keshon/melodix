@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/perm"
 )
 
@@ -19,13 +19,13 @@ import (
 func WithUserPermissionCheck() command.Middleware {
 	return func(c command.Command) command.Command {
 		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
-			cc := cmdadapter.ContextFromInvocation(inv)
+			cc := adapter.ContextFromInvocation(inv)
 			if cc == nil {
 				return c.Run(ctx, inv)
 			}
 			// No guild means no roles to check against, and an unidentifiable
 			// caller means the answer would be about nobody.
-			if cc.GuildID() == "" || cc.UserID() == cmdadapter.UnknownUserID {
+			if cc.GuildID() == "" || cc.UserID() == adapter.UnknownUserID {
 				return c.Run(ctx, inv)
 			}
 
@@ -37,7 +37,7 @@ func WithUserPermissionCheck() command.Middleware {
 				return c.Run(ctx, inv)
 			}
 
-			meta, ok := command.Root(c).(cmdadapter.Meta)
+			meta, ok := command.Root(c).(adapter.Meta)
 			if !ok {
 				return c.Run(ctx, inv)
 			}

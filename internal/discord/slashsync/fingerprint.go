@@ -1,4 +1,4 @@
-package cmdsync
+package slashsync
 
 import (
 	"crypto/sha1"
@@ -8,7 +8,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 // fingerprint is a stable digest of the fields that matter for registration.
@@ -21,7 +21,7 @@ import (
 //
 // The digest is never persisted -- both sides are computed fresh on every
 // sync -- so the algorithm can change without a migration.
-func fingerprint(c *cmdadapter.SlashCommand) string {
+func fingerprint(c *adapter.SlashCommand) string {
 	if c == nil {
 		return ""
 	}
@@ -41,7 +41,7 @@ func fingerprint(c *cmdadapter.SlashCommand) string {
 // normalizeOptions renders options into a sorted, deterministic structure.
 // Discord does not promise an order and neither library preserves one, so a
 // declaration reordered in source must not read as a change.
-func normalizeOptions(opts []cmdadapter.SlashOption) []map[string]any {
+func normalizeOptions(opts []adapter.SlashOption) []map[string]any {
 	out := make([]map[string]any, 0, len(opts))
 	for _, o := range opts {
 		entry := map[string]any{
@@ -70,7 +70,7 @@ func normalizeOptions(opts []cmdadapter.SlashOption) []map[string]any {
 	return out
 }
 
-func normalizeChoices(choices []cmdadapter.SlashChoice) []map[string]any {
+func normalizeChoices(choices []adapter.SlashChoice) []map[string]any {
 	out := make([]map[string]any, 0, len(choices))
 	for _, c := range choices {
 		out = append(out, map[string]any{
@@ -89,18 +89,18 @@ func normalizeChoices(choices []cmdadapter.SlashChoice) []map[string]any {
 
 // fromWire converts a command Discord reported back into the neutral
 // declaration, so it can be fingerprinted against what the registry declares.
-func fromWire(c discord.ApplicationCommand) *cmdadapter.SlashCommand {
+func fromWire(c discord.ApplicationCommand) *adapter.SlashCommand {
 	if c == nil {
 		return nil
 	}
-	out := &cmdadapter.SlashCommand{Name: c.Name()}
+	out := &adapter.SlashCommand{Name: c.Name()}
 	switch c.Type() {
 	case discord.ApplicationCommandTypeMessage:
-		out.Type = cmdadapter.MessageMenuCommand
+		out.Type = adapter.MessageMenuCommand
 	case discord.ApplicationCommandTypeUser:
-		out.Type = cmdadapter.UserMenuCommand
+		out.Type = adapter.UserMenuCommand
 	default:
-		out.Type = cmdadapter.ChatInputCommand
+		out.Type = adapter.ChatInputCommand
 	}
 	if slash, ok := c.(discord.SlashCommand); ok {
 		out.Description = slash.Description
@@ -109,39 +109,39 @@ func fromWire(c discord.ApplicationCommand) *cmdadapter.SlashCommand {
 	return out
 }
 
-func optionsFromWire(opts []discord.ApplicationCommandOption) []cmdadapter.SlashOption {
+func optionsFromWire(opts []discord.ApplicationCommandOption) []adapter.SlashOption {
 	if len(opts) == 0 {
 		return nil
 	}
-	out := make([]cmdadapter.SlashOption, 0, len(opts))
+	out := make([]adapter.SlashOption, 0, len(opts))
 	for _, o := range opts {
 		out = append(out, optionFromWire(o))
 	}
 	return out
 }
 
-func optionFromWire(o discord.ApplicationCommandOption) cmdadapter.SlashOption {
+func optionFromWire(o discord.ApplicationCommandOption) adapter.SlashOption {
 	switch v := o.(type) {
 	case discord.ApplicationCommandOptionSubCommand:
-		return cmdadapter.SlashOption{
-			Type: cmdadapter.OptionSubCommand, Name: v.Name,
+		return adapter.SlashOption{
+			Type: adapter.OptionSubCommand, Name: v.Name,
 			Description: v.Description, Options: optionsFromWire(v.Options),
 		}
 	case discord.ApplicationCommandOptionSubCommandGroup:
-		subs := make([]cmdadapter.SlashOption, 0, len(v.Options))
+		subs := make([]adapter.SlashOption, 0, len(v.Options))
 		for _, sub := range v.Options {
-			subs = append(subs, cmdadapter.SlashOption{
-				Type: cmdadapter.OptionSubCommand, Name: sub.Name,
+			subs = append(subs, adapter.SlashOption{
+				Type: adapter.OptionSubCommand, Name: sub.Name,
 				Description: sub.Description, Options: optionsFromWire(sub.Options),
 			})
 		}
-		return cmdadapter.SlashOption{
-			Type: cmdadapter.OptionSubCommandGroup, Name: v.Name,
+		return adapter.SlashOption{
+			Type: adapter.OptionSubCommandGroup, Name: v.Name,
 			Description: v.Description, Options: subs,
 		}
 	case discord.ApplicationCommandOptionInt:
-		out := cmdadapter.SlashOption{
-			Type: cmdadapter.OptionInteger, Name: v.Name,
+		out := adapter.SlashOption{
+			Type: adapter.OptionInteger, Name: v.Name,
 			Description: v.Description, Required: v.Required,
 		}
 		if v.MinValue != nil {
@@ -152,26 +152,26 @@ func optionFromWire(o discord.ApplicationCommandOption) cmdadapter.SlashOption {
 			out.MaxValue = float64(*v.MaxValue)
 		}
 		for _, c := range v.Choices {
-			out.Choices = append(out.Choices, cmdadapter.SlashChoice{Name: c.Name, Value: c.Value})
+			out.Choices = append(out.Choices, adapter.SlashChoice{Name: c.Name, Value: c.Value})
 		}
 		return out
 	case discord.ApplicationCommandOptionBool:
-		return cmdadapter.SlashOption{
-			Type: cmdadapter.OptionBoolean, Name: v.Name,
+		return adapter.SlashOption{
+			Type: adapter.OptionBoolean, Name: v.Name,
 			Description: v.Description, Required: v.Required,
 		}
 	case discord.ApplicationCommandOptionString:
-		out := cmdadapter.SlashOption{
-			Type: cmdadapter.OptionString, Name: v.Name,
+		out := adapter.SlashOption{
+			Type: adapter.OptionString, Name: v.Name,
 			Description: v.Description, Required: v.Required,
 		}
 		for _, c := range v.Choices {
-			out.Choices = append(out.Choices, cmdadapter.SlashChoice{Name: c.Name, Value: c.Value})
+			out.Choices = append(out.Choices, adapter.SlashChoice{Name: c.Name, Value: c.Value})
 		}
 		return out
 	default:
-		return cmdadapter.SlashOption{
-			Type: cmdadapter.OptionString, Name: o.OptionName(),
+		return adapter.SlashOption{
+			Type: adapter.OptionString, Name: o.OptionName(),
 		}
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/cmdqueue"
+	"github.com/keshon/melodix/internal/discord/queue"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
@@ -25,7 +25,7 @@ type Bot struct {
 	// lifetime, like the voice service: a command outliving the session it
 	// arrived on is a command that cannot answer, not a command to abandon
 	// halfway through whatever it was doing to the player.
-	commands *cmdqueue.Queue
+	commands *queue.Queue
 
 	// Replaced wholesale when a session opens and cleared when one closes, so
 	// a reader gets a live one or the fallback, never a half-torn one.

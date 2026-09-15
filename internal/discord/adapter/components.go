@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 // Button is a control under a message. CustomID comes back when it is pressed,
 // and is the only thing that does -- a chooser that puts everything it needs

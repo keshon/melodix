@@ -2,7 +2,7 @@
 //
 // Build a client, connect, log, and record what a watchdog needs to judge the
 // connection. Nothing above it names a Discord library: commands reach Discord
-// through cmdadapter's neutral types, and reply supplies the implementations.
+// through adapter's neutral types, and reply supplies the implementations.
 package session
 
 import (

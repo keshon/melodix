@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 // Embed is a rich message in the shape melodix actually writes them.
 //

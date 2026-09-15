@@ -3,7 +3,7 @@ package discord
 import (
 	"fmt"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/sources"
@@ -25,7 +25,7 @@ type VoiceAPI interface {
 	// AnnouncePlayback answers the interaction with embed and makes that
 	// message the guild's playback status message, so the asynchronous
 	// transitions can keep editing it past the token's expiry.
-	AnnouncePlayback(to cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error
+	AnnouncePlayback(to adapter.Interaction, guildID string, embed *adapter.Embed) error
 
 	// SetGuildMusicNotifyChannel stores the slash command text channel for async
 	// playback failure UI.
@@ -70,7 +70,7 @@ func (b *Bot) ResolveTracks(guildID, input, source, parser string) ([]sources.Tr
 
 // AnnouncePlayback answers the interaction and registers the reply as the
 // guild's playback status message (delegates to voice service).
-func (b *Bot) AnnouncePlayback(to cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error {
+func (b *Bot) AnnouncePlayback(to adapter.Interaction, guildID string, embed *adapter.Embed) error {
 	if b.voice == nil {
 		return nil
 	}

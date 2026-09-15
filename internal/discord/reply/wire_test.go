@@ -5,7 +5,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 func strPtr(s string) *string { return &s }
@@ -33,14 +33,14 @@ func TestSubcommandGroupsAreRebuiltIntoATree(t *testing.T) {
 	}
 
 	args := SlashArguments(data)
-	ctx := &cmdadapter.SlashInteractionContext{Arguments: args}
+	ctx := &adapter.SlashInteractionContext{Arguments: args}
 
 	group, ok := ctx.FirstOption()
-	if !ok || group.Name != "commands" || group.Type != cmdadapter.OptionSubCommandGroup {
+	if !ok || group.Name != "commands" || group.Type != adapter.OptionSubCommandGroup {
 		t.Fatalf("group = %+v", group)
 	}
 	sub, ok := group.First()
-	if !ok || sub.Name != "enable" || sub.Type != cmdadapter.OptionSubCommand {
+	if !ok || sub.Name != "enable" || sub.Type != adapter.OptionSubCommand {
 		t.Fatalf("subcommand = %+v", sub)
 	}
 	arg, ok := sub.Option("group")
@@ -60,7 +60,7 @@ func TestBareSubcommandHasNoGroupAboveIt(t *testing.T) {
 	if len(args) != 1 {
 		t.Fatalf("args = %+v, want one", args)
 	}
-	if args[0].Name != "now" || args[0].Type != cmdadapter.OptionSubCommand {
+	if args[0].Name != "now" || args[0].Type != adapter.OptionSubCommand {
 		t.Errorf("subcommand = %+v", args[0])
 	}
 }
@@ -74,7 +74,7 @@ func TestPlainArgumentsStayAtTheTopLevel(t *testing.T) {
 		},
 	}
 
-	ctx := &cmdadapter.SlashInteractionContext{Arguments: SlashArguments(data)}
+	ctx := &adapter.SlashInteractionContext{Arguments: SlashArguments(data)}
 	if got := ctx.StringOption("input"); got != "never gonna give" {
 		t.Errorf("input = %q", got)
 	}
@@ -95,7 +95,7 @@ func TestValuesDecodeToTheDeclaredType(t *testing.T) {
 		},
 	}
 
-	ctx := &cmdadapter.SlashInteractionContext{Arguments: SlashArguments(data)}
+	ctx := &adapter.SlashInteractionContext{Arguments: SlashArguments(data)}
 	if got := ctx.IntOption("page"); got != 7 {
 		t.Errorf("page = %d, want 7", got)
 	}
@@ -111,7 +111,7 @@ func TestValuesDecodeToTheDeclaredType(t *testing.T) {
 // An empty invocation is a real case -- /settings with no group -- and has to
 // answer rather than panic.
 func TestEmptyInvocationAnswersEmpty(t *testing.T) {
-	ctx := &cmdadapter.SlashInteractionContext{
+	ctx := &adapter.SlashInteractionContext{
 		Arguments: SlashArguments(discord.SlashCommandInteractionData{}),
 	}
 	if opts := ctx.Options(); len(opts) != 0 {
@@ -152,12 +152,12 @@ func TestLeafOrderIsStable(t *testing.T) {
 // a Type field. Registering one as the wrong kind is accepted by Discord and
 // then unusable, with no error to notice.
 func TestCommandKindsRenderToTheirOwnTypes(t *testing.T) {
-	chat := SlashCommandCreate(&cmdadapter.SlashCommand{Name: "play", Description: "play"})
+	chat := SlashCommandCreate(&adapter.SlashCommand{Name: "play", Description: "play"})
 	if _, ok := chat.(discord.SlashCommandCreate); !ok {
 		t.Errorf("a chat-input command rendered as %T", chat)
 	}
-	menu := SlashCommandCreate(&cmdadapter.SlashCommand{
-		Type: cmdadapter.MessageMenuCommand, Name: "Add to queue",
+	menu := SlashCommandCreate(&adapter.SlashCommand{
+		Type: adapter.MessageMenuCommand, Name: "Add to queue",
 	})
 	if _, ok := menu.(discord.MessageCommandCreate); !ok {
 		t.Errorf("a message-menu command rendered as %T", menu)
@@ -170,15 +170,15 @@ func TestCommandKindsRenderToTheirOwnTypes(t *testing.T) {
 // Nesting is typed per level in disgo: a group holds subcommands, a subcommand
 // holds plain arguments. Getting it wrong is a registration Discord rejects.
 func TestNestedDeclarationsRenderAtEachLevel(t *testing.T) {
-	def := &cmdadapter.SlashCommand{
+	def := &adapter.SlashCommand{
 		Name:        "settings",
 		Description: "settings",
-		Options: []cmdadapter.SlashOption{{
-			Type: cmdadapter.OptionSubCommandGroup, Name: "commands", Description: "g",
-			Options: []cmdadapter.SlashOption{{
-				Type: cmdadapter.OptionSubCommand, Name: "enable", Description: "s",
-				Options: []cmdadapter.SlashOption{{
-					Type: cmdadapter.OptionString, Name: "group", Description: "a", Required: true,
+		Options: []adapter.SlashOption{{
+			Type: adapter.OptionSubCommandGroup, Name: "commands", Description: "g",
+			Options: []adapter.SlashOption{{
+				Type: adapter.OptionSubCommand, Name: "enable", Description: "s",
+				Options: []adapter.SlashOption{{
+					Type: adapter.OptionString, Name: "group", Description: "a", Required: true,
 				}},
 			}},
 		}},
@@ -219,7 +219,7 @@ func TestNoRowsRendersAnEmptyListRatherThanNil(t *testing.T) {
 // The chooser puts everything it needs into the button id, so the id is the
 // one field that must survive intact -- lose it and a click means nothing.
 func TestButtonsKeepTheirCustomID(t *testing.T) {
-	rows := Components([]cmdadapter.ActionRow{{Buttons: []cmdadapter.Button{
+	rows := Components([]adapter.ActionRow{{Buttons: []adapter.Button{
 		{Label: "1", CustomID: "search:yt:abc123"},
 		{Label: "2", CustomID: "search:sc:def456", Disabled: true},
 	}}})
@@ -250,9 +250,9 @@ func TestButtonsKeepTheirCustomID(t *testing.T) {
 // Taking the address of a range variable is the classic way to give every
 // field the last one's value.
 func TestEmbedFieldsKeepTheirOwnInlineFlag(t *testing.T) {
-	e := Embed(&cmdadapter.Embed{
+	e := Embed(&adapter.Embed{
 		Title: "t", Description: "d", Footer: "f", ImageURL: "http://x/y.png",
-		Fields: []cmdadapter.EmbedField{
+		Fields: []adapter.EmbedField{
 			{Name: "a", Value: "1", Inline: true},
 			{Name: "b", Value: "2", Inline: false},
 			{Name: "c", Value: "3", Inline: true},

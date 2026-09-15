@@ -10,8 +10,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
-	"github.com/keshon/melodix/internal/discord/cmdqueue"
+	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/queue"
 )
 
 func newDispatchBot(t *testing.T, parallelism int) *Bot {
@@ -19,7 +19,7 @@ func newDispatchBot(t *testing.T, parallelism int) *Bot {
 	b := &Bot{
 		cfg:      &config.Config{CommandParallelism: parallelism},
 		log:      zerolog.Nop(),
-		commands: cmdqueue.New(zerolog.Nop(), parallelism),
+		commands: queue.New(zerolog.Nop(), parallelism),
 	}
 	b.setSessionContext(context.Background())
 	t.Cleanup(func() {
@@ -30,8 +30,8 @@ func newDispatchBot(t *testing.T, parallelism int) *Bot {
 	return b
 }
 
-func inGuild(id string) cmdadapter.Invoker {
-	return cmdadapter.Invoker{GuildID: id, ChannelID: "c" + id}
+func inGuild(id string) adapter.Invoker {
+	return adapter.Invoker{GuildID: id, ChannelID: "c" + id}
 }
 
 // The whole point: the gateway read goroutine hands the body off and goes back
@@ -161,7 +161,7 @@ func TestDirectMessagesDoNotShareOneLane(t *testing.T) {
 	blocked := make(chan struct{})
 	release := make(chan struct{})
 	defer close(release)
-	b.dispatchInteraction(cmdadapter.Invoker{ChannelID: "dm1"}, nil, "slash", "slow",
+	b.dispatchInteraction(adapter.Invoker{ChannelID: "dm1"}, nil, "slash", "slow",
 		func(context.Context) error {
 			close(blocked)
 			<-release
@@ -170,7 +170,7 @@ func TestDirectMessagesDoNotShareOneLane(t *testing.T) {
 	<-blocked
 
 	ran := make(chan struct{})
-	b.dispatchInteraction(cmdadapter.Invoker{ChannelID: "dm2"}, nil, "slash", "quick",
+	b.dispatchInteraction(adapter.Invoker{ChannelID: "dm2"}, nil, "slash", "quick",
 		func(context.Context) error {
 			close(ran)
 			return nil

@@ -7,7 +7,7 @@ import (
 
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 func runHelpByCategory() string {
@@ -17,7 +17,7 @@ func runHelpByCategory() string {
 	categorySort := make(map[string]int)
 
 	for _, c := range all {
-		meta, _ := command.Root(c).(cmdadapter.Meta)
+		meta, _ := command.Root(c).(adapter.Meta)
 		cat := ""
 		if meta != nil {
 			cat = meta.Category()

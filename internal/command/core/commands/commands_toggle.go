@@ -3,37 +3,37 @@ package commands
 import (
 	"fmt"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/storage"
 )
 
 // RunCmdEnable enables a command group for the guild.
-func RunCmdEnable(ctx *cmdadapter.SlashInteractionContext, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub cmdadapter.SlashArgument) error {
+func RunCmdEnable(ctx *adapter.SlashInteractionContext, stor storage.Storage, syncer adapter.CommandSyncer, sub adapter.SlashArgument) error {
 	group := subOptionString(sub, "group")
 	return runCmdSetGroupState(ctx, stor, syncer, group, true)
 }
 
 // RunCmdDisable disables a command group for the guild.
-func RunCmdDisable(ctx *cmdadapter.SlashInteractionContext, stor storage.Storage, syncer cmdadapter.CommandSyncer, sub cmdadapter.SlashArgument) error {
+func RunCmdDisable(ctx *adapter.SlashInteractionContext, stor storage.Storage, syncer adapter.CommandSyncer, sub adapter.SlashArgument) error {
 	group := subOptionString(sub, "group")
 	return runCmdSetGroupState(ctx, stor, syncer, group, false)
 }
 
-func runCmdSetGroupState(ctx *cmdadapter.SlashInteractionContext, stor storage.Storage, syncer cmdadapter.CommandSyncer, group string, enabled bool) error {
+func runCmdSetGroupState(ctx *adapter.SlashInteractionContext, stor storage.Storage, syncer adapter.CommandSyncer, group string, enabled bool) error {
 	if group == "" {
-		return ctx.RespondEphemeral(&cmdadapter.Embed{
+		return ctx.RespondEphemeral(&adapter.Embed{
 			Description: "Missing required group option.",
 		})
 	}
 
 	if group == "core" && !enabled {
-		return ctx.RespondEphemeral(&cmdadapter.Embed{
+		return ctx.RespondEphemeral(&adapter.Embed{
 			Description: "You can't disable the `core` group. It's the backbone of the discord.",
 		})
 	}
 
 	var err error
-	embed := &cmdadapter.Embed{
+	embed := &adapter.Embed{
 		Footer: "Use /settings commands status to check which commands are disabled.",
 	}
 
@@ -60,7 +60,7 @@ func runCmdSetGroupState(ctx *cmdadapter.SlashInteractionContext, stor storage.S
 	return ctx.RespondEphemeral(embed)
 }
 
-func subOptionString(sub cmdadapter.SlashArgument, name string) string {
+func subOptionString(sub adapter.SlashArgument, name string) string {
 	for _, opt := range sub.Options {
 		if opt.Name == name {
 			return opt.StringValue()

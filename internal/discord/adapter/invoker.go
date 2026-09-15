@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 // Invoker is who ran a command and where, resolved once when the context is
 // built rather than read back off a wire event by every accessor.

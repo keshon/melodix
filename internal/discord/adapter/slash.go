@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 // SlashCommand is how a command declares itself to Discord, in terms a command
 // can write without importing the library that registers it.

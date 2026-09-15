@@ -2,7 +2,7 @@ package help
 
 import (
 	"github.com/keshon/buildinfo"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
@@ -16,23 +16,23 @@ func (c *Help) UserPermissions() []int64 {
 	return []int64{}
 }
 
-func (c *Help) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *Help) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []cmdadapter.SlashOption{
+		Options: []adapter.SlashOption{
 			{
-				Type:        cmdadapter.OptionSubCommand,
+				Type:        adapter.OptionSubCommand,
 				Name:        "category",
 				Description: "View commands grouped by category",
 			},
 			{
-				Type:        cmdadapter.OptionSubCommand,
+				Type:        adapter.OptionSubCommand,
 				Name:        "group",
 				Description: "View commands grouped by group",
 			},
 			{
-				Type:        cmdadapter.OptionSubCommand,
+				Type:        adapter.OptionSubCommand,
 				Name:        "flat",
 				Description: "View all commands as a flat list",
 			},
@@ -40,7 +40,7 @@ func (c *Help) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Help) Run(context *cmdadapter.SlashInteractionContext) error {
+func (c *Help) Run(context *adapter.SlashInteractionContext) error {
 
 	if err := context.DeferEphemeral(); err != nil {
 		context.AppLog.Error().Err(err).Msg("help_defer_failed")
@@ -49,7 +49,7 @@ func (c *Help) Run(context *cmdadapter.SlashInteractionContext) error {
 
 	sub, ok := context.FirstOption()
 	if !ok {
-		return context.FollowupEphemeral(&cmdadapter.Embed{
+		return context.FollowupEphemeral(&adapter.Embed{
 			Description: "No subcommand provided. Use `category`, `group`, or `flat`.",
 		})
 	}
@@ -65,7 +65,7 @@ func (c *Help) Run(context *cmdadapter.SlashInteractionContext) error {
 	}
 
 	info := buildinfo.Get()
-	embed := &cmdadapter.Embed{
+	embed := &adapter.Embed{
 		Title:       info.Project + " Help",
 		Description: output,
 		Color:       reply.EmbedColor,

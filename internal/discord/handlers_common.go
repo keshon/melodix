@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 type commandRunOptions struct {
@@ -59,7 +59,7 @@ func (b *Bot) runWithCommandContext(opts commandRunOptions, fn func(cmdCtx conte
 // It runs on a command worker, not on the gateway read goroutine; see
 // dispatchInteraction.
 func (b *Bot) runGuardedInteraction(
-	r cmdadapter.Responder,
+	r adapter.Responder,
 	kind string,
 	name string,
 	fn func(cmdCtx context.Context) error,
@@ -68,7 +68,7 @@ func (b *Bot) runGuardedInteraction(
 		if r == nil {
 			return
 		}
-		_ = r.Respond(cmdadapter.Reply{Embed: &cmdadapter.Embed{Description: msg}, Ephemeral: true})
+		_ = r.Respond(adapter.Reply{Embed: &adapter.Embed{Description: msg}, Ephemeral: true})
 	}
 
 	// A command that answered through a followup, or by editing a message it
@@ -111,8 +111,8 @@ func (b *Bot) runGuardedInteraction(
 // voice connection. Direct messages have no guild, so they lane by channel --
 // otherwise every DM in the process would queue behind every other.
 func (b *Bot) dispatchInteraction(
-	who cmdadapter.Invoker,
-	r cmdadapter.Responder,
+	who adapter.Invoker,
+	r adapter.Responder,
 	kind string,
 	name string,
 	fn func(cmdCtx context.Context) error,
@@ -130,11 +130,11 @@ func (b *Bot) dispatchInteraction(
 
 	b.log.Warn().Str("kind", kind).Str("command", name).Msg("command_refused_shutting_down")
 	if r != nil {
-		_ = r.Respond(cmdadapter.Reply{Embed: &cmdadapter.Embed{Description: "Bot is shutting down."}, Ephemeral: true})
+		_ = r.Respond(adapter.Reply{Embed: &adapter.Embed{Description: "Bot is shutting down."}, Ephemeral: true})
 	}
 }
 
-func commandLane(who cmdadapter.Invoker) string {
+func commandLane(who adapter.Invoker) string {
 	if who.GuildID != "" {
 		return who.GuildID
 	}

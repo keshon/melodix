@@ -1,6 +1,6 @@
 // Package reply puts things on the wire.
 //
-// It renders cmdadapter's neutral types into Discord's, implements the reply
+// It renders adapter's neutral types into Discord's, implements the reply
 // surface a command works with, and owns the embeds the bot composes for
 // itself. Nothing above it names a Discord library; this is the one package
 // that does, alongside the session and the audio path.
@@ -16,13 +16,13 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 // Embed renders an embed. A nil Embed renders as the zero value, which the
 // callers here never send: they check first, because disgo takes embeds by
 // value and there is no nil to pass through.
-func Embed(e *cmdadapter.Embed) discord.Embed {
+func Embed(e *adapter.Embed) discord.Embed {
 	if e == nil {
 		return discord.Embed{}
 	}
@@ -50,7 +50,7 @@ func Embed(e *cmdadapter.Embed) discord.Embed {
 
 // Embeds wraps one embed as the slice every send takes, or an empty slice for
 // a nil embed so a caller cannot accidentally send a blank one.
-func Embeds(e *cmdadapter.Embed) []discord.Embed {
+func Embeds(e *adapter.Embed) []discord.Embed {
 	if e == nil {
 		return nil
 	}
@@ -60,7 +60,7 @@ func Embeds(e *cmdadapter.Embed) []discord.Embed {
 // Components renders rows of controls. Empty stays empty: sending an empty
 // component list is how a chooser is consumed, and that is different from
 // sending none at all.
-func Components(rows []cmdadapter.ActionRow) []discord.LayoutComponent {
+func Components(rows []adapter.ActionRow) []discord.LayoutComponent {
 	out := make([]discord.LayoutComponent, 0, len(rows))
 	for _, row := range rows {
 		buttons := make([]discord.InteractiveComponent, 0, len(row.Buttons))
@@ -77,13 +77,13 @@ func Components(rows []cmdadapter.ActionRow) []discord.LayoutComponent {
 	return out
 }
 
-func buttonStyle(s cmdadapter.ButtonStyle) discord.ButtonStyle {
+func buttonStyle(s adapter.ButtonStyle) discord.ButtonStyle {
 	switch s {
-	case cmdadapter.PrimaryButton:
+	case adapter.PrimaryButton:
 		return discord.ButtonStylePrimary
-	case cmdadapter.SuccessButton:
+	case adapter.SuccessButton:
 		return discord.ButtonStyleSuccess
-	case cmdadapter.DangerButton:
+	case adapter.DangerButton:
 		return discord.ButtonStyleDanger
 	default:
 		return discord.ButtonStyleSecondary
@@ -94,16 +94,16 @@ func buttonStyle(s cmdadapter.ButtonStyle) discord.ButtonStyle {
 //
 // disgo models the three command kinds as three types behind an interface
 // rather than one struct with a Type field, which matches
-// cmdadapter.SlashCommandType's own three-way split -- so this returns the
+// adapter.SlashCommandType's own three-way split -- so this returns the
 // interface and the switch is the whole of the translation.
-func SlashCommandCreate(c *cmdadapter.SlashCommand) discord.ApplicationCommandCreate {
+func SlashCommandCreate(c *adapter.SlashCommand) discord.ApplicationCommandCreate {
 	if c == nil {
 		return nil
 	}
 	switch c.Type {
-	case cmdadapter.MessageMenuCommand:
+	case adapter.MessageMenuCommand:
 		return discord.MessageCommandCreate{Name: c.Name}
-	case cmdadapter.UserMenuCommand:
+	case adapter.UserMenuCommand:
 		return discord.UserCommandCreate{Name: c.Name}
 	default:
 		return discord.SlashCommandCreate{
@@ -114,7 +114,7 @@ func SlashCommandCreate(c *cmdadapter.SlashCommand) discord.ApplicationCommandCr
 	}
 }
 
-func options(opts []cmdadapter.SlashOption) []discord.ApplicationCommandOption {
+func options(opts []adapter.SlashOption) []discord.ApplicationCommandOption {
 	if len(opts) == 0 {
 		return nil
 	}
@@ -129,21 +129,21 @@ func options(opts []cmdadapter.SlashOption) []discord.ApplicationCommandOption {
 // commands -- one Go type per kind -- so an option that this package does not
 // model cannot be built by accident; it falls to a string, which is what an
 // unrecognised argument arrives as anyway.
-func option(o cmdadapter.SlashOption) discord.ApplicationCommandOption {
+func option(o adapter.SlashOption) discord.ApplicationCommandOption {
 	switch o.Type {
-	case cmdadapter.OptionSubCommand:
+	case adapter.OptionSubCommand:
 		return discord.ApplicationCommandOptionSubCommand{
 			Name:        o.Name,
 			Description: o.Description,
 			Options:     subOptions(o.Options),
 		}
-	case cmdadapter.OptionSubCommandGroup:
+	case adapter.OptionSubCommandGroup:
 		return discord.ApplicationCommandOptionSubCommandGroup{
 			Name:        o.Name,
 			Description: o.Description,
 			Options:     subCommands(o.Options),
 		}
-	case cmdadapter.OptionInteger:
+	case adapter.OptionInteger:
 		opt := discord.ApplicationCommandOptionInt{
 			Name:        o.Name,
 			Description: o.Description,
@@ -159,7 +159,7 @@ func option(o cmdadapter.SlashOption) discord.ApplicationCommandOption {
 			opt.MaxValue = &max
 		}
 		return opt
-	case cmdadapter.OptionBoolean:
+	case adapter.OptionBoolean:
 		return discord.ApplicationCommandOptionBool{
 			Name:        o.Name,
 			Description: o.Description,
@@ -180,10 +180,10 @@ func option(o cmdadapter.SlashOption) discord.ApplicationCommandOption {
 // arguments. Anything at the wrong level is dropped rather than coerced --
 // Discord would reject the registration, and inventing a shape here would
 // register a command nobody declared.
-func subCommands(opts []cmdadapter.SlashOption) []discord.ApplicationCommandOptionSubCommand {
+func subCommands(opts []adapter.SlashOption) []discord.ApplicationCommandOptionSubCommand {
 	out := make([]discord.ApplicationCommandOptionSubCommand, 0, len(opts))
 	for _, o := range opts {
-		if o.Type != cmdadapter.OptionSubCommand {
+		if o.Type != adapter.OptionSubCommand {
 			continue
 		}
 		out = append(out, discord.ApplicationCommandOptionSubCommand{
@@ -195,10 +195,10 @@ func subCommands(opts []cmdadapter.SlashOption) []discord.ApplicationCommandOpti
 	return out
 }
 
-func subOptions(opts []cmdadapter.SlashOption) []discord.ApplicationCommandOption {
+func subOptions(opts []adapter.SlashOption) []discord.ApplicationCommandOption {
 	out := make([]discord.ApplicationCommandOption, 0, len(opts))
 	for _, o := range opts {
-		if o.Type == cmdadapter.OptionSubCommand || o.Type == cmdadapter.OptionSubCommandGroup {
+		if o.Type == adapter.OptionSubCommand || o.Type == adapter.OptionSubCommandGroup {
 			continue
 		}
 		out = append(out, option(o))
@@ -206,7 +206,7 @@ func subOptions(opts []cmdadapter.SlashOption) []discord.ApplicationCommandOptio
 	return out
 }
 
-func stringChoices(choices []cmdadapter.SlashChoice) []discord.ApplicationCommandOptionChoiceString {
+func stringChoices(choices []adapter.SlashChoice) []discord.ApplicationCommandOptionChoiceString {
 	if len(choices) == 0 {
 		return nil
 	}
@@ -218,7 +218,7 @@ func stringChoices(choices []cmdadapter.SlashChoice) []discord.ApplicationComman
 	return out
 }
 
-func intChoices(choices []cmdadapter.SlashChoice) []discord.ApplicationCommandOptionChoiceInt {
+func intChoices(choices []adapter.SlashChoice) []discord.ApplicationCommandOptionChoiceInt {
 	if len(choices) == 0 {
 		return nil
 	}
@@ -248,7 +248,7 @@ func choiceInt(v any) int {
 //
 // This is where the two libraries disagree most. discordgo delivers options as
 // a nested tree -- a group holding a subcommand holding its arguments -- and
-// cmdadapter.SlashArgument models that tree because that is what the commands
+// adapter.SlashArgument models that tree because that is what the commands
 // walk. disgo has already resolved it: the subcommand and group names are
 // separate fields and Options is a flat map of the leaves that actually
 // arrived.
@@ -256,24 +256,24 @@ func choiceInt(v any) int {
 // So the tree is rebuilt here rather than the commands being taught a second
 // shape. /settings commands enable <group> has to answer FirstOption with the
 // group either way, or routing silently stops finding its subcommand.
-func SlashArguments(data discord.SlashCommandInteractionData) []cmdadapter.SlashArgument {
+func SlashArguments(data discord.SlashCommandInteractionData) []adapter.SlashArgument {
 	leaves := leafArguments(data.Options)
 
 	if data.SubCommandName == nil {
 		return leaves
 	}
-	sub := cmdadapter.SlashArgument{
+	sub := adapter.SlashArgument{
 		Name:    *data.SubCommandName,
-		Type:    cmdadapter.OptionSubCommand,
+		Type:    adapter.OptionSubCommand,
 		Options: leaves,
 	}
 	if data.SubCommandGroupName == nil {
-		return []cmdadapter.SlashArgument{sub}
+		return []adapter.SlashArgument{sub}
 	}
-	return []cmdadapter.SlashArgument{{
+	return []adapter.SlashArgument{{
 		Name:    *data.SubCommandGroupName,
-		Type:    cmdadapter.OptionSubCommandGroup,
-		Options: []cmdadapter.SlashArgument{sub},
+		Type:    adapter.OptionSubCommandGroup,
+		Options: []adapter.SlashArgument{sub},
 	}}
 }
 
@@ -283,7 +283,7 @@ func SlashArguments(data discord.SlashCommandInteractionData) []cmdadapter.Slash
 // -- they are looked up by name -- but Go randomises map iteration, and a
 // slice whose order changes between two invocations of the same command is
 // the kind of thing that makes a later bug report unreproducible.
-func leafArguments(opts map[string]discord.SlashCommandOption) []cmdadapter.SlashArgument {
+func leafArguments(opts map[string]discord.SlashCommandOption) []adapter.SlashArgument {
 	if len(opts) == 0 {
 		return nil
 	}
@@ -293,10 +293,10 @@ func leafArguments(opts map[string]discord.SlashCommandOption) []cmdadapter.Slas
 	}
 	sort.Strings(names)
 
-	out := make([]cmdadapter.SlashArgument, 0, len(names))
+	out := make([]adapter.SlashArgument, 0, len(names))
 	for _, name := range names {
 		o := opts[name]
-		out = append(out, cmdadapter.SlashArgument{
+		out = append(out, adapter.SlashArgument{
 			Name:  o.Name,
 			Type:  argumentType(o.Type),
 			Value: argumentValue(o),
@@ -316,13 +316,13 @@ func argumentValue(o discord.SlashCommandOption) any {
 		return nil
 	}
 	switch argumentType(o.Type) {
-	case cmdadapter.OptionInteger:
+	case adapter.OptionInteger:
 		var v int64
 		if err := json.Unmarshal(o.Value, &v); err != nil {
 			return nil
 		}
 		return v
-	case cmdadapter.OptionBoolean:
+	case adapter.OptionBoolean:
 		var v bool
 		if err := json.Unmarshal(o.Value, &v); err != nil {
 			return nil
@@ -339,18 +339,18 @@ func argumentValue(o discord.SlashCommandOption) any {
 
 // argumentType is option read backwards. Anything this package does not model
 // reads as a string, matching the registration side.
-func argumentType(t discord.ApplicationCommandOptionType) cmdadapter.SlashOptionType {
+func argumentType(t discord.ApplicationCommandOptionType) adapter.SlashOptionType {
 	switch t {
 	case discord.ApplicationCommandOptionTypeSubCommand:
-		return cmdadapter.OptionSubCommand
+		return adapter.OptionSubCommand
 	case discord.ApplicationCommandOptionTypeSubCommandGroup:
-		return cmdadapter.OptionSubCommandGroup
+		return adapter.OptionSubCommandGroup
 	case discord.ApplicationCommandOptionTypeInt:
-		return cmdadapter.OptionInteger
+		return adapter.OptionInteger
 	case discord.ApplicationCommandOptionTypeBool:
-		return cmdadapter.OptionBoolean
+		return adapter.OptionBoolean
 	default:
-		return cmdadapter.OptionString
+		return adapter.OptionString
 	}
 }
 
@@ -361,15 +361,15 @@ func argumentType(t discord.ApplicationCommandOptionType) cmdadapter.SlashOption
 // Everything the declaration can express is sent, because a declaration is
 // the whole intended state rather than a delta -- anything left out here
 // would silently keep whatever the guild had.
-func SlashCommandUpdate(c *cmdadapter.SlashCommand) discord.ApplicationCommandUpdate {
+func SlashCommandUpdate(c *adapter.SlashCommand) discord.ApplicationCommandUpdate {
 	if c == nil {
 		return nil
 	}
 	name := c.Name
 	switch c.Type {
-	case cmdadapter.MessageMenuCommand:
+	case adapter.MessageMenuCommand:
 		return discord.MessageCommandUpdate{Name: &name}
-	case cmdadapter.UserMenuCommand:
+	case adapter.UserMenuCommand:
 		return discord.UserCommandUpdate{Name: &name}
 	default:
 		description := c.Description

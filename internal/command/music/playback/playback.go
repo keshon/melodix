@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/command/music/common"
@@ -30,12 +30,12 @@ type Target struct {
 // interaction with the reason and reports ok=false, so callers just return.
 //
 // The interaction must already be deferred: every reply here is a followup.
-func Join(bot discord.VoiceAPI, ctx cmdadapter.Interaction) (Target, bool) {
+func Join(bot discord.VoiceAPI, ctx adapter.Interaction) (Target, bool) {
 	guildID := ctx.GuildID()
 
 	voiceState, err := bot.FindUserVoiceState(guildID, ctx.UserID())
 	if err != nil {
-		ctx.FollowupEphemeral(&cmdadapter.Embed{
+		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Voice Error",
 			Description: fmt.Sprintf("%v", err),
 		})
@@ -44,7 +44,7 @@ func Join(bot discord.VoiceAPI, ctx cmdadapter.Interaction) (Target, bool) {
 
 	permOK, err := ctx.CanJoinVoice(voiceState.ChannelID)
 	if err != nil || !permOK {
-		ctx.FollowupEphemeral(&cmdadapter.Embed{
+		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Voice Error",
 			Description: "I don't have permission to join or speak in that voice channel.",
 		})
@@ -56,7 +56,7 @@ func Join(bot discord.VoiceAPI, ctx cmdadapter.Interaction) (Target, bool) {
 
 	p := bot.GetOrCreatePlayer(guildID)
 	if p == nil {
-		ctx.FollowupEphemeral(&cmdadapter.Embed{
+		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -81,7 +81,7 @@ func Join(bot discord.VoiceAPI, ctx cmdadapter.Interaction) (Target, bool) {
 //     is playing, which has not changed, and overwriting it with "added"
 //     would replace the answer to "what is on" with the answer to a question
 //     nobody asked twice.
-func StartAndRender(bot discord.VoiceAPI, ctx cmdadapter.Interaction, log zerolog.Logger, t Target, added int) {
+func StartAndRender(bot discord.VoiceAPI, ctx adapter.Interaction, log zerolog.Logger, t Target, added int) {
 	if t.Player.IsPlaying() {
 		if err := ctx.Respond(reply.TracksAddedEmbed(added)); err != nil {
 			log.Warn().Str("guild_id", t.GuildID).Err(err).Msg("queue_added_reply_failed")
@@ -104,29 +104,29 @@ func StartAndRender(bot discord.VoiceAPI, ctx cmdadapter.Interaction, log zerolo
 }
 
 // QueueError reports a failed enqueue.
-func QueueError(ctx cmdadapter.Interaction, err error) {
-	ctx.FollowupEphemeral(&cmdadapter.Embed{
+func QueueError(ctx adapter.Interaction, err error) {
+	ctx.FollowupEphemeral(&adapter.Embed{
 		Title:       "🎵 Queue Error",
 		Description: fmt.Sprintf("%v", err),
 	})
 }
 
-func renderStartError(ctx cmdadapter.Interaction, err error) {
+func renderStartError(ctx adapter.Interaction, err error) {
 	switch {
 	case errors.Is(err, player.ErrTrackStartFailed):
-		ctx.FollowupEphemeral(&cmdadapter.Embed{
+		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Playback Error",
 			Description: common.PlaybackErrorDescription(err),
 			Color:       reply.EmbedColor,
 		})
 	case errors.Is(err, player.ErrNoTracksInQueue):
-		ctx.FollowupEphemeral(&cmdadapter.Embed{
+		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Queue",
 			Description: "Nothing is in the queue to play.",
 			Color:       reply.EmbedColor,
 		})
 	default:
-		ctx.FollowupEphemeral(&cmdadapter.Embed{
+		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Playback Error",
 			Description: fmt.Sprintf("%v", err),
 			Color:       reply.EmbedColor,

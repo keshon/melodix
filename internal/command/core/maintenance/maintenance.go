@@ -3,7 +3,7 @@ package maintenance
 import (
 	"fmt"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/perm"
 )
 
@@ -17,23 +17,23 @@ func (c *Maintenance) UserPermissions() []int64 {
 	return []int64{perm.Administrator}
 }
 
-func (c *Maintenance) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *Maintenance) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []cmdadapter.SlashOption{
+		Options: []adapter.SlashOption{
 			{
-				Type:        cmdadapter.OptionSubCommand,
+				Type:        adapter.OptionSubCommand,
 				Name:        "ping",
 				Description: "Check bot latency",
 			},
 			{
-				Type:        cmdadapter.OptionSubCommand,
+				Type:        adapter.OptionSubCommand,
 				Name:        "export-data",
 				Description: "Export the current server database as JSON",
 			},
 			{
-				Type:        cmdadapter.OptionSubCommand,
+				Type:        adapter.OptionSubCommand,
 				Name:        "status",
 				Description: "Retrieve statistics about the guild",
 			},
@@ -41,13 +41,13 @@ func (c *Maintenance) SlashDefinition() *cmdadapter.SlashCommand {
 	}
 }
 
-func (c *Maintenance) Run(context *cmdadapter.SlashInteractionContext) error {
+func (c *Maintenance) Run(context *adapter.SlashInteractionContext) error {
 
 	storage := context.Storage
 
 	sub, ok := context.FirstOption()
 	if !ok {
-		return context.RespondEphemeral(&cmdadapter.Embed{
+		return context.RespondEphemeral(&adapter.Embed{
 			Description: "No subcommand provided.",
 		})
 	}
@@ -60,7 +60,7 @@ func (c *Maintenance) Run(context *cmdadapter.SlashInteractionContext) error {
 	case "status":
 		return runStatus(context, *storage)
 	default:
-		return context.RespondEphemeral(&cmdadapter.Embed{
+		return context.RespondEphemeral(&adapter.Embed{
 			Description: fmt.Sprintf("Unknown subcommand: %s", sub.Name),
 		})
 	}

@@ -4,23 +4,23 @@ import (
 	"testing"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/rs/zerolog"
 )
 
-// fakeCommand is the minimum a cmdadapter.Handler needs. The opt-out is tested
+// fakeCommand is the minimum a adapter.Handler needs. The opt-out is tested
 // against a fake rather than a real command because whether any particular
 // command wants it is a product decision, while the mechanism has to work
 // regardless — and a test bound to one command would go quiet the day that
 // command changed its mind.
 type fakeCommand struct{}
 
-func (fakeCommand) Name() string                                  { return "fake" }
-func (fakeCommand) Description() string                           { return "a stand-in command" }
-func (fakeCommand) Group() string                                 { return "test" }
-func (fakeCommand) Category() string                              { return "test" }
-func (fakeCommand) UserPermissions() []int64                      { return nil }
-func (fakeCommand) Run(*cmdadapter.SlashInteractionContext) error { return nil }
+func (fakeCommand) Name() string                               { return "fake" }
+func (fakeCommand) Description() string                        { return "a stand-in command" }
+func (fakeCommand) Group() string                              { return "test" }
+func (fakeCommand) Category() string                           { return "test" }
+func (fakeCommand) UserPermissions() []int64                   { return nil }
+func (fakeCommand) Run(*adapter.SlashInteractionContext) error { return nil }
 
 // unloggedCommand opts out; ordinaryCommand is the control.
 type unloggedCommand struct{ fakeCommand }
@@ -29,7 +29,7 @@ func (unloggedCommand) Unlogged() {}
 
 type ordinaryCommand struct{ fakeCommand }
 
-// A command that declares cmdadapter.Unlogged must come back unwrapped, because
+// A command that declares adapter.Unlogged must come back unwrapped, because
 // wrapping is the only thing that would write its caller to storage. The
 // guarantee is worth exactly as much as this test: without it, adding a
 // middleware or renaming SkipAuditLog would quietly start recording who ran the
@@ -37,7 +37,7 @@ type ordinaryCommand struct{ fakeCommand }
 func TestCommandLoggerSkipsUnloggedCommands(t *testing.T) {
 	mw := WithCommandLogger(zerolog.Nop())
 
-	got := command.Apply(&cmdadapter.Adapter{Cmd: unloggedCommand{}}, mw)
+	got := command.Apply(&adapter.Adapter{Cmd: unloggedCommand{}}, mw)
 	if _, wrapped := got.(command.Unwrappable); wrapped {
 		t.Fatal("an Unlogged command was wrapped by the audit logger: its caller would reach storage")
 	}
@@ -49,7 +49,7 @@ func TestCommandLoggerSkipsUnloggedCommands(t *testing.T) {
 func TestCommandLoggerWrapsOrdinaryCommands(t *testing.T) {
 	mw := WithCommandLogger(zerolog.Nop())
 
-	got := command.Apply(&cmdadapter.Adapter{Cmd: ordinaryCommand{}}, mw)
+	got := command.Apply(&adapter.Adapter{Cmd: ordinaryCommand{}}, mw)
 	if _, wrapped := got.(command.Unwrappable); !wrapped {
 		t.Fatal("an ordinary command was not wrapped: nothing would be logged for any command")
 	}
@@ -65,9 +65,9 @@ func TestUnloggedSurvivesTheFullMiddlewareChain(t *testing.T) {
 		WithCommandLogger(zerolog.Nop()),
 	}
 
-	got := command.Apply(&cmdadapter.Adapter{Cmd: unloggedCommand{}}, chain...)
+	got := command.Apply(&adapter.Adapter{Cmd: unloggedCommand{}}, chain...)
 
-	root, ok := command.Root(got).(*cmdadapter.Adapter)
+	root, ok := command.Root(got).(*adapter.Adapter)
 	if !ok {
 		t.Fatalf("command.Root returned %T, not the Adapter the opt-out is read from", command.Root(got))
 	}

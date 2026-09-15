@@ -85,7 +85,7 @@ func Check(ctx context.Context, token string, log zerolog.Logger) (CheckResult, 
 	}
 
 	// A read-only REST call. It confirms the token authenticates for REST as
-	// well as the gateway, and that ApplicationID resolved -- cmdsync needs
+	// well as the gateway, and that ApplicationID resolved -- slashsync needs
 	// both, and under discordgo the id came from a User("@me") fallback that
 	// disgo makes unnecessary.
 	for guild := range client.Caches.Guilds() {

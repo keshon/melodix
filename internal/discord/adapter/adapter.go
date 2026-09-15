@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func (a *Adapter) UserPermissions() []int64 { return a.Cmd.UserPermissions() }
 func (a *Adapter) Run(ctx context.Context, inv *command.Invocation) error {
 	slash, ok := inv.Data.(*SlashInteractionContext)
 	if !ok {
-		return fmt.Errorf("cmdadapter: %s was dispatched with a %T, not a slash interaction", a.Name(), inv.Data)
+		return fmt.Errorf("adapter: %s was dispatched with a %T, not a slash interaction", a.Name(), inv.Data)
 	}
 	return a.Cmd.Run(slash)
 }
@@ -38,7 +38,7 @@ func (a *Adapter) Run(ctx context.Context, inv *command.Invocation) error {
 // it, so that the Adapter satisfies SlashProvider.
 //
 // It used to render the wire form here instead. Nothing type-checked that:
-// middleware unwraps to the Adapter and cmdsync asks it for a SlashProvider,
+// middleware unwraps to the Adapter and slashsync asks it for a SlashProvider,
 // and an Adapter whose method returns a different type simply is not one. The
 // assertion failed, every command resolved to no definition, and a sync that
 // wants nothing deletes everything the guild has. Rendering belongs at the
@@ -50,7 +50,7 @@ func (a *Adapter) SlashDefinition() *SlashCommand {
 	return nil
 }
 
-// Compile-time proof that the Adapter is what cmdsync looks for. Without
+// Compile-time proof that the Adapter is what slashsync looks for. Without
 // these, the only thing standing between a changed signature and a guild
 // losing all of its commands is a runtime type assertion that fails quietly.
 var _ SlashProvider = (*Adapter)(nil)

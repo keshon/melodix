@@ -1,4 +1,4 @@
-package cmdqueue
+package queue
 
 import (
 	"context"

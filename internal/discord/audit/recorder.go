@@ -1,18 +1,18 @@
-// Package cmdaudit records command invocations to storage, resolving channel
+// Package audit records command invocations to storage, resolving channel
 // and guild names from the connection.
 //
 // It is an audit trail, not a log. What every package writes diagnostics to is
 // zerolog; this answers "who ran what, and where", and its rows outlive the
 // process. Having both called Logger sent readers looking for command history
 // in the wrong place.
-package cmdaudit
+package audit
 
 import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rs/zerolog"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/storage"
 )
 
@@ -28,7 +28,7 @@ func NewRecorder(client *bot.Client, store *storage.Storage, log zerolog.Logger)
 	return &Recorder{client: client, storage: store, log: log}
 }
 
-var _ cmdadapter.AuditLog = (*Recorder)(nil)
+var _ adapter.AuditLog = (*Recorder)(nil)
 
 // LogCommand records a command execution, resolving names from the cache.
 //

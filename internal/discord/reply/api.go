@@ -6,7 +6,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 // The connection-level answers. Everything here reads from disgo's cache
@@ -117,7 +117,7 @@ func (a *API) SendChannelMessage(channelID, content string) error {
 	return err
 }
 
-func (a *API) SendChannelEmbed(channelID string, embed *cmdadapter.Embed) error {
+func (a *API) SendChannelEmbed(channelID string, embed *adapter.Embed) error {
 	cid, err := a.channelID(channelID)
 	if err != nil {
 		return err
@@ -126,7 +126,7 @@ func (a *API) SendChannelEmbed(channelID string, embed *cmdadapter.Embed) error 
 	return err
 }
 
-func (a *API) EditChannelEmbed(channelID, messageID string, embed *cmdadapter.Embed) error {
+func (a *API) EditChannelEmbed(channelID, messageID string, embed *adapter.Embed) error {
 	cid, err := a.channelID(channelID)
 	if err != nil {
 		return err
@@ -142,19 +142,19 @@ func (a *API) EditChannelEmbed(channelID, messageID string, embed *cmdadapter.Em
 
 // GuildInfo describes a guild. The counts are whatever the cache holds, which
 // is what the status command has always reported.
-func (a *API) GuildInfo(guildID string) (cmdadapter.GuildInfo, error) {
+func (a *API) GuildInfo(guildID string) (adapter.GuildInfo, error) {
 	if a.client == nil {
-		return cmdadapter.GuildInfo{}, fmt.Errorf("no Discord session")
+		return adapter.GuildInfo{}, fmt.Errorf("no Discord session")
 	}
 	gid, err := parseID(guildID)
 	if err != nil {
-		return cmdadapter.GuildInfo{}, err
+		return adapter.GuildInfo{}, err
 	}
 	guild, ok := a.client.Caches.Guild(gid)
 	if !ok {
 		fetched, err := a.client.Rest.GetGuild(gid, false)
 		if err != nil {
-			return cmdadapter.GuildInfo{}, err
+			return adapter.GuildInfo{}, err
 		}
 		guild = fetched.Guild
 	}
@@ -166,7 +166,7 @@ func (a *API) GuildInfo(guildID string) (cmdadapter.GuildInfo, error) {
 		}
 	}
 
-	return cmdadapter.GuildInfo{
+	return adapter.GuildInfo{
 		ID:       guild.ID.String(),
 		Name:     guild.Name,
 		Members:  a.client.Caches.MembersLen(gid),

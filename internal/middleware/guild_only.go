@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 // WithGuildOnly wraps a command to enforce guild-only access
@@ -15,7 +15,7 @@ func WithGuildOnly() command.Middleware {
 			// five also closes the gap that the switch left: a component
 			// interaction or a context-menu command in a direct message used
 			// to reach a guild-only command, because neither type was listed.
-			if cc := cmdadapter.ContextFromInvocation(inv); cc != nil && cc.GuildID() == "" {
+			if cc := adapter.ContextFromInvocation(inv); cc != nil && cc.GuildID() == "" {
 				return nil
 			}
 			return c.Run(ctx, inv)

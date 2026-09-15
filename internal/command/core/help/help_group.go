@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 func runHelpByGroup() string {
@@ -14,7 +14,7 @@ func runHelpByGroup() string {
 
 	groupMap := make(map[string][]command.Command)
 	for _, c := range all {
-		meta, _ := command.Root(c).(cmdadapter.Meta)
+		meta, _ := command.Root(c).(adapter.Meta)
 		group := ""
 		if meta != nil {
 			group = meta.Group()

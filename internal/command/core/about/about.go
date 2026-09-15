@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/keshon/buildinfo"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
@@ -19,18 +19,18 @@ func (c *About) UserPermissions() []int64 {
 	return []int64{}
 }
 
-func (c *About) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *About) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *About) Run(context *cmdadapter.SlashInteractionContext) error {
+func (c *About) Run(context *adapter.SlashInteractionContext) error {
 
 	info := buildinfo.Get()
 
-	fields := []cmdadapter.EmbedField{
+	fields := []adapter.EmbedField{
 		{
 			Name:  "Developed by Señor Mega",
 			Value: "[LinkedIn](https://www.linkedin.com/in/keshon), [GitHub](https://github.com/keshon), [Homepage](https://keshon.ru)",
@@ -45,7 +45,7 @@ func (c *About) Run(context *cmdadapter.SlashInteractionContext) error {
 		},
 	}
 
-	embed := &cmdadapter.Embed{
+	embed := &adapter.Embed{
 		Title:       "ℹ️ About " + info.Project,
 		Description: info.Description,
 		Color:       reply.EmbedColor,
@@ -59,7 +59,7 @@ func (c *About) Run(context *cmdadapter.SlashInteractionContext) error {
 		defer f.Close()
 		imageName := filepath.Base(imagePath)
 		embed.ImageURL = "attachment://" + imageName
-		return context.RespondWith(cmdadapter.Reply{
+		return context.RespondWith(adapter.Reply{
 			Embed: embed, File: f, FileName: imageName, Ephemeral: true,
 		})
 	}

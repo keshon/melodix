@@ -1,4 +1,4 @@
-package cmdsync
+package slashsync
 
 import (
 	"encoding/json"
@@ -6,24 +6,24 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
 func minValue(f float64) *float64 { return &f }
 
-func settingsCommand() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func settingsCommand() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        "settings",
 		Description: "bot settings",
-		Options: []cmdadapter.SlashOption{{
-			Type: cmdadapter.OptionSubCommandGroup, Name: "commands", Description: "command groups",
-			Options: []cmdadapter.SlashOption{{
-				Type: cmdadapter.OptionSubCommand, Name: "enable", Description: "enable a group",
-				Options: []cmdadapter.SlashOption{{
-					Type: cmdadapter.OptionString, Name: "group", Description: "group name",
+		Options: []adapter.SlashOption{{
+			Type: adapter.OptionSubCommandGroup, Name: "commands", Description: "command groups",
+			Options: []adapter.SlashOption{{
+				Type: adapter.OptionSubCommand, Name: "enable", Description: "enable a group",
+				Options: []adapter.SlashOption{{
+					Type: adapter.OptionString, Name: "group", Description: "group name",
 					Required: true,
-					Choices: []cmdadapter.SlashChoice{
+					Choices: []adapter.SlashChoice{
 						{Name: "music", Value: "music"},
 						{Name: "core", Value: "core"},
 					},
@@ -33,16 +33,16 @@ func settingsCommand() *cmdadapter.SlashCommand {
 	}
 }
 
-func historyCommand() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func historyCommand() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        "history",
 		Description: "played tracks",
-		Options: []cmdadapter.SlashOption{
+		Options: []adapter.SlashOption{
 			{
-				Type: cmdadapter.OptionInteger, Name: "page", Description: "page",
+				Type: adapter.OptionInteger, Name: "page", Description: "page",
 				MinValue: minValue(1), MaxValue: 100,
 			},
-			{Type: cmdadapter.OptionBoolean, Name: "all", Description: "every guild"},
+			{Type: adapter.OptionBoolean, Name: "all", Description: "every guild"},
 		},
 	}
 }
@@ -50,7 +50,7 @@ func historyCommand() *cmdadapter.SlashCommand {
 // roundTrip renders a declaration the way registration does, then reads it
 // back the way Discord reports it. It stands in for the API without one: the
 // bytes are the same bytes.
-func roundTrip(t *testing.T, decl *cmdadapter.SlashCommand) *cmdadapter.SlashCommand {
+func roundTrip(t *testing.T, decl *adapter.SlashCommand) *adapter.SlashCommand {
 	t.Helper()
 
 	raw, err := json.Marshal(reply.SlashCommandCreate(decl))
@@ -72,11 +72,11 @@ func roundTrip(t *testing.T, decl *cmdadapter.SlashCommand) *cmdadapter.SlashCom
 // This is the property that makes the comparison worth doing at all, and it
 // cannot be checked by inspecting either side alone.
 func TestAnUnchangedCommandFingerprintsTheSameAfterARoundTrip(t *testing.T) {
-	for _, decl := range []*cmdadapter.SlashCommand{
+	for _, decl := range []*adapter.SlashCommand{
 		settingsCommand(),
 		historyCommand(),
 		{Name: "ping", Description: "latency"},
-		{Type: cmdadapter.MessageMenuCommand, Name: "Add to queue"},
+		{Type: adapter.MessageMenuCommand, Name: "Add to queue"},
 	} {
 		t.Run(decl.Name, func(t *testing.T) {
 			got := fingerprint(roundTrip(t, decl))
@@ -101,11 +101,11 @@ func TestRealChangesAreSeen(t *testing.T) {
 	redescribed.Description = "something else"
 
 	retyped := settingsCommand()
-	retyped.Type = cmdadapter.MessageMenuCommand
+	retyped.Type = adapter.MessageMenuCommand
 
 	argAdded := settingsCommand()
 	argAdded.Options[0].Options[0].Options = append(argAdded.Options[0].Options[0].Options,
-		cmdadapter.SlashOption{Type: cmdadapter.OptionBoolean, Name: "force", Description: "force"})
+		adapter.SlashOption{Type: adapter.OptionBoolean, Name: "force", Description: "force"})
 
 	choiceChanged := settingsCommand()
 	choiceChanged.Options[0].Options[0].Options[0].Choices[0].Value = "muzak"
@@ -113,7 +113,7 @@ func TestRealChangesAreSeen(t *testing.T) {
 	requiredFlipped := settingsCommand()
 	requiredFlipped.Options[0].Options[0].Options[0].Required = false
 
-	for name, changed := range map[string]*cmdadapter.SlashCommand{
+	for name, changed := range map[string]*adapter.SlashCommand{
 		"name":         renamed,
 		"description":  redescribed,
 		"type":         retyped,

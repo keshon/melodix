@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 // GuildInfo is what a command can learn about a guild without naming the
 // library that fetched it.

@@ -9,9 +9,9 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/keshon/command"
 
-	"github.com/keshon/melodix/internal/discord/cmdaudit"
-	"github.com/keshon/melodix/internal/discord/cmdsync"
+	"github.com/keshon/melodix/internal/discord/audit"
 	"github.com/keshon/melodix/internal/discord/session"
+	"github.com/keshon/melodix/internal/discord/slashsync"
 	"github.com/keshon/melodix/internal/discord/voice/voicesink"
 	"github.com/keshon/melodix/internal/discord/watchdog"
 )
@@ -27,8 +27,8 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	// and wiring. The syncer and recorder need the client, which does not exist
 	// yet, so they are filled in once it does.
 	var (
-		syncer   *cmdsync.Syncer
-		recorder *cmdaudit.Recorder
+		syncer   *slashsync.Syncer
+		recorder *audit.Recorder
 	)
 
 	dave := voicesink.NewDaveRegistry()
@@ -60,8 +60,8 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	}
 
 	client := session.Client()
-	syncer = cmdsync.NewSyncer(client, command.DefaultRegistry, b.log)
-	recorder = cmdaudit.NewRecorder(client, b.storage, b.log)
+	syncer = slashsync.NewSyncer(client, command.DefaultRegistry, b.log)
+	recorder = audit.NewRecorder(client, b.storage, b.log)
 
 	b.setConn(&conn{client: client, dave: dave})
 	defer b.clearConn()

@@ -1,4 +1,4 @@
-package cmdadapter
+package adapter
 
 // SlashArgument is one argument as it arrived, or one subcommand carrying its
 // own. Discord models both as options, which is why this is one type.

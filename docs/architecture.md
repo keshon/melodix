@@ -93,11 +93,11 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `internal/discord` | The `Bot`: session lifecycle, handlers, health watchdogs, voice service |
 | `internal/discord/voice` | Per-guild players and sink providers; guild status messages; **survives session restarts** |
 | `internal/discord/voice/voicesink` | Joins a voice channel and forwards a track's Opus packets to it (no encode); holds frames the transport cannot protect |
-| `internal/discord/cmdadapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
-| `internal/discord/cmdsync` | Per-guild slash-command diff sync (create/edit/delete) |
-| `internal/discord/cmdaudit` | The audit trail: who ran what, where, persisted — distinct from the diagnostic log |
+| `internal/discord/adapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
+| `internal/discord/slashsync` | Per-guild slash-command diff sync (create/edit/delete) |
+| `internal/discord/audit` | The audit trail: who ran what, where, persisted — distinct from the diagnostic log |
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
-| `internal/discord/cmdqueue` | How commands get scheduled: one FIFO lane per guild, drained off the gateway read goroutine so a guild's commands stay ordered and never overlap, plus the global cap on how many run at once across every guild |
+| `internal/discord/queue` | How commands get scheduled: one FIFO lane per guild, drained off the gateway read goroutine so a guild's commands stay ordered and never overlap, plus the global cap on how many run at once across every guild |
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
 | `internal/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
@@ -418,8 +418,8 @@ handler, as an ephemeral embed. Asynchronous failures — a track dying
 mid-play — travel through
 `runPlayback → markPlaybackFailed → Options.OnPlaybackFailed → voice.Service.notifyPlaybackFailed`,
 which edits the guild status message, falling back to a public message in
-the last-used command channel if needed. `internal/playbackerr` turns the
-raw error text into something a person can actually read.
+the last-used command channel if needed. `reply.ClampEmbedText` cuts the raw
+error text to something Discord will accept in an embed.
 
 `ProcessStream` (the ffmpeg wrapper) converts a zero-byte EOF from a failed
 process into the real underlying error, so an instant ffmpeg failure — a
@@ -434,14 +434,14 @@ stderr is captured and classified (403/forbidden/conversion failures at Warn).
 ## Discord command layer
 
 Commands implement the melodix `Handler` interface and get registered
-through `cmdadapter.Register` into `keshon/command`'s `DefaultRegistry`,
+through `adapter.Register` into `keshon/command`'s `DefaultRegistry`,
 wrapped in middleware for guild-only checks, per-guild disabled-command
 gating, permission checks, and invocation logging. Optional capabilities are
 discovered through interface assertion: `SlashProvider`,
 `ContextMenuProvider`, `ComponentInteractionHandler`.
 
 Dispatch happens through `onApplicationCommand`, which routes slash and
-context-menu commands into `cmdqueue` and returns; message components are
+context-menu commands into `queue` and returns; message components are
 matched by a `customID` prefix convention (`name`, `name:`, `name_`) and go
 the same way. The body then runs on a worker, under the queue's own cap
 (`COMMAND_PARALLELISM` limits how many run at once across all guilds).
@@ -458,10 +458,10 @@ semaphore never contended.
 The gateway loop stays serial, because its ordering is load-bearing: `Ready`
 and `GuildJoin` both sync commands and must not interleave. One lane per
 guild, because a guild's music is sequential — `/play` and `/next` at the
-same instant have no meaningful interleaving. `cmdsync`'s per-guild lock
+same instant have no meaningful interleaving. `slashsync`'s per-guild lock
 became load-bearing in the same change rather than redundant: `Ready` syncs
 on the gateway goroutine while `/commands enable` syncs on a worker.
-Slash-command sync is handled by `cmdsync.Syncer`, which diffs desired
+Slash-command sync is handled by `slashsync.Syncer`, which diffs desired
 against existing per-guild commands by name, type, and fingerprint whenever
 `INIT_SLASH_COMMANDS=true`. And `go run ./cmd/discord -readme` regenerates
 the command listing in `README.md` straight from the registry — that's a dev

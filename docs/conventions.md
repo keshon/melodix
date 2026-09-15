@@ -59,7 +59,7 @@ Discord-specific belongs in `internal/`. Checked by
 
 **[enforced: adapter-boundary]** Only `internal/discord` names a Discord
 client library. Everything else — commands, middleware, readme generation,
-`cmd` — reaches Discord through `cmdadapter`'s neutral types, so swapping the
+`cmd` — reaches Discord through `adapter`'s neutral types, so swapping the
 library is one package's problem rather than the whole tree's. Checked by
 `TestDiscordStaysBehindTheAdapter`.
 

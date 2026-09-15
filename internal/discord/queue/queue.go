@@ -1,4 +1,4 @@
-// Package cmdqueue runs command bodies off the gateway read goroutine, in
+// Package queue runs command bodies off the gateway read goroutine, in
 // arrival order, one guild at a time.
 //
 // disgo dispatches events synchronously by default: one goroutine reads the
@@ -21,7 +21,7 @@
 // guilds run at the same time, up to the global cap this package also owns --
 // lanes and cap being two halves of one question, which is how many commands
 // may be running and which of them may overlap.
-package cmdqueue
+package queue
 
 import (
 	"context"
@@ -73,7 +73,7 @@ type lane struct {
 // at once across every lane. Zero or less means uncapped.
 func New(log zerolog.Logger, parallelism int) *Queue {
 	q := &Queue{
-		log:   log.With().Str("component", "cmdqueue").Logger(),
+		log:   log.With().Str("component", "queue").Logger(),
 		lanes: make(map[string]*lane),
 	}
 	if parallelism > 0 {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	musicplayer "github.com/keshon/melodix/pkg/music/player"
 )
@@ -21,14 +21,14 @@ func (c *Next) Group() string            { return "music" }
 func (c *Next) Category() string         { return "🎵 Music" }
 func (c *Next) UserPermissions() []int64 { return []int64{} }
 
-func (c *Next) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *Next) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *Next) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
+func (c *Next) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	guildID := slashCtx.GuildID()
 
@@ -38,7 +38,7 @@ func (c *Next) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	voiceState, err := c.Bot.FindUserVoiceState(guildID, slashCtx.UserID())
 	if err != nil {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Voice Channel Error",
 			Description: fmt.Sprintf("Join a voice channel first.\n\n**Error:** %v", err),
 		})
@@ -47,7 +47,7 @@ func (c *Next) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	permOK, err := slashCtx.CanJoinVoice(voiceState.ChannelID)
 	if err != nil || !permOK {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Voice Error",
 			Description: "I don't have permission to join or speak in that voice channel.",
 		})
@@ -58,7 +58,7 @@ func (c *Next) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	player := c.Bot.GetOrCreatePlayer(guildID)
 	if player == nil {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -66,7 +66,7 @@ func (c *Next) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 	}
 	queue := player.Queue()
 	if len(queue) == 0 {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Queue Empty",
 			Description: "No tracks left to skip.",
 		})
@@ -76,14 +76,14 @@ func (c *Next) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 	_ = player.Stop(false)
 	if err = player.PlayNext(voiceState.ChannelID); err != nil {
 		if errors.Is(err, musicplayer.ErrTrackStartFailed) {
-			slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+			slashCtx.FollowupEphemeral(&adapter.Embed{
 				Title:       "🎵 Playback Error",
 				Description: common.PlaybackErrorDescription(err),
 				Color:       reply.EmbedColor,
 			})
 			return nil
 		}
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Playback Error",
 			Description: fmt.Sprintf("Failed to play next track.\n\n**Error:** %v", err),
 		})

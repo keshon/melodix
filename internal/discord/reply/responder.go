@@ -11,7 +11,7 @@ import (
 	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 // respondable is what both interaction events can do. Keeping it as an
@@ -41,7 +41,7 @@ type Responder struct {
 	response responseState
 }
 
-var _ cmdadapter.Responder = (*Responder)(nil)
+var _ adapter.Responder = (*Responder)(nil)
 
 // NewCommandResponder binds a slash or context-menu interaction.
 func NewCommandResponder(e *events.ApplicationCommandInteractionCreate) *Responder {
@@ -164,7 +164,7 @@ func (s *responseState) takePending() bool {
 
 // create turns a Reply into the message disgo sends. One place decides what a
 // reply's fields mean, so Respond and Followup cannot disagree about it.
-func create(rep cmdadapter.Reply) discord.MessageCreate {
+func create(rep adapter.Reply) discord.MessageCreate {
 	msg := discord.MessageCreate{
 		Content: rep.Text,
 		Flags:   ephemeralFlags(rep.Ephemeral),
@@ -190,7 +190,7 @@ func create(rep cmdadapter.Reply) discord.MessageCreate {
 // private by editing it; a public one edits the response that is already
 // there. Getting that wrong shows the wrong people the reply, and it used to
 // be written out separately for each shape of message.
-func (r *Responder) Respond(rep cmdadapter.Reply) error {
+func (r *Responder) Respond(rep adapter.Reply) error {
 	msg := create(rep)
 	err := r.event.CreateMessage(msg)
 	if err == nil {
@@ -211,14 +211,14 @@ func (r *Responder) Respond(rep cmdadapter.Reply) error {
 }
 
 // Followup posts beside an answer already given.
-func (r *Responder) Followup(rep cmdadapter.Reply) error {
+func (r *Responder) Followup(rep adapter.Reply) error {
 	_, err := r.followup(create(rep))
 	return err
 }
 
 // AnswerEmbedMessage replaces the deferred placeholder with the embed, rather
-// than posting a followup beside it. See cmdadapter.Responder.
-func (r *Responder) AnswerEmbedMessage(embed *cmdadapter.Embed) (string, string, error) {
+// than posting a followup beside it. See adapter.Responder.
+func (r *Responder) AnswerEmbedMessage(embed *adapter.Embed) (string, string, error) {
 	msg, err := r.event.Client().Rest.UpdateInteractionResponse(r.appID, r.token,
 		discord.MessageUpdate{Embeds: &[]discord.Embed{Embed(embed)}})
 	if err != nil {
@@ -239,11 +239,11 @@ func (r *Responder) EditResponseText(content string) error {
 // chooser is consumed: the buttons go away with the same click that acts on
 // them, so nothing can be pressed twice. The empty component slice is the
 // removal and has to be sent rather than omitted.
-func (r *Responder) ReplaceMessage(embed *cmdadapter.Embed) error {
+func (r *Responder) ReplaceMessage(embed *adapter.Embed) error {
 	if r.component == nil {
 		// Not a component interaction; the nearest honest thing is a plain
 		// answer rather than silently doing nothing.
-		return r.Respond(cmdadapter.Reply{Embed: embed})
+		return r.Respond(adapter.Reply{Embed: embed})
 	}
 	err := r.component.UpdateMessage(discord.MessageUpdate{
 		Embeds:     &[]discord.Embed{Embed(embed)},
@@ -285,8 +285,8 @@ func NewSessionAPI(client *bot.Client) *API {
 }
 
 var (
-	_ cmdadapter.SessionAPI = (*API)(nil)
-	_ cmdadapter.BotAPI     = (*API)(nil)
+	_ adapter.SessionAPI = (*API)(nil)
+	_ adapter.BotAPI     = (*API)(nil)
 )
 
 func (a *API) EmbedColor() int { return EmbedColor }

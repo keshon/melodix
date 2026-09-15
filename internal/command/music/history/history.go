@@ -6,7 +6,7 @@ import (
 
 	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
@@ -25,23 +25,23 @@ func (c *History) UserPermissions() []int64 { return []int64{} }
 // discordgo requires a pointer for MinValue on slash options.
 var historyPageMinValue = 1.0
 
-func (c *History) SlashDefinition() *cmdadapter.SlashCommand {
-	return &cmdadapter.SlashCommand{
+func (c *History) SlashDefinition() *adapter.SlashCommand {
+	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
-		Options: []cmdadapter.SlashOption{
+		Options: []adapter.SlashOption{
 			{
-				Type:        cmdadapter.OptionString,
+				Type:        adapter.OptionString,
 				Name:        "view",
 				Description: "Chronological list or plays per link",
 				Required:    false,
-				Choices: []cmdadapter.SlashChoice{
+				Choices: []adapter.SlashChoice{
 					{Name: "Timeline", Value: "timeline"},
 					{Name: "By URL", Value: "counts"},
 				},
 			},
 			{
-				Type:        cmdadapter.OptionInteger,
+				Type:        adapter.OptionInteger,
 				Name:        "page",
 				Description: "Page number (default 1)",
 				Required:    false,
@@ -55,7 +55,7 @@ const historyLinesPerPage = 15
 
 const historyFooterReplay = "replay with `/play <id>`."
 
-func (c *History) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
+func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	store := slashCtx.Storage
 
@@ -75,7 +75,7 @@ func (c *History) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	guildID := slashCtx.GuildID()
 	if c.Bot.GetOrCreatePlayer(guildID) == nil {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
@@ -83,7 +83,7 @@ func (c *History) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 	}
 
 	if store == nil {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music history storage is not available.",
 		})
@@ -92,7 +92,7 @@ func (c *History) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 
 	rows, err := store.ListMusicPlaybackTimeline(guildID)
 	if err != nil {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 History",
 			Description: fmt.Sprintf("Could not load history: %v", err),
 		})
@@ -100,7 +100,7 @@ func (c *History) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 	}
 
 	if len(rows) == 0 {
-		slashCtx.FollowupEphemeral(&cmdadapter.Embed{
+		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 History",
 			Description: "No playback history yet. Use `/play` first. History is stored per server; very old entries may be removed when the list is trimmed.",
 			Color:       reply.EmbedColor,
@@ -167,7 +167,7 @@ func (c *History) Run(slashCtx *cmdadapter.SlashInteractionContext) error {
 		desc = desc[:3997] + "..."
 	}
 
-	embed := &cmdadapter.Embed{
+	embed := &adapter.Embed{
 		Title:       embedTitle,
 		Description: desc,
 		Footer:      fmt.Sprintf("Page %d/%d (%d rows). %s", page, totalPages, totalRows, footerExtra),

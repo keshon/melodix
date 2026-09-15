@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
@@ -21,7 +21,7 @@ import (
 // there is no session. It is a function rather than a value so the service
 // survives reconnects: a restart replaces the session, and everything here
 // asks again rather than holding a handle that has gone stale.
-type APIGetter func() cmdadapter.BotAPI
+type APIGetter func() adapter.BotAPI
 
 // SinkProviderFactory builds the audio path for one guild. It is supplied by
 // whatever is holding the connection -- the service itself does not know which
@@ -131,7 +131,7 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 	} else {
 		desc = detail
 	}
-	s.deliverPlaybackFailureEmbed(api, guildID, &cmdadapter.Embed{
+	s.deliverPlaybackFailureEmbed(api, guildID, &adapter.Embed{
 		Title:       "Playback failed",
 		Description: desc,
 		Color:       reply.EmbedColor,
@@ -141,7 +141,7 @@ func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err 
 // deliverPlaybackFailureEmbed edits the stored "now playing" message when
 // possible; otherwise sends a public embed to the last known slash channel (see
 // SetGuildMusicNotifyChannel / UpdatePlaybackStatus).
-func (s *Service) deliverPlaybackFailureEmbed(api cmdadapter.BotAPI, guildID string, embed *cmdadapter.Embed) {
+func (s *Service) deliverPlaybackFailureEmbed(api adapter.BotAPI, guildID string, embed *adapter.Embed) {
 	s.guildMusicStatusMu.RLock()
 	msg, hasMsg := s.guildMusicStatus[guildID]
 	notifyCh := s.guildMusicNotifyChannel[guildID]
@@ -319,7 +319,7 @@ func (s *Service) hasStatusMessage(guildID string) bool {
 // The reply doubles as the status message because the two want to be the same
 // thing at the moment playback starts: the caller is told what is playing, and
 // that is exactly what the asynchronous transitions later need to edit.
-func (s *Service) AnnouncePlayback(to cmdadapter.Interaction, guildID string, embed *cmdadapter.Embed) error {
+func (s *Service) AnnouncePlayback(to adapter.Interaction, guildID string, embed *adapter.Embed) error {
 	if to == nil {
 		return nil
 	}
@@ -345,7 +345,7 @@ func (s *Service) AnnouncePlayback(to cmdadapter.Interaction, guildID string, em
 // nobody to answer and the message must already exist. A guild with no status
 // message registered is a no-op rather than an error: playback can start from
 // a path that never announced one, and a missing message is not a failure.
-func (s *Service) UpdatePlaybackStatus(guildID string, embed *cmdadapter.Embed) error {
+func (s *Service) UpdatePlaybackStatus(guildID string, embed *adapter.Embed) error {
 	s.guildMusicStatusMu.RLock()
 	msg, ok := s.guildMusicStatus[guildID]
 	s.guildMusicStatusMu.RUnlock()

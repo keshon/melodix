@@ -1,8 +1,8 @@
-// Package cmdsync registers a guild's slash commands.
+// Package slashsync registers a guild's slash commands.
 //
 // It compares what the registry declares against what the guild already has,
 // then creates, updates and deletes the difference.
-package cmdsync
+package slashsync
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 	"github.com/keshon/command"
 	"github.com/rs/zerolog"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
@@ -41,7 +41,7 @@ func NewSyncer(client *bot.Client, registry *command.Registry, log zerolog.Logge
 	return &Syncer{client: client, registry: registry, log: log}
 }
 
-var _ cmdadapter.CommandSyncer = (*Syncer)(nil)
+var _ adapter.CommandSyncer = (*Syncer)(nil)
 
 // SyncGuildCommands makes a guild's registered commands match the registry.
 func (m *Syncer) SyncGuildCommands(guildID string) error {
@@ -80,7 +80,7 @@ func (m *Syncer) SyncGuildCommands(guildID string) error {
 			fingerprint: fingerprint(fromWire(c)),
 		}
 	}
-	desiredByKey := make(map[string]*cmdadapter.SlashCommand, len(desired))
+	desiredByKey := make(map[string]*adapter.SlashCommand, len(desired))
 	for _, c := range desired {
 		desiredByKey[fmt.Sprintf("%s:%d", c.Name, commandType(c.Type))] = c
 	}
@@ -146,8 +146,8 @@ func (m *Syncer) guildLock(guildID string) *sync.Mutex {
 
 // buildCommandDefinitions collects what the registry declares, in neutral
 // form. The rendering to disgo's types happens at the point of registration.
-func (m *Syncer) buildCommandDefinitions() []*cmdadapter.SlashCommand {
-	var defs []*cmdadapter.SlashCommand
+func (m *Syncer) buildCommandDefinitions() []*adapter.SlashCommand {
+	var defs []*adapter.SlashCommand
 	for _, c := range m.registry.GetAll() {
 		if def := declarationOf(c); def != nil {
 			defs = append(defs, def)
@@ -163,10 +163,10 @@ func (m *Syncer) buildCommandDefinitions() []*cmdadapter.SlashCommand {
 // interface declares simply is not one, with no compile error to say so. A
 // command that resolves to nothing here is a command this backend would
 // delete from the guild.
-func declarationOf(c command.Command) *cmdadapter.SlashCommand {
+func declarationOf(c command.Command) *adapter.SlashCommand {
 	root := command.Root(c)
 
-	if slash, ok := root.(cmdadapter.SlashProvider); ok {
+	if slash, ok := root.(adapter.SlashProvider); ok {
 		if def := slash.SlashDefinition(); def != nil {
 			return def
 		}
@@ -175,11 +175,11 @@ func declarationOf(c command.Command) *cmdadapter.SlashCommand {
 	return nil
 }
 
-func commandType(t cmdadapter.SlashCommandType) discord.ApplicationCommandType {
+func commandType(t adapter.SlashCommandType) discord.ApplicationCommandType {
 	switch t {
-	case cmdadapter.MessageMenuCommand:
+	case adapter.MessageMenuCommand:
 		return discord.ApplicationCommandTypeMessage
-	case cmdadapter.UserMenuCommand:
+	case adapter.UserMenuCommand:
 		return discord.ApplicationCommandTypeUser
 	default:
 		return discord.ApplicationCommandTypeSlash

@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 const (
@@ -16,27 +16,27 @@ const (
 var maxContentLength = discordMaxMessageLength - len(codeLeftBlockWrapper) - len(codeRightBlockWrapper)
 
 // CommandsSubcommandOptions returns slash options for command management.
-func CommandsSubcommandOptions() []cmdadapter.SlashOption {
+func CommandsSubcommandOptions() []adapter.SlashOption {
 	groupChoices := groupOptionChoices()
 
-	return []cmdadapter.SlashOption{
+	return []adapter.SlashOption{
 		{
-			Type:        cmdadapter.OptionSubCommand,
+			Type:        adapter.OptionSubCommand,
 			Name:        "log",
 			Description: "Review recently used commands",
 		},
 		{
-			Type:        cmdadapter.OptionSubCommand,
+			Type:        adapter.OptionSubCommand,
 			Name:        "status",
 			Description: "Show enabled and disabled command groups",
 		},
 		{
-			Type:        cmdadapter.OptionSubCommand,
+			Type:        adapter.OptionSubCommand,
 			Name:        "enable",
 			Description: "Enable a command group",
-			Options: []cmdadapter.SlashOption{
+			Options: []adapter.SlashOption{
 				{
-					Type:        cmdadapter.OptionString,
+					Type:        adapter.OptionString,
 					Name:        "group",
 					Description: "Choose command group to enable",
 					Required:    true,
@@ -45,12 +45,12 @@ func CommandsSubcommandOptions() []cmdadapter.SlashOption {
 			},
 		},
 		{
-			Type:        cmdadapter.OptionSubCommand,
+			Type:        adapter.OptionSubCommand,
 			Name:        "disable",
 			Description: "Disable a command group",
-			Options: []cmdadapter.SlashOption{
+			Options: []adapter.SlashOption{
 				{
-					Type:        cmdadapter.OptionString,
+					Type:        adapter.OptionString,
 					Name:        "group",
 					Description: "Choose command group to disable",
 					Required:    true,
@@ -61,10 +61,10 @@ func CommandsSubcommandOptions() []cmdadapter.SlashOption {
 	}
 }
 
-func groupOptionChoices() []cmdadapter.SlashChoice {
-	groupChoices := []cmdadapter.SlashChoice{}
+func groupOptionChoices() []adapter.SlashChoice {
+	groupChoices := []adapter.SlashChoice{}
 	for _, g := range GetUniqueGroups() {
-		groupChoices = append(groupChoices, cmdadapter.SlashChoice{Name: g, Value: g})
+		groupChoices = append(groupChoices, adapter.SlashChoice{Name: g, Value: g})
 	}
 	sort.Slice(groupChoices, func(i, j int) bool { return groupChoices[i].Name < groupChoices[j].Name })
 	return groupChoices
@@ -74,7 +74,7 @@ func groupOptionChoices() []cmdadapter.SlashChoice {
 func GetUniqueGroups() []string {
 	set := map[string]struct{}{}
 	for _, c := range command.DefaultRegistry.GetAll() {
-		meta, _ := command.Root(c).(cmdadapter.Meta)
+		meta, _ := command.Root(c).(adapter.Meta)
 		group := ""
 		if meta != nil {
 			group = meta.Group()

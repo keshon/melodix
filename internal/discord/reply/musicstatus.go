@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
@@ -24,7 +24,7 @@ const EmbedColor = 0xb01e66
 // started: a title/link line plus a line of inline-code "chips" (source ·
 // parser, duration or `live` for radio, artist when known). Embeds don't render
 // -# subtext, so code spans are the chip look Discord gives us.
-func NowPlayingEmbed(track *parsers.Track) *cmdadapter.Embed {
+func NowPlayingEmbed(track *parsers.Track) *adapter.Embed {
 	var title, url string
 	if track != nil {
 		title, url = track.Title, track.URL
@@ -44,7 +44,7 @@ func NowPlayingEmbed(track *parsers.Track) *cmdadapter.Embed {
 		// Blank line: the only vertical spacing embed markdown offers.
 		desc += "\n\n" + chips
 	}
-	return &cmdadapter.Embed{
+	return &adapter.Embed{
 		Title:       "▶️ Now Playing",
 		Description: desc,
 		Color:       EmbedColor,
@@ -100,7 +100,7 @@ func formatDuration(d time.Duration) string {
 // TracksAddedEmbed builds the status embed for tracks queued while something is
 // playing. The count matters for playlists: it is the only place the caller
 // learns how many of them actually arrived.
-func TracksAddedEmbed(added int) *cmdadapter.Embed {
+func TracksAddedEmbed(added int) *adapter.Embed {
 	desc := "Added to queue"
 	switch {
 	case added == 1:
@@ -108,7 +108,7 @@ func TracksAddedEmbed(added int) *cmdadapter.Embed {
 	case added > 1:
 		desc = fmt.Sprintf("Added %d tracks to the queue", added)
 	}
-	return &cmdadapter.Embed{
+	return &adapter.Embed{
 		Title:       "🎶 Track(s) Added",
 		Description: desc,
 		Color:       EmbedColor,
@@ -116,8 +116,8 @@ func TracksAddedEmbed(added int) *cmdadapter.Embed {
 }
 
 // PlaybackFinishedEmbed builds the status embed for natural queue end.
-func PlaybackFinishedEmbed() *cmdadapter.Embed {
-	return &cmdadapter.Embed{
+func PlaybackFinishedEmbed() *adapter.Embed {
+	return &adapter.Embed{
 		Title:       "⏹ Playback Finished",
 		Description: "Queue is empty.",
 		Color:       EmbedColor,

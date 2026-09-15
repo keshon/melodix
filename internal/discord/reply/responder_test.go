@@ -10,7 +10,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/rest"
 
-	"github.com/keshon/melodix/internal/discord/cmdadapter"
+	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
 // The placeholder is only removed when the caller saw nothing in its place.
@@ -136,14 +136,14 @@ func TestAlreadyAcknowledgedIsMatchedByCode(t *testing.T) {
 // about what a field means -- which is the failure a method per combination
 // invites, and the reason there is no longer one.
 func TestAReplyBecomesTheMessageItDescribes(t *testing.T) {
-	embed := &cmdadapter.Embed{Description: "body"}
+	embed := &adapter.Embed{Description: "body"}
 
 	for name, tc := range map[string]struct {
-		in   cmdadapter.Reply
+		in   adapter.Reply
 		want func(discord.MessageCreate) error
 	}{
 		"embed": {
-			cmdadapter.Reply{Embed: embed},
+			adapter.Reply{Embed: embed},
 			func(m discord.MessageCreate) error {
 				if len(m.Embeds) != 1 || m.Flags != 0 {
 					return fmt.Errorf("embeds=%d flags=%d", len(m.Embeds), m.Flags)
@@ -152,7 +152,7 @@ func TestAReplyBecomesTheMessageItDescribes(t *testing.T) {
 			},
 		},
 		"ephemeral text": {
-			cmdadapter.Reply{Text: "hello", Ephemeral: true},
+			adapter.Reply{Text: "hello", Ephemeral: true},
 			func(m discord.MessageCreate) error {
 				if m.Content != "hello" || m.Flags != discord.MessageFlagEphemeral {
 					return fmt.Errorf("content=%q flags=%d", m.Content, m.Flags)
@@ -164,7 +164,7 @@ func TestAReplyBecomesTheMessageItDescribes(t *testing.T) {
 			},
 		},
 		"attachment": {
-			cmdadapter.Reply{Embed: embed, File: strings.NewReader("x"), FileName: "a.txt"},
+			adapter.Reply{Embed: embed, File: strings.NewReader("x"), FileName: "a.txt"},
 			func(m discord.MessageCreate) error {
 				if len(m.Files) != 1 || m.Files[0].Name != "a.txt" {
 					return fmt.Errorf("files=%d", len(m.Files))
@@ -173,8 +173,8 @@ func TestAReplyBecomesTheMessageItDescribes(t *testing.T) {
 			},
 		},
 		"buttons": {
-			cmdadapter.Reply{Embed: embed, Buttons: []cmdadapter.ActionRow{{
-				Buttons: []cmdadapter.Button{{Label: "go", CustomID: "search:yt:1"}},
+			adapter.Reply{Embed: embed, Buttons: []adapter.ActionRow{{
+				Buttons: []adapter.Button{{Label: "go", CustomID: "search:yt:1"}},
 			}}},
 			func(m discord.MessageCreate) error {
 				if len(m.Components) != 1 {
