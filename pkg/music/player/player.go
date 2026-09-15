@@ -377,9 +377,24 @@ func (p *Player) PlayNext(target string) error {
 // idle, with no channel anyone can still signal. So phase two checks it is
 // still talking about the same run.
 func (p *Player) Stop(disconnect bool) error {
+	return p.stop(disconnect, anyGeneration)
+}
+
+// anyGeneration means "whatever is playing", which is what a user asking to
+// stop means. A caller that means one particular run names it.
+const anyGeneration = int64(-1)
+
+// stop ends the run named by want, or whatever is current when want is
+// anyGeneration, and does nothing when a different run is in charge.
+func (p *Player) stop(disconnect bool, want int64) error {
 	p.log.Info().Bool("disconnect", disconnect).Msg("stop_called")
 
 	p.mu.Lock()
+	if want != anyGeneration && p.gen != want {
+		p.mu.Unlock()
+		p.log.Info().Int64("wanted", want).Msg("stop_skipped_not_that_run")
+		return nil
+	}
 	stopping := p.gen
 	doneCh := p.playbackDone
 	p.stopOnce.Do(func() {
@@ -597,7 +612,13 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 		p.mu.Unlock()
 		nextErr := p.PlayNext(target)
 		if errors.Is(nextErr, ErrNoTracksInQueue) {
-			_ = p.Stop(true)
+			// This run's own teardown, not "stop whatever is playing". A
+			// /play that arrives between the queue looking empty and this
+			// line is both the commonest way a queue stops being empty and
+			// the one where an unconditional stop takes the track the user
+			// just asked for with it -- clearing the queue it was added to
+			// and leaving the voice channel it was about to play in.
+			_ = p.stop(true, gen)
 			return
 		}
 		if nextErr != nil {

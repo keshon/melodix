@@ -195,3 +195,100 @@ func TestASupersededRunDoesNotClearTheCurrentOne(t *testing.T) {
 }
 
 var _ parsers.Streamer = fakeStreamer{}
+
+// A /play that lands exactly as the queue runs dry is the commonest way a
+// queue stops being empty, and it used to be the way to lose a track: the
+// finishing run had already decided the queue was empty, and its teardown
+// cleared the queue the new track had just been added to, leaving the voice
+// channel it was about to play in.
+//
+// The teardown now names its own run, so this drives it directly: the
+// finishing run's stop, arriving after a newer one has started.
+func TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"plays": pacedStreamer("t", 4000)})
+
+	provider := newFakeProvider(&fakeSink{block: true})
+	p := New(provider, nil)
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{testTrack("first", "plays")}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := p.PlayNext("chan"); err != nil {
+		t.Fatalf("play first: %v", err)
+	}
+	p.mu.Lock()
+	finishing := p.gen
+	p.mu.Unlock()
+
+	// What /play does when it arrives at the boundary.
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{testTrack("second", "plays")}); err != nil {
+		t.Fatalf("enqueue second: %v", err)
+	}
+	if err := p.PlayNext("chan"); err != nil {
+		t.Fatalf("play second: %v", err)
+	}
+
+	// The finishing run's teardown, arriving late.
+	_ = p.stop(true, finishing)
+
+	if !p.IsPlaying() {
+		t.Fatal("the queue-end teardown stopped the track that replaced it")
+	}
+	track, ok := p.CurrentTrack()
+	if !ok || track.SourceInfo.Title != "second" {
+		t.Fatalf("current track is %+v, want the newly queued one", track)
+	}
+	if got := provider.releaseCount(); got != 0 {
+		t.Fatalf("left the voice channel %d times under a track that was playing", got)
+	}
+	_ = p.Stop(true)
+}
+
+// The other half: with nothing to supersede it, the queue-end teardown must
+// still happen, or the bot sits in a voice channel with an empty queue.
+func TestAQueueEndTeardownStillLeavesWhenNothingFollowed(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"plays": pacedStreamer("t", 40)})
+
+	provider := newFakeProvider(&fakeSink{})
+	p := New(provider, nil)
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{testTrack("only", "plays")}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := p.PlayNext("chan"); err != nil {
+		t.Fatalf("play: %v", err)
+	}
+
+	waitRelease(t, provider, 5*time.Second)
+	if p.IsPlaying() {
+		t.Fatal("still playing after the queue ended")
+	}
+}
+
+// A user asking to stop means whatever is playing, whichever run that is.
+func TestStopWithoutAGenerationStopsWhateverIsPlaying(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"plays": pacedStreamer("t", 4000)})
+
+	provider := newFakeProvider(&fakeSink{block: true})
+	p := New(provider, nil)
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{
+		testTrack("first", "plays"),
+		testTrack("second", "plays"),
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := p.PlayNext("chan"); err != nil {
+		t.Fatalf("play first: %v", err)
+	}
+	if err := p.PlayNext("chan"); err != nil {
+		t.Fatalf("play second: %v", err)
+	}
+
+	if err := p.Stop(true); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if p.IsPlaying() {
+		t.Fatal("/stop left a track playing")
+	}
+	if len(p.Queue()) != 0 {
+		t.Fatal("/stop left the queue populated")
+	}
+}
