@@ -25,27 +25,16 @@ type conn interface {
 	VoiceResources() (disgovoice.Manager, *sink.DaveRegistry)
 }
 
-// connHolder boxes the interface so it can live in an atomic.Value, which
-// needs a single concrete type.
-type connHolder struct {
-	c conn
-}
-
 // setConn publishes a live connection; clearConn withdraws it.
-func (b *Bot) setConn(c conn) { b.conn.Store(&connHolder{c: c}) }
-func (b *Bot) clearConn()     { b.conn.Store(&connHolder{}) }
+func (b *Bot) setConn(c conn) { b.conn.Store(&c) }
+func (b *Bot) clearConn()     { b.conn.Store(nil) }
 
 // currentConn is the live connection, or nil between sessions.
 func (b *Bot) currentConn() conn {
-	v := b.conn.Load()
-	if v == nil {
-		return nil
+	if c := b.conn.Load(); c != nil {
+		return *c
 	}
-	holder, ok := v.(*connHolder)
-	if !ok || holder == nil {
-		return nil
-	}
-	return holder.c
+	return nil
 }
 
 // deadSinkProvider is what a guild gets when its id is not a snowflake, which

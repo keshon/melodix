@@ -37,8 +37,8 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 	// underneath.
 	b.voice = voice.NewVoiceService(b.sessionAPI, b.newSinkProvider, cfg, storage, log)
 	b.commands = cmdqueue.New(log)
-	b.sessionCtx.Store(&sessionCtxHolder{ctx: context.Background()})
-	b.cmdGuard.Store(&cmdGuardHolder{g: disabledGuard})
+	b.setSessionContext(context.Background())
+	b.setGuard(disabledGuard)
 	kkdai.SetLogger(log)
 	ffmpeg.SetLogger(log)
 	soundcloudapi.SetLogger(log)

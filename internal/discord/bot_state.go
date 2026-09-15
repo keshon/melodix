@@ -28,17 +28,18 @@ type Bot struct {
 	// halfway through whatever it was doing to the player.
 	commands *cmdqueue.Queue
 
-	sessionCtx atomic.Value // *sessionCtxHolder
-	cmdGuard   atomic.Value // *cmdGuardHolder
-	conn       atomic.Value // *connHolder
-}
-
-type sessionCtxHolder struct {
-	ctx context.Context
-}
-
-type cmdGuardHolder struct {
-	g *execguard.Guard
+	// Replaced wholesale when a session opens and cleared when one closes, so
+	// a reader gets a live one or the fallback, never a half-torn one.
+	//
+	// atomic.Pointer rather than atomic.Value: Value stores an interface and
+	// panics if the concrete type it is given ever changes, which is why each
+	// of these used to be a one-field struct wrapping what it actually held --
+	// a box whose only job was to be a single type. There was even a test that
+	// storing the same type twice does not panic, which is a test of the
+	// standard library.
+	sessionCtx atomic.Pointer[context.Context]
+	cmdGuard   atomic.Pointer[execguard.Guard]
+	conn       atomic.Pointer[conn]
 }
 
 var disabledGuard = execguard.New(0)
@@ -53,20 +54,20 @@ var disabledGuard = execguard.New(0)
 // already expired.
 const slotWaitBudget = 2 * time.Second
 
+func (b *Bot) setSessionContext(ctx context.Context) { b.sessionCtx.Store(&ctx) }
+
 func (b *Bot) baseSessionContext() context.Context {
-	if v := b.sessionCtx.Load(); v != nil {
-		if holder, ok := v.(*sessionCtxHolder); ok && holder != nil && holder.ctx != nil {
-			return holder.ctx
-		}
+	if ctx := b.sessionCtx.Load(); ctx != nil && *ctx != nil {
+		return *ctx
 	}
 	return context.Background()
 }
 
+func (b *Bot) setGuard(g *execguard.Guard) { b.cmdGuard.Store(g) }
+
 func (b *Bot) guard() *execguard.Guard {
-	if v := b.cmdGuard.Load(); v != nil {
-		if holder, ok := v.(*cmdGuardHolder); ok && holder != nil && holder.g != nil {
-			return holder.g
-		}
+	if g := b.cmdGuard.Load(); g != nil {
+		return g
 	}
 	return disabledGuard
 }

@@ -22,8 +22,8 @@ func newDispatchBot(t *testing.T, parallelism int) *Bot {
 		log:      zerolog.Nop(),
 		commands: cmdqueue.New(zerolog.Nop()),
 	}
-	b.sessionCtx.Store(&sessionCtxHolder{ctx: context.Background()})
-	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(parallelism)})
+	b.setSessionContext(context.Background())
+	b.setGuard(execguard.New(parallelism))
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

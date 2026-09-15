@@ -1,8 +1,12 @@
 package reply
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"testing"
+
+	"github.com/disgoorg/disgo/rest"
 )
 
 // The placeholder is only removed when the caller saw nothing in its place.
@@ -97,5 +101,29 @@ func TestPendingIsClaimedOnceUnderConcurrency(t *testing.T) {
 
 	if claims != 1 {
 		t.Errorf("placeholder claimed %d times, want exactly 1", claims)
+	}
+}
+
+// Every response fallback in the responder turns on recognising this one
+// error, so it is worth pinning to the code rather than to the sentence
+// Discord happens to send with it.
+func TestAlreadyAcknowledgedIsMatchedByCode(t *testing.T) {
+	acked := &rest.Error{Code: rest.JSONErrorCodeInteractionAlreadyAcknowledged}
+	if !alreadyAcknowledged(acked) {
+		t.Fatal("did not recognise 40060")
+	}
+	if !alreadyAcknowledged(fmt.Errorf("responding: %w", acked)) {
+		t.Fatal("did not recognise 40060 through a wrap")
+	}
+
+	for name, err := range map[string]error{
+		"nil":               nil,
+		"unrelated rest":    &rest.Error{Code: rest.JSONErrorCodeUnknownInteraction},
+		"plain error":       errors.New("already been acknowledged"),
+		"unrelated wrapped": fmt.Errorf("x: %w", errors.New("boom")),
+	} {
+		if alreadyAcknowledged(err) {
+			t.Errorf("%s: treated as an acknowledged interaction", name)
+		}
 	}
 }

@@ -87,14 +87,14 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	b.setConn(clientConn{client: client, dave: dave})
 	defer b.clearConn()
 
-	b.cmdGuard.Store(&cmdGuardHolder{g: execguard.New(b.cfg.CommandParallelism)})
+	b.setGuard(execguard.New(b.cfg.CommandParallelism))
 
 	sessionCtx, cancelSession := context.WithCancel(ctx)
-	b.sessionCtx.Store(&sessionCtxHolder{ctx: sessionCtx})
+	b.setSessionContext(sessionCtx)
 	defer func() {
 		cancelSession()
-		b.sessionCtx.Store(&sessionCtxHolder{ctx: context.Background()})
-		b.cmdGuard.Store(&cmdGuardHolder{g: disabledGuard})
+		b.setSessionContext(context.Background())
+		b.setGuard(disabledGuard)
 	}()
 
 	openCtx, cancelOpen := context.WithTimeout(ctx, 30*time.Second)

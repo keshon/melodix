@@ -1,8 +1,8 @@
 package reply
 
 import (
+	"errors"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
@@ -76,12 +76,17 @@ func ephemeralFlags(ephemeral bool) discord.MessageFlags {
 // The same recovery the discordgo backend does, for the same reason: a command
 // that defers and then responds, or two paths that both answer, would
 // otherwise surface as a failed reply rather than as the message the user was
-// owed. Matched on text because the API returns it as a generic error.
+// owed.
+//
+// It used to match on the message text, because discordgo surfaced this as a
+// generic error and there was nothing else to match on. disgo types it, and
+// the difference is not cosmetic: every response fallback in this file depends
+// on recognising it, and the old match survived only because the rendered
+// error happened to contain the English phrase Discord sends.
 func alreadyAcknowledged(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "already been acknowledged")
+	var restErr *rest.Error
+	return errors.As(err, &restErr) &&
+		restErr.Code == rest.JSONErrorCodeInteractionAlreadyAcknowledged
 }
 
 func (r *Responder) AckDeferred(ephemeral bool) error {
