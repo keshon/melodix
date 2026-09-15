@@ -385,9 +385,21 @@ func (s *Service) StopAllPlayers() {
 	s.sinkProviders = nil // reinitialized on next GetOrCreatePlayer if needed
 	s.mu.Unlock()
 
+	// In parallel, because each Stop leaves a voice channel and that waits on
+	// the voice gateway. Sequentially, one guild whose gateway has stopped
+	// answering spends the whole shutdown budget on its own and every guild
+	// behind it is left in its channel -- and a server that has stopped
+	// answering one connection is not answering the others either, so the
+	// slow case is the case where they are all slow.
+	var stopping sync.WaitGroup
 	for _, p := range players {
-		_ = p.Stop(true)
+		stopping.Add(1)
+		go func(p *player.Player) {
+			defer stopping.Done()
+			_ = p.Stop(true)
+		}(p)
 	}
+	stopping.Wait()
 }
 
 // InvalidateAllSinks disconnects and forgets current voice connections for all

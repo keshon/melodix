@@ -32,9 +32,8 @@ const gatewayCloseBudget = 3 * time.Second
 const commandsDrainTimeout = 5 * time.Second
 
 // playersStopTimeout bounds stopping playback across every guild. Each player
-// leaves its voice channel, which is a round trip, and they are stopped one
-// after another -- so a server that has stopped answering costs this once
-// rather than once per guild.
+// leaves its voice channel, which is a round trip; they are stopped in
+// parallel, so this is one guild's worst case rather than the sum of them.
 const playersStopTimeout = 10 * time.Second
 
 // closeWithin runs a teardown step, gives up waiting for it after timeout, and
