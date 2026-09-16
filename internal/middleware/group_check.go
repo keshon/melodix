@@ -57,7 +57,7 @@ func disabledGroup(c command.Command, guildID string, stor *storage.Storage, res
 		return false
 	}
 	if disabled {
-		respond("This command is disabled on this server.\nUse `/commands status` to check which commands are disabled.")
+		respond("This command is disabled on this server.\nUse `/settings commands status` to check which commands are disabled.")
 		return true
 	}
 	return false
