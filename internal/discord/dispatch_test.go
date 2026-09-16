@@ -2,6 +2,7 @@ package discord
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -213,4 +214,79 @@ func TestACommandThatCannotGetASlotIsRefused(t *testing.T) {
 		t.Fatal("a command with no slot waited past its own budget")
 	}
 	close(release)
+}
+
+// recordingResponder keeps the replies a refused command was given.
+type recordingResponder struct {
+	mu      sync.Mutex
+	replies []adapter.Reply
+}
+
+func (r *recordingResponder) record(reply adapter.Reply) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.replies = append(r.replies, reply)
+	return nil
+}
+
+func (r *recordingResponder) AckDeferred(bool) error              { return nil }
+func (r *recordingResponder) Respond(reply adapter.Reply) error   { return r.record(reply) }
+func (r *recordingResponder) Followup(reply adapter.Reply) error  { return r.record(reply) }
+func (r *recordingResponder) EditResponseText(string) error       { return nil }
+func (r *recordingResponder) ReplaceMessage(*adapter.Embed) error { return nil }
+func (r *recordingResponder) ResolveDeferred() error              { return nil }
+func (r *recordingResponder) AnswerEmbedMessage(*adapter.Embed) (string, string, error) {
+	return "", "", nil
+}
+
+var _ adapter.Responder = (*recordingResponder)(nil)
+
+func (r *recordingResponder) only(t *testing.T) string {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.replies) != 1 || r.replies[0].Embed == nil {
+		t.Fatalf("got %d replies, want exactly one embed", len(r.replies))
+	}
+	return r.replies[0].Embed.Description
+}
+
+// A guild with a full lane is busy, not shutting down. It used to be told the
+// bot was shutting down, which reads as "stop trying" at the exact moment the
+// right answer is "try again shortly".
+func TestAFullLaneIsReportedAsBusyNotAsShutdown(t *testing.T) {
+	b := newDispatchBot(t, 4)
+
+	release := make(chan struct{})
+	defer close(release)
+	blocked := make(chan struct{})
+	b.dispatchInteraction(inGuild("g1"), nil, "slash", "slow", func(context.Context) error {
+		close(blocked)
+		<-release
+		return nil
+	})
+	<-blocked
+	for i := 0; i < 64; i++ {
+		b.dispatchInteraction(inGuild("g1"), nil, "slash", "queued", func(context.Context) error { return nil })
+	}
+
+	r := &recordingResponder{}
+	b.dispatchInteraction(inGuild("g1"), r, "slash", "refused", func(context.Context) error { return nil })
+
+	if got := r.only(t); strings.Contains(got, "shutting down") {
+		t.Fatalf("a full lane replied %q", got)
+	}
+}
+
+// A closed queue really is shutting down, and still says so.
+func TestAClosedQueueStillSaysItIsShuttingDown(t *testing.T) {
+	b := newDispatchBot(t, 4)
+	b.commands.Close(context.Background())
+
+	r := &recordingResponder{}
+	b.dispatchInteraction(inGuild("g1"), r, "slash", "late", func(context.Context) error { return nil })
+
+	if got := r.only(t); !strings.Contains(got, "shutting down") {
+		t.Fatalf("a closed queue replied %q", got)
+	}
 }

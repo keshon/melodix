@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/queue"
 )
 
 type commandRunOptions struct {
@@ -124,13 +125,20 @@ func (b *Bot) dispatchInteraction(
 		run()
 		return
 	}
-	if b.commands.Submit(commandLane(who), run) {
+	err := b.commands.Submit(commandLane(who), run)
+	if err == nil {
 		return
 	}
 
-	b.log.Warn().Str("kind", kind).Str("command", name).Msg("command_refused_shutting_down")
+	text := "Bot is shutting down."
+	if errors.Is(err, queue.ErrLaneFull) {
+		text = "Too many commands are waiting on this server. Try again in a moment."
+		b.log.Warn().Str("kind", kind).Str("command", name).Msg("command_refused_lane_full")
+	} else {
+		b.log.Warn().Str("kind", kind).Str("command", name).Err(err).Msg("command_refused_shutting_down")
+	}
 	if r != nil {
-		_ = r.Respond(adapter.Reply{Embed: &adapter.Embed{Description: "Bot is shutting down."}, Ephemeral: true})
+		_ = r.Respond(adapter.Reply{Embed: &adapter.Embed{Description: text}, Ephemeral: true})
 	}
 }
 

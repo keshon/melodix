@@ -25,6 +25,7 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"runtime/debug"
 	"sync"
 
@@ -113,19 +114,28 @@ func (q *Queue) Release() {
 	}
 }
 
+// ErrClosed and ErrLaneFull are the two reasons Submit refuses work. They mean
+// different things to the person waiting on the command -- the bot is going
+// away, or their server is sending commands faster than they can run -- so a
+// caller answers them differently. They used to share one false, and a busy
+// guild was told the bot was shutting down.
+var (
+	ErrClosed   = errors.New("command queue is closed")
+	ErrLaneFull = errors.New("too many commands queued for this server")
+)
+
 // Submit queues fn to run on key's lane, after everything already queued
-// there. It returns immediately; ok is false when the queue is closed or the
-// lane is full, and in both cases fn will not run and the caller still owes
-// somebody an answer.
-func (q *Queue) Submit(key string, fn func()) (ok bool) {
+// there. It returns immediately. On ErrClosed or ErrLaneFull fn will not run,
+// and the caller still owes somebody an answer.
+func (q *Queue) Submit(key string, fn func()) error {
 	if fn == nil {
-		return false
+		return errors.New("queue: nil command")
 	}
 
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.closed {
-		return false
+		return ErrClosed
 	}
 
 	l, found := q.lanes[key]
@@ -135,7 +145,7 @@ func (q *Queue) Submit(key string, fn func()) (ok bool) {
 	}
 	if len(l.pending) >= maxPerLane {
 		q.log.Warn().Str("lane", key).Int("depth", len(l.pending)).Msg("command_lane_full")
-		return false
+		return ErrLaneFull
 	}
 	l.pending = append(l.pending, fn)
 	if !l.draining {
@@ -143,7 +153,7 @@ func (q *Queue) Submit(key string, fn func()) (ok bool) {
 		q.running.Add(1)
 		go q.drain(key, l)
 	}
-	return true
+	return nil
 }
 
 func (q *Queue) drain(key string, l *lane) {

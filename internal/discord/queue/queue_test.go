@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,7 +21,7 @@ func TestSubmitReturnsBeforeTheWorkRuns(t *testing.T) {
 	release := make(chan struct{})
 	started := make(chan struct{})
 
-	if ok := q.Submit("g1", func() { close(started); <-release }); !ok {
+	if err := q.Submit("g1", func() { close(started); <-release }); err != nil {
 		t.Fatal("submit refused")
 	}
 
@@ -40,7 +41,7 @@ func TestOneGuildRunsOneCommandAtATime(t *testing.T) {
 
 	for i := 0; i < maxPerLane/2; i++ {
 		wg.Add(1)
-		if !q.Submit("g1", func() {
+		if err := q.Submit("g1", func() {
 			defer wg.Done()
 			n := live.Add(1)
 			for {
@@ -51,8 +52,8 @@ func TestOneGuildRunsOneCommandAtATime(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond)
 			live.Add(-1)
-		}) {
-			t.Fatalf("submit %d refused below the lane's bound", i)
+		}); err != nil {
+			t.Fatalf("submit %d refused below the lane's bound: %v", i, err)
 		}
 	}
 
@@ -71,7 +72,7 @@ func TestOneGuildKeepsArrivalOrder(t *testing.T) {
 	q := newTestQueue()
 	release := make(chan struct{})
 	blocked := make(chan struct{})
-	if !q.Submit("g1", func() { close(blocked); <-release }) {
+	if err := q.Submit("g1", func() { close(blocked); <-release }); err != nil {
 		t.Fatal("submit refused")
 	}
 	<-blocked
@@ -83,13 +84,13 @@ func TestOneGuildKeepsArrivalOrder(t *testing.T) {
 	const queued = maxPerLane - 1 // one slot is the blocker's
 	for i := 0; i < queued; i++ {
 		wg.Add(1)
-		if !q.Submit("g1", func() {
+		if err := q.Submit("g1", func() {
 			defer wg.Done()
 			mu.Lock()
 			seen = append(seen, i)
 			mu.Unlock()
-		}) {
-			t.Fatalf("submit %d refused below the lane's bound", i)
+		}); err != nil {
+			t.Fatalf("submit %d refused below the lane's bound: %v", i, err)
 		}
 	}
 	close(release)
@@ -157,7 +158,7 @@ func TestALaneRestartsAfterGoingIdle(t *testing.T) {
 	q := newTestQueue()
 	for i := 0; i < 200; i++ {
 		done := make(chan struct{})
-		if ok := q.Submit("g1", func() { close(done) }); !ok {
+		if err := q.Submit("g1", func() { close(done) }); err != nil {
 			t.Fatalf("submit %d refused", i)
 		}
 		select {
@@ -203,7 +204,7 @@ func TestCloseDrainsThenRefuses(t *testing.T) {
 	if !finished.Load() {
 		t.Fatal("Close abandoned a command that was already running")
 	}
-	if q.Submit("g1", func() {}) {
+	if err := q.Submit("g1", func() {}); !errors.Is(err, ErrClosed) {
 		t.Fatal("a closed queue accepted work it will never run")
 	}
 }
@@ -243,8 +244,11 @@ func TestALaneRefusesRatherThanGrowWithoutBound(t *testing.T) {
 
 	accepted := 0
 	for i := 0; i < maxPerLane*2; i++ {
-		if q.Submit("g1", func() {}) {
+		switch err := q.Submit("g1", func() {}); {
+		case err == nil:
 			accepted++
+		case !errors.Is(err, ErrLaneFull):
+			t.Fatalf("a full lane refused with %v, want ErrLaneFull", err)
 		}
 	}
 	if accepted != maxPerLane {
@@ -252,7 +256,7 @@ func TestALaneRefusesRatherThanGrowWithoutBound(t *testing.T) {
 	}
 
 	// A different guild is unaffected: the bound is per lane, not global.
-	if !q.Submit("g2", func() {}) {
+	if err := q.Submit("g2", func() {}); err != nil {
 		t.Fatal("one guild filling its lane refused another guild's command")
 	}
 }
