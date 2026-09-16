@@ -82,7 +82,7 @@ outright the day somebody sets this up without ticking all three boxes.
 
 Swap in your own application ID and open this URL:
 
-https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&permissions=3238912
+https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&permissions=3165184
 
 ### Step 3: Configure
 

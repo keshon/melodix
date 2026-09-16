@@ -1,6 +1,10 @@
 package perm
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -39,5 +43,35 @@ func TestNameFallsBackToHex(t *testing.T) {
 
 	if got := Name(unknownBit); got != "0x4000000000000000" {
 		t.Errorf("Name(unknown) = %q, want the hex form", got)
+	}
+}
+
+// The invite has to grant what playback checks for. The recommended set asked
+// for eight permissions and not Connect or Speak, which is the pair
+// CheckBotVoicePermissions refuses /play without -- so a bot invited exactly
+// as recommended could not play anything.
+func TestTheInviteGrantsWhatPlaybackChecks(t *testing.T) {
+	if RecommendedBotMask()&int64(VoicePlayback) != int64(VoicePlayback) {
+		t.Fatalf("recommended mask %#x lacks the voice permissions playback requires (%#x)",
+			RecommendedBotMask(), int64(VoicePlayback))
+	}
+}
+
+// running.md hands people an invite URL with the mask written out, and that
+// number is a third copy of this list unless something holds it to the first.
+// It had drifted: it asked for Manage Messages and not Attach Files, while the
+// list here asked for Manage Roles and not Connect.
+func TestRunningDocInvitesWithTheRecommendedMask(t *testing.T) {
+	doc, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "running.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`oauth2/authorize\?[^\s)]*permissions=(\d+)`).FindSubmatch(doc)
+	if m == nil {
+		t.Fatal("running.md has no invite URL with a permissions= mask")
+	}
+	if got, want := string(m[1]), strconv.FormatInt(RecommendedBotMask(), 10); got != want {
+		t.Fatalf("running.md invites with permissions=%s; the recommended mask is %s (%s)",
+			got, want, strings.Join(RecommendedBotNames(), ", "))
 	}
 }

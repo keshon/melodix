@@ -11,15 +11,23 @@ import "github.com/disgoorg/disgo/discord"
 // README to decide what they were granting was told wrong. Deriving both from
 // here means the next permission added shows up in both places or neither.
 var recommendedBot = []int64{
+	// Seeing the channel a command came from, and posting "Playback failed"
+	// there when there is no status message to edit.
 	int64(discord.PermissionViewChannel),
 	int64(discord.PermissionSendMessages),
 	int64(discord.PermissionEmbedLinks),
-	int64(discord.PermissionAttachFiles),
-	int64(discord.PermissionReadMessageHistory),
-	int64(discord.PermissionManageMessages),
-	int64(discord.PermissionManageRoles),
-	int64(discord.PermissionUseApplicationCommands),
+	// VoicePlayback, which /play and /next check before joining.
+	int64(discord.PermissionConnect),
+	int64(discord.PermissionSpeak),
 }
+
+// Nothing else is asked for, because nothing else is used: interaction replies
+// -- including /about's banner and export-data's file -- are answered through
+// the interaction, not posted as the bot, so they need no channel permission.
+// The set used to add Attach Files, Read Message History, Manage Messages,
+// Manage Roles and Use Application Commands, none of which any code path
+// exercises, while leaving out the two voice permissions playback refuses to
+// start without.
 
 // RecommendedBotMask is the permissions bitmask for the OAuth2 invite URL.
 func RecommendedBotMask() int64 {
@@ -39,3 +47,8 @@ func RecommendedBotNames() []string {
 	}
 	return names
 }
+
+// VoicePlayback is what the bot needs in a voice channel before it can play.
+// The invite asks for exactly these, and TestTheInviteGrantsWhatPlaybackChecks
+// holds the two together.
+var VoicePlayback = discord.PermissionConnect | discord.PermissionSpeak

@@ -7,6 +7,7 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/perm"
 )
 
 // The connection-level answers. Everything here reads from disgo's cache
@@ -61,7 +62,7 @@ func (a *API) CheckBotVoicePermissions(channelID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return perms.Has(discord.PermissionConnect, discord.PermissionSpeak), nil
+	return perms.Has(perm.VoicePlayback), nil
 }
 
 func (a *API) botPermissions(channelID string) (discord.Permissions, error) {
