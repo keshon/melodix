@@ -32,28 +32,27 @@ Small commits, one bug each. Verified against the code at `779550a`.
 
 | # | Bug | Where | Fix |
 |---|---|---|---|
-| 1.1 | The gateway watchdog fires once per session and exits, so under `ignore`, `restart-voice` or a grace count it never fires again. Both `.env.example` files also set `DISCORD_UNHEALTHY_MODE=ignore` and `INIT_SLASH_COMMANDS=true`, the opposite of the code defaults: copying the example turns session recovery off | `watchdog/ws_silence.go`, `config.go`, `.env.example`, `docker/.env.example` | Keep watching after a signal; align the examples and extend `config_doc_test.go` to check example values |
-| 1.2 | `/history` page 1 shows the oldest 15 rows | `command/music/history/history.go` | Newest first; fix the footer |
-| 1.3 | A full command lane replies "Bot is shutting down." | `discord/queue/queue.go`, `handlers_common.go` | `Submit` says why it refused |
-| 1.4 | `/help flat` never lists subcommands: the assertion is made on the middleware wrapper | `discord/adapter/slash_render.go` | `command.Root(c)`, plus a test that the assertion matches |
-| 1.5 | The disabled-group refusal points at `/commands status`, which does not exist | `middleware/group_check.go` | `/settings commands status` |
-| 1.6 | Three permission lists disagree (README, running.md, runtime); the recommended set lacks Connect and Speak | `discord/perm/recommended.go`, `docs/running.md` | One list; the invite link is built from it |
-| 1.7 | `DEVELOPER_ID` is parsed and never used; running.md promises developer-only commands | `config.go`, `perm/permissions.go` | Remove it |
+| 1.1 | ~~The gateway watchdog fires once per session and exits, so under `ignore`, `restart-voice` or a grace count it never fires again. Both `.env.example` files also set `DISCORD_UNHEALTHY_MODE=ignore` and `INIT_SLASH_COMMANDS=true`, the opposite of the code defaults: copying the example turns session recovery off~~ | `watchdog/ws_silence.go`, `config.go`, `.env.example`, `docker/.env.example` | Keep watching after a signal; align the examples and extend `config_doc_test.go` to check example values — done in `4286a99` |
+| 1.2 | ~~`/history` page 1 shows the oldest 15 rows~~ | `command/music/history/history.go` | Newest first; fix the footer — done in `ceee88f` |
+| 1.3 | ~~A full command lane replies "Bot is shutting down."~~ | `discord/queue/queue.go`, `handlers_common.go` | `Submit` says why it refused — done in `e60e1cf` |
+| 1.4 | ~~`/help flat` never lists subcommands: the assertion is made on the middleware wrapper~~ | `discord/adapter/slash_render.go` | `command.Root(c)`, plus a test that the assertion matches — done in `ad4113f` |
+| 1.5 | ~~The disabled-group refusal points at `/commands status`, which does not exist~~ | `middleware/group_check.go` | `/settings commands status` — done in `b784e3d` |
+| 1.6 | ~~Three permission lists disagree (README, running.md, runtime); the recommended set lacks Connect and Speak~~ | `discord/perm/recommended.go`, `docs/running.md` | One list; the invite link is built from it — done in `006f054` |
+| 1.7 | ~~`DEVELOPER_ID` is parsed and never used; running.md promises developer-only commands~~ | `config.go`, `perm/permissions.go` | Remove it — done in `43eae08` |
 | 1.8 | Starting playback edits the *previous* status message to the new track, which then stays stuck there | `voice/service.go`, `player.go`, `command/music/playback` | Folded into 2.E |
 | 1.9 | A `/search` pick registers the ephemeral chooser as the status message: one person sees Now Playing, later edits fail | `command/music/search`, `voice/service.go` | Folded into 2.E |
 | 1.10 | "Ephemeral" replies after a public defer are public, including the dispatcher's own error replies | `adapter/reply_methods.go`, `reply/responder.go`, `handlers_common.go` | Folded into 2.C |
 | 1.11 | Component interactions bypass all middleware: no group check, no audit row | `discord/handlers.go`, `middleware/group_check.go` | Folded into 2.D |
 
-**Suspected — prove with a failing test or a live check before fixing:**
+**Suspected — proved or refuted before fixing:**
 
-- **Queue-end teardown vs `/play`.** If `/play` has enqueued but not yet called
-  `PlayNext`, the finishing run's `stop(true, gen)` still sees its own
-  generation, clears the queue with the new track in it and leaves voice.
-- **yt-dlp live duration.** With no root duration, both yt-dlp parsers take the
-  first fragment's, so a live stream can read as a five-second track and stop
-  recovering (`ytdlp/link.go`, `ytdlp/pipe.go`).
-- **SoundCloud metadata.** `scnative` overwrites Title and Duration
-  unconditionally; a zero duration makes a track read as live.
+- ~~**Queue-end teardown vs `/play`.**~~ Confirmed by a failing test and fixed in
+  `2f48338`: a teardown that finds tracks queued stands down.
+- ~~**yt-dlp live duration.**~~ Refuted for the sources that reach yt-dlp: a
+  YouTube live stream's formats carry no fragments (checked against
+  `yt-dlp -j` on a live broadcast), so the fallback never fires.
+- **SoundCloud metadata.** Not reproduced; goes away with 2.A, which only
+  applies what a parser actually learned.
 
 Release after phase 1.
 
@@ -96,7 +95,7 @@ type run struct {
 `Player` holds `run *run` instead of `gen`, `stopPlayback`, `playbackDone` and
 `stopOnce`. "Is this still my run?" becomes `p.run == r`, and a run's channels
 cannot be confused with another run's because they are not on `Player` at all.
-The queue-end race above is fixed here. Rule 5's tests stay as the net; its
+Rule 5's tests stay as the net, including the queue-end one; its
 text and the per-run-channel invariant in conventions.md are rewritten.
 
 ### 2.C Reply visibility follows the deferral (fixes 1.10)
