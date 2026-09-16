@@ -423,6 +423,21 @@ func (p *Player) stop(disconnect bool, want int64) error {
 		return nil
 	}
 
+	// A run's queue-end teardown decided to leave when the queue looked empty,
+	// and that was before it retook the lock. The generation cannot tell
+	// whether anything happened since: /play enqueues first and starts a run
+	// second, so between the two the generation still matches while the queue
+	// no longer is empty. Clearing it here threw away the track /play had just
+	// added and left voice under it. Whoever enqueued is about to start it, so
+	// the teardown stands down. A user's stop means whatever is queued too, and
+	// is not affected.
+	if disconnect && want != anyGeneration && len(p.queue) > 0 {
+		queued := len(p.queue)
+		p.mu.Unlock()
+		p.log.Info().Int("queue_len", queued).Msg("queue_end_teardown_skipped")
+		return nil
+	}
+
 	p.playing = false
 	p.starting = false
 	p.currTrack = nil

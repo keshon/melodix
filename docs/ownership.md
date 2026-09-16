@@ -118,6 +118,12 @@ skip — long tracks exercise the first check and never the second.
 concurrent runs into one sink when the check is removed and one when it is
 there.
 
+The generation has one blind spot, and the queue-end teardown covers it
+separately: `/play` enqueues before it starts a run, so between the two the
+generation still matches while the queue is no longer empty. A teardown that
+finds tracks queued stands down rather than clearing them. Tested:
+`TestAQueueEndTeardownKeepsATrackQueuedAfterTheQueueEmptied`.
+
 ## 6. Nothing reachable from a Player has session lifetime
 
 A `voicesink.Provider` holds no voice manager and no DAVE registry. It resolves

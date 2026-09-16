@@ -340,3 +340,46 @@ func TestAStopNeverResetsARunItDidNotAskAbout(t *testing.T) {
 		t.Fatalf("%d runs streamed into one sink at once: a stop reset a run it never asked about", peak)
 	}
 }
+
+// The window the generation check cannot see. A finishing run's completion
+// goroutine finds the queue empty and heads for its teardown; /play enqueues a
+// track and has not yet called PlayNext, so no newer run exists and the
+// generation still matches. The teardown then cleared the queue it had not
+// looked at since, and left voice -- so /play's PlayNext found nothing and told
+// the user there was nothing to play, under the track they had just added.
+//
+// The state is built directly, as the other teardown tests do: the finished
+// run's generation, no run live, a track queued after the queue emptied.
+func TestAQueueEndTeardownKeepsATrackQueuedAfterTheQueueEmptied(t *testing.T) {
+	swapRegistry(t, map[string]parsers.Streamer{"plays": pacedStreamer("t", 4000)})
+
+	provider := newFakeProvider(&fakeSink{block: true})
+	p := New(provider, nil)
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{testTrack("first", "plays")}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := p.PlayNext("chan"); err != nil {
+		t.Fatalf("play first: %v", err)
+	}
+	p.mu.Lock()
+	finishing := p.gen
+	p.mu.Unlock()
+	// The run is over; nothing newer has started.
+	_ = p.Stop(false)
+
+	// What /play does next, up to but not including its PlayNext.
+	if err := p.EnqueueTrackInfos([]sources.TrackInfo{testTrack("second", "plays")}); err != nil {
+		t.Fatalf("enqueue second: %v", err)
+	}
+
+	// The finished run's queue-end teardown, arriving in that gap.
+	_ = p.stop(true, finishing)
+
+	if got := len(p.Queue()); got != 1 {
+		t.Fatalf("queue has %d track(s) after the teardown, want the one /play just added", got)
+	}
+	if got := provider.releaseCount(); got != 0 {
+		t.Fatalf("left the voice channel %d time(s) with a track waiting to play", got)
+	}
+	_ = p.Stop(true)
+}
