@@ -32,7 +32,9 @@ func FormatCommandWithSubcommands(c command.Command) string {
 	var sb strings.Builder
 	sb.WriteString(FormatCommandEntry(c))
 
-	sp, ok := c.(SlashProvider)
+	// The registry holds commands behind middleware, and the wrapper has no
+	// SlashDefinition of its own: assert on what it wraps.
+	sp, ok := command.Root(c).(SlashProvider)
 	if !ok {
 		return sb.String()
 	}
