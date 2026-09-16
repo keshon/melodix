@@ -8,6 +8,7 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/internal/storage"
 )
 
 type History struct {
@@ -130,10 +131,8 @@ func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 	default:
 		totalRows = len(rows)
 		embedTitle = "🎵 Playback history (timeline)"
-		footerExtra = "Chronological; " + historyFooterReplay
-		for _, m := range rows {
-			lines = append(lines, common.FormatTimelineLine(m.ID, m.Title, m.URL, m.PlayedAt))
-		}
+		footerExtra = "Newest first; " + historyFooterReplay
+		lines = timelineLines(rows)
 	}
 
 	totalPages := (totalRows + historyLinesPerPage - 1) / historyLinesPerPage
@@ -177,4 +176,16 @@ func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 		slashCtx.AppLog.Warn().Str("command", "history").Err(err).Msg("followup_embed_failed")
 	}
 	return nil
+}
+
+// timelineLines renders the timeline newest first, so page 1 is what was just
+// played. Storage keeps rows oldest first -- its trimming relies on that -- so
+// the order is turned here rather than there.
+func timelineLines(rows []storage.PlaybackEntry) []string {
+	lines := make([]string, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- {
+		m := rows[i]
+		lines = append(lines, common.FormatTimelineLine(m.ID, m.Title, m.URL, m.PlayedAt))
+	}
+	return lines
 }
