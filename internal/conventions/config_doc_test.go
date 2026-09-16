@@ -131,6 +131,50 @@ func TestDocumentedDefaultsMatchTheCode(t *testing.T) {
 	}
 }
 
+// The example files may set a value other than the default -- that is often
+// the point of an example -- but a "# Default:" comment above a variable is a
+// claim about the code, and it drifts like any other copy. Both examples once
+// set DISCORD_UNHEALTHY_MODE=ignore with no default stated beside it, so
+// copying either one quietly turned session recovery off.
+func TestExampleDefaultsMatchTheCode(t *testing.T) {
+	root := repoRoot(t)
+
+	cfg := readRepoFile(t, root, "internal", "config", "config.go")
+	declared := map[string]string{}
+	for _, m := range envTag.FindAllStringSubmatch(cfg, -1) {
+		declared[m[1]] = m[2]
+	}
+
+	stated := regexp.MustCompile(`^#\s*Default:\s*(.+)$`)
+	assignment := regexp.MustCompile(`^#?\s*([A-Z][A-Z0-9_]*)=`)
+
+	for _, path := range [][]string{{".env.example"}, {"docker", ".env.example"}} {
+		where := filepath.Join(path...)
+		pending := ""
+		for i, line := range strings.Split(readRepoFile(t, root, path...), "\n") {
+			line = strings.TrimSpace(line)
+			if m := stated.FindStringSubmatch(line); m != nil {
+				pending = strings.TrimSpace(m[1])
+				continue
+			}
+			m := assignment.FindStringSubmatch(line)
+			if m == nil || pending == "" {
+				continue
+			}
+			name, claim := m[1], pending
+			pending = ""
+			want, ok := declared[name]
+			if !ok || want == "" {
+				continue // unknown knobs are TestEveryConfigKnobIsDocumented's
+			}
+			if !strings.Contains(claim, want) {
+				t.Errorf("%s:%d says %s defaults to %q; internal/config declares %q",
+					where, i+1, name, claim, want)
+			}
+		}
+	}
+}
+
 func readRepoFile(t *testing.T, root string, parts ...string) string {
 	t.Helper()
 	path := filepath.Join(append([]string{root}, parts...)...)

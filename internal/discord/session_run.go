@@ -108,6 +108,10 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	}
 }
 
+// healthWatchTick is how often the silence watcher checks the gateway, and so
+// also how late a repeated signal can land after its timeout.
+const healthWatchTick = 10 * time.Second
+
 // startHealthWatcher watches for a gateway that has stopped talking.
 //
 // One watcher, not two. The fork needed a second to notice a session whose
@@ -121,6 +125,15 @@ func (b *Bot) startHealthWatcher(
 	tracker *watchdog.Tracker,
 	notifyUnhealthy func(),
 ) {
+	if mode := b.cfg.DiscordUnhealthyMode; mode != "ignore" && mode != "restart-voice" &&
+		!graceCanEscalate(b.cfg.DiscordUnhealthyGrace, b.cfg.DiscordUnhealthyWindow, b.cfg.WSSilenceTimeout, healthWatchTick) {
+		b.log.Warn().
+			Int("grace", b.cfg.DiscordUnhealthyGrace).
+			Dur("window", b.cfg.DiscordUnhealthyWindow).
+			Dur("timeout", b.cfg.WSSilenceTimeout).
+			Msg("unhealthy_grace_never_escalates")
+	}
+
 	go watchdog.NewWSSilence(
 		tracker,
 		b.cfg.WSSilenceTimeout,
@@ -136,7 +149,7 @@ func (b *Bot) startHealthWatcher(
 		},
 		watchdog.WSSilenceOptions{
 			SettleDelay:      15 * time.Second,
-			Tick:             10 * time.Second,
+			Tick:             healthWatchTick,
 			LastHeartbeatAck: session.LastHeartbeatAck,
 		},
 	).Run(ctx)

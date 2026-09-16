@@ -66,3 +66,16 @@ func (b *Bot) makeSessionUnhealthyNotifier(disconnected chan struct{}) func() {
 		})
 	}
 }
+
+// graceCanEscalate reports whether DISCORD_UNHEALTHY_GRACE can ever be
+// exceeded. The silence watcher repeats its signal on the first tick after each
+// timeout, and the count below resets when a signal lands outside the window,
+// so the window has to hold grace+1 signals spaced that far apart. When it
+// cannot, restart-session never restarts and nothing says so -- the defaults
+// do exactly that with any grace at all. See WSSilence.signal.
+func graceCanEscalate(grace int, window, timeout, tick time.Duration) bool {
+	if grace <= 0 || timeout <= 0 {
+		return true
+	}
+	return time.Duration(grace)*(timeout+tick) <= window
+}

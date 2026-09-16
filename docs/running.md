@@ -106,7 +106,7 @@ default and can be left alone until you actually need it:
 | `WS_SILENCE_TIMEOUT`      | How long without events or heartbeat ACKs before the gateway is treated as unhealthy. | `2m`  |
 | `DISCORD_UNHEALTHY_MODE`  | What to do when unhealthy: `restart-session`, `restart-voice`, or `ignore`. | `restart-session` |
 | `DISCORD_UNHEALTHY_GRACE` | Under `restart-session`, ignore the first N unhealthy signals in the window below (sinks still get invalidated). | `0` |
-| `DISCORD_UNHEALTHY_WINDOW`| The window `DISCORD_UNHEALTHY_GRACE` counts within.         | `1m`                    |
+| `DISCORD_UNHEALTHY_WINDOW`| The window `DISCORD_UNHEALTHY_GRACE` counts within. A silent gateway signals again once per `WS_SILENCE_TIMEOUT`, so the window has to span that many timeouts (plus a few seconds) or the restart never comes; the bot logs `unhealthy_grace_never_escalates` when it cannot. | `1m` |
 | `PLAYER_TRANSPORT_RECOVERY_MODE` | On a voice transport failure: `hard` rejoins the voice channel outright, `soft` tries reopening the stream first and falls back to hard. | `hard` |
 | `PLAYER_TRANSPORT_SOFT_ATTEMPTS` | In `soft` mode, how many soft retries happen before falling back to hard. | `1` |
 | `CACHE_ENABLED`           | Cache played tracks to disk, so later plays — from any guild, or via `/play <id>` — serve instantly with no re-extraction. | `false` |
