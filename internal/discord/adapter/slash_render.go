@@ -22,6 +22,8 @@ func AppendSlashSubcommands(sb *strings.Builder, commandName string, options []S
 		case OptionSubCommandGroup:
 			groupPrefix := strings.TrimSpace(prefix + " " + opt.Name)
 			AppendSlashSubcommands(sb, commandName, opt.Options, groupPrefix)
+		case OptionString, OptionInteger, OptionBoolean:
+			// Arguments, not part of a command path.
 		}
 	}
 }

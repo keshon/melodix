@@ -50,6 +50,8 @@ func main() {
 					fmt.Println("⏹ Stopped")
 				case player.StatusError:
 					fmt.Println("❌ Error")
+				case player.StatusPaused, player.StatusResumed:
+					// The player supports neither.
 				}
 			}
 		}

@@ -8,6 +8,8 @@ linters:
   default: none
   enable:
     - errcheck
+    - errorlint
+    - exhaustive
     - govet
     - ineffassign
     - misspell
@@ -15,6 +17,11 @@ linters:
     - unconvert
     - unused
   settings:
+    # A switch over an enum names every value, so a new status or mode fails
+    # the lint until each switch decides what to do with it. A default case
+    # counts as that decision: it is written for exactly the values it takes.
+    exhaustive:
+      default-signifies-exhaustive: true
     errcheck:
       exclude-functions:
         # Best-effort Discord UI replies. By the time one of these fails the

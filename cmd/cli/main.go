@@ -95,6 +95,8 @@ func main() {
 					fmt.Println("⏹ Stopped")
 				case player.StatusError:
 					fmt.Println("❌ Error")
+				case player.StatusPaused, player.StatusResumed:
+					// The player supports neither.
 				}
 			}
 		}
@@ -148,7 +150,7 @@ func main() {
 				continue
 			}
 			if !p.IsPlaying() {
-				if err := p.PlayNext(""); err != nil && err != player.ErrNoTracksInQueue {
+				if err := p.PlayNext(""); err != nil && !errors.Is(err, player.ErrNoTracksInQueue) {
 					fmt.Println("Play error:", err)
 				}
 			}
@@ -157,7 +159,7 @@ func main() {
 				_ = p.Stop(false)
 			}
 			if err := p.PlayNext(""); err != nil {
-				if err == player.ErrNoTracksInQueue {
+				if errors.Is(err, player.ErrNoTracksInQueue) {
 					fmt.Println("Queue is empty")
 				} else {
 					fmt.Println("Error:", err)

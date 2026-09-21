@@ -175,7 +175,8 @@ wrapped and internal errors — everything that exists to be read in a log.
 **[invariant]** Sentinel errors (`ErrCipherOnly`, `ErrNoTracksInQueue`) are
 exported and matched with `errors.Is`. Never pattern-match the error text: it
 is display copy, it gets reworded, and a match against it fails silently when
-that happens.
+that happens. `errorlint` rejects the `==` comparison and the `%v` wrap that
+would break `errors.Is`; matching on the text is left to review.
 
 **[enforced: log-event-naming]** Log events are lowercase, snake_case,
 verb-last (`playback_running`, `stream_open_failed`), with structured fields
@@ -350,8 +351,10 @@ found that.
 
 **[enforced: golangci]** Code is gofmt-clean and `go vet`-clean, and
 `.golangci.yml` passes with zero findings — the set is kept deliberately
-curated so a finding always means something. `internal/conventions` runs as
-part of the same `go test ./...`.
+curated so a finding always means something. `exhaustive` is in it so a new
+player status or mode has to be placed in every switch over that type, not
+silently fall through them. `internal/conventions` runs as part of the same
+`go test ./...`.
 
 The enforced checks are absolute: a violation anywhere fails the build. They
 used to ratchet against a recorded baseline, so that a rule could be adopted on

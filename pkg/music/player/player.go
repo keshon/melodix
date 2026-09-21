@@ -313,7 +313,7 @@ func (p *Player) PlayNext(target string) error {
 			if qEmpty {
 				// The Discord slash handler reports this one itself; emitting here
 				// too would put a stray StatusError on the channel.
-				return fmt.Errorf("%w: %v", ErrTrackStartFailed, err)
+				return fmt.Errorf("%w: %w", ErrTrackStartFailed, err)
 			}
 			continue
 		}

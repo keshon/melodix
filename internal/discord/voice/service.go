@@ -273,6 +273,11 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			if err := s.UpdatePlaybackStatus(guildID, reply.PlaybackFinishedEmbed()); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 			}
+		case player.StatusAdded, player.StatusError, player.StatusPaused, player.StatusResumed:
+			// Rendered elsewhere or never emitted: the command that queued
+			// tracks answers with them, a playback failure is posted by
+			// onPlaybackFailed, and the player supports neither pause nor
+			// resume. Listed so a new status has to be placed here too.
 		}
 	}
 }
