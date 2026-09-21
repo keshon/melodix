@@ -89,17 +89,13 @@ func StartAndRender(bot discord.VoiceAPI, ctx adapter.Interaction, log zerolog.L
 		return
 	}
 
-	if err := t.Player.PlayNext(t.ChannelID); err != nil {
-		renderStartError(ctx, err)
-		return
-	}
-
-	embed := reply.TracksAddedEmbed(added)
-	if track, ok := t.Player.CurrentTrack(); ok {
-		embed = reply.NowPlayingEmbed(&track)
-	}
-	if err := bot.AnnouncePlayback(ctx, t.GuildID, embed); err != nil {
+	err := bot.PlayNextAndAnnounce(ctx, t.Player, t.GuildID, t.ChannelID, added, nil)
+	switch {
+	case err == nil:
+	case errors.Is(err, discord.ErrAnnounceFailed):
 		log.Warn().Str("guild_id", t.GuildID).Err(err).Msg("guild_status_update_failed")
+	default:
+		renderStartError(ctx, err)
 	}
 }
 

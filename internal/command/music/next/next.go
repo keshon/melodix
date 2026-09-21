@@ -8,6 +8,7 @@ import (
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/pkg/music/parsers"
 	musicplayer "github.com/keshon/melodix/pkg/music/player"
 )
 
@@ -73,8 +74,18 @@ func (c *Next) Run(slashCtx *adapter.SlashInteractionContext) error {
 		return nil
 	}
 
+	skipped, wasPlaying := player.CurrentTrack()
 	_ = player.Stop(false)
-	if err = player.PlayNext(voiceState.ChannelID); err != nil {
+	var moving *parsers.Track
+	if wasPlaying {
+		moving = &skipped
+	}
+	err = c.Bot.PlayNextAndAnnounce(slashCtx, player, guildID, voiceState.ChannelID, 0, moving)
+	if errors.Is(err, discord.ErrAnnounceFailed) {
+		slashCtx.AppLog.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
+		return nil
+	}
+	if err != nil {
 		if errors.Is(err, musicplayer.ErrTrackStartFailed) {
 			slashCtx.FollowupEphemeral(&adapter.Embed{
 				Title:       "🎵 Playback Error",
@@ -88,14 +99,6 @@ func (c *Next) Run(slashCtx *adapter.SlashInteractionContext) error {
 			Description: fmt.Sprintf("Failed to play next track.\n\n**Error:** %v", err),
 		})
 		return nil
-	}
-
-	// The skip outcome is known here, so render it synchronously (async
-	// transitions are handled by the voice service's status watcher).
-	if track, ok := player.CurrentTrack(); ok {
-		if uerr := c.Bot.AnnouncePlayback(slashCtx, guildID, reply.NowPlayingEmbed(&track)); uerr != nil {
-			slashCtx.AppLog.Warn().Str("guild_id", guildID).Err(uerr).Msg("guild_status_update_failed")
-		}
 	}
 	return nil
 }

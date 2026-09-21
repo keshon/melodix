@@ -5,6 +5,7 @@ import (
 
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/voice"
+	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
@@ -22,15 +23,20 @@ type VoiceAPI interface {
 	// Resolve resolves input to tracks using the bot's shared resolver.
 	ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error)
 
-	// AnnouncePlayback answers the interaction with embed and makes that
-	// message the guild's playback status message, so the asynchronous
-	// transitions can keep editing it past the token's expiry.
-	AnnouncePlayback(to adapter.Interaction, guildID string, embed *adapter.Embed) error
+	// PlayNextAndAnnounce starts the next queued track and makes the answer
+	// to the interaction the guild's playback status message, so the
+	// asynchronous transitions can keep editing it past the token's expiry.
+	// skipped is the track /next is moving past, or nil.
+	PlayNextAndAnnounce(to adapter.Interaction, p *player.Player, guildID, voiceChannelID string, added int, skipped *parsers.Track) error
 
 	// SetGuildMusicNotifyChannel stores the slash command text channel for async
 	// playback failure UI.
 	SetGuildMusicNotifyChannel(guildID, channelID string)
 }
+
+// ErrAnnounceFailed is voice.ErrAnnounceFailed, so a command can tell a track
+// that did not start from one that started and was not announced.
+var ErrAnnounceFailed = voice.ErrAnnounceFailed
 
 // UserVoiceState holds minimal voice channel state for a user. Aliased from
 // the voice service so a caller keeps naming it discord.UserVoiceState.
@@ -68,13 +74,13 @@ func (b *Bot) ResolveTracks(guildID, input, source, parser string) ([]sources.Tr
 	return b.voice.ResolveTracks(guildID, input, source, parser)
 }
 
-// AnnouncePlayback answers the interaction and registers the reply as the
+// PlayNextAndAnnounce starts the next track and registers the answer as the
 // guild's playback status message (delegates to voice service).
-func (b *Bot) AnnouncePlayback(to adapter.Interaction, guildID string, embed *adapter.Embed) error {
+func (b *Bot) PlayNextAndAnnounce(to adapter.Interaction, p *player.Player, guildID, voiceChannelID string, added int, skipped *parsers.Track) error {
 	if b.voice == nil {
-		return nil
+		return fmt.Errorf("voice service not available")
 	}
-	return b.voice.AnnouncePlayback(to, guildID, embed)
+	return b.voice.PlayNextAndAnnounce(to, p, guildID, voiceChannelID, added, skipped)
 }
 
 // SetGuildMusicNotifyChannel records the text channel for public

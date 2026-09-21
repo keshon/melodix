@@ -153,6 +153,8 @@ func (c *SlashInteractionContext) AnswerEmbedMessage(embed *Embed) (string, stri
 	return answerEmbedMessage(c.Responder, c.AppLog, embed)
 }
 
+func (c *SlashInteractionContext) Component() bool { return false }
+
 // --- ComponentInteractionContext ---
 
 func (c *ComponentInteractionContext) Defer() error {
@@ -191,6 +193,8 @@ func (c *ComponentInteractionContext) AnswerEmbedMessage(embed *Embed) (string, 
 	return answerEmbedMessage(c.Responder, c.AppLog, embed)
 }
 
+func (c *ComponentInteractionContext) Component() bool { return true }
+
 // ReplaceMessage answers a component interaction by rewriting the message it
 // came from, which is how a chooser is consumed: the buttons go away with the
 // same click that acts on them, so nothing can be pressed twice.
@@ -222,6 +226,12 @@ type Interaction interface {
 
 	// CanJoinVoice reports whether the bot may connect and speak in a channel.
 	CanJoinVoice(channelID string) (bool, error)
+
+	// Component reports whether the interaction came from a message
+	// component. Its own answer is then the message that carried the
+	// component -- for /search, the ephemeral chooser -- which only the person
+	// who clicked can see and which nothing can edit later.
+	Component() bool
 
 	// AnswerEmbedMessage makes the embed the interaction's own answer and
 	// reports where it landed, so a caller that means to edit it later can

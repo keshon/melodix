@@ -139,6 +139,12 @@ type BotAPI interface {
 	// that has since expired.
 	EditChannelEmbed(channelID, messageID string, embed *Embed) error
 
+	// PostChannelEmbed posts an embed as the bot and reports the message id,
+	// for a message that has to be edited later and cannot be an interaction
+	// answer -- the status message a /search pick starts, whose interaction
+	// answer is an ephemeral chooser.
+	PostChannelEmbed(channelID string, embed *Embed) (messageID string, err error)
+
 	// UserVoiceChannel is the voice channel a user is connected to, or an
 	// error if they are not in one.
 	UserVoiceChannel(guildID, userID string) (string, error)

@@ -127,6 +127,18 @@ func (a *API) SendChannelEmbed(channelID string, embed *adapter.Embed) error {
 	return err
 }
 
+func (a *API) PostChannelEmbed(channelID string, embed *adapter.Embed) (string, error) {
+	cid, err := a.channelID(channelID)
+	if err != nil {
+		return "", err
+	}
+	msg, err := a.client.Rest.CreateMessage(cid, discord.MessageCreate{Embeds: Embeds(embed)})
+	if err != nil {
+		return "", err
+	}
+	return msg.ID.String(), nil
+}
+
 func (a *API) EditChannelEmbed(channelID, messageID string, embed *adapter.Embed) error {
 	cid, err := a.channelID(channelID)
 	if err != nil {

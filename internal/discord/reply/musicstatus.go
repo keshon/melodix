@@ -115,6 +115,28 @@ func TracksAddedEmbed(added int) *adapter.Embed {
 	}
 }
 
+// SkippedEmbed is what a status message becomes when /next moves the track it
+// was showing into the past. Left as it was, it would go on saying the skipped
+// track is playing, above the message that says what actually is.
+func SkippedEmbed(track *parsers.Track) *adapter.Embed {
+	desc := "🎶 Unknown track"
+	if track != nil {
+		switch {
+		case track.Title != "" && track.URL != "":
+			desc = fmt.Sprintf("🎶 [%s](%s)", track.Title, track.URL)
+		case track.Title != "":
+			desc = "🎶 " + track.Title
+		case track.URL != "":
+			desc = "🎶 " + track.URL
+		}
+	}
+	return &adapter.Embed{
+		Title:       "⏭ Skipped",
+		Description: desc,
+		Color:       EmbedColor,
+	}
+}
+
 // PlaybackFinishedEmbed builds the status embed for natural queue end.
 func PlaybackFinishedEmbed() *adapter.Embed {
 	return &adapter.Embed{

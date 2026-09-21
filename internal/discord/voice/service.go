@@ -1,6 +1,7 @@
 package voice
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -57,6 +58,12 @@ func (s *Service) FindUserVoiceState(guildID, userID string) (*UserVoiceState, e
 	}
 	return &UserVoiceState{ChannelID: channelID, UserID: userID}, nil
 }
+
+// ErrAnnounceFailed marks a PlayNextAndAnnounce error that came after the
+// track had started: playback is running, only the message about it is
+// missing. A caller must not report it as a failure to play, which is what the
+// user would otherwise be told over the music.
+var ErrAnnounceFailed = errors.New("playback started, but announcing it failed")
 
 type guildMusicStatus struct {
 	ChannelID string
@@ -213,11 +220,10 @@ func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
 }
 
 // watchPlayerStatus is the single long-lived consumer of the player's status
-// channel (one per guild, for the player's lifetime). Slash handlers render
-// interaction-driven updates synchronously; this watcher covers async
-// transitions only: auto-advance to the next track and natural queue end. On an
-// interaction-driven start both paths render the same "Now Playing" embed — the
-// duplicate edit is invisible to users.
+// channel (one per guild, for the player's lifetime). Interaction-driven starts
+// are rendered by PlayNextAndAnnounce, which detaches the old status message
+// first so this watcher cannot write the new track into it; what is left here
+// is the asynchronous half -- auto-advance, parser corrections, queue end.
 func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 	for status := range p.PlayerStatus {
 		if s.getAPI() == nil {
@@ -307,36 +313,101 @@ func (s *Service) hasStatusMessage(guildID string) bool {
 	return ok
 }
 
-// AnnouncePlayback answers the interaction with embed, and makes that message
-// the guild's playback status message.
+// PlayNextAndAnnounce starts the guild's next queued track and makes the
+// answer to the interaction the guild's status message. It is the only path by
+// which a status message comes to exist, and the order inside it is the point.
 //
-// The caller always gets a reply. That is the whole difference from what this
-// used to be: one method took an optional interaction, and when a status
-// message already existed it edited that and dropped the interaction on the
-// floor -- so the person who ran the command got nothing, and the deferred
-// placeholder sat there with nothing to replace it.
+// The old message is detached before PlayNext. The player announces Playing
+// while PlayNext is still running, before the new message has been posted, and
+// the watcher renders Playing into whatever is registered at that moment: while
+// the start was split between this service and the commands, that was the
+// previous status message, which got the new track written into it and then
+// stayed on that track for good, above the message that went on being updated.
 //
-// The reply doubles as the status message because the two want to be the same
-// thing at the moment playback starts: the caller is told what is playing, and
-// that is exactly what the asynchronous transitions later need to edit.
-func (s *Service) AnnouncePlayback(to adapter.Interaction, guildID string, embed *adapter.Embed) error {
-	if to == nil {
+// skipped is the track /next is moving past, or nil. Its status message would
+// otherwise go on saying that track is playing, so it is marked skipped.
+//
+// A component interaction's own answer is the message that carried the
+// component -- for /search, the ephemeral chooser -- which only the person who
+// clicked can see and which the channel endpoint cannot edit later. There the
+// status message is posted publicly instead, and the chooser is answered with
+// what happened to the pick.
+func (s *Service) PlayNextAndAnnounce(to adapter.Interaction, p *player.Player, guildID, voiceChannelID string, added int, skipped *parsers.Track) error {
+	if to == nil || p == nil {
 		return nil
 	}
 	s.rememberNotifyChannel(guildID, to.ChannelID())
 
-	channelID, messageID, err := to.AnswerEmbedMessage(embed)
-	if err != nil {
+	old, hadOld := s.detachStatusMessage(guildID)
+	if err := p.PlayNext(voiceChannelID); err != nil {
+		// Nothing replaced it, so it is still the guild's status message: a
+		// failure reported later still lands where people are looking.
+		if hadOld {
+			s.restoreStatusMessage(guildID, old)
+		}
 		return err
 	}
-	if messageID == "" {
-		return nil
+	if hadOld && skipped != nil {
+		if api := s.getAPI(); api != nil {
+			if err := api.EditChannelEmbed(old.ChannelID, old.MessageID, reply.SkippedEmbed(skipped)); err != nil {
+				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("skipped_status_update_failed")
+			}
+		}
 	}
 
-	s.guildMusicStatusMu.Lock()
-	s.guildMusicStatus[guildID] = guildMusicStatus{ChannelID: channelID, MessageID: messageID}
-	s.guildMusicStatusMu.Unlock()
+	embed := reply.TracksAddedEmbed(added)
+	if track, ok := p.CurrentTrack(); ok {
+		embed = reply.NowPlayingEmbed(&track)
+	}
+	msg, err := s.postStatusMessage(to, embed, added)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrAnnounceFailed, err)
+	}
+	if msg.MessageID != "" {
+		s.guildMusicStatusMu.Lock()
+		s.guildMusicStatus[guildID] = msg
+		s.guildMusicStatusMu.Unlock()
+	}
 	return nil
+}
+
+// postStatusMessage answers to with embed where that answer can serve as the
+// status message, and posts it publicly where it cannot.
+func (s *Service) postStatusMessage(to adapter.Interaction, embed *adapter.Embed, added int) (guildMusicStatus, error) {
+	if !to.Component() {
+		channelID, messageID, err := to.AnswerEmbedMessage(embed)
+		return guildMusicStatus{ChannelID: channelID, MessageID: messageID}, err
+	}
+
+	// The chooser gets an answer either way: the pick is what its owner is
+	// waiting to hear about.
+	if _, _, err := to.AnswerEmbedMessage(reply.TracksAddedEmbed(added)); err != nil {
+		s.log.Warn().Err(err).Msg("pick_answer_failed")
+	}
+	api := s.getAPI()
+	if api == nil {
+		return guildMusicStatus{}, nil
+	}
+	messageID, err := api.PostChannelEmbed(to.ChannelID(), embed)
+	return guildMusicStatus{ChannelID: to.ChannelID(), MessageID: messageID}, err
+}
+
+func (s *Service) detachStatusMessage(guildID string) (guildMusicStatus, bool) {
+	s.guildMusicStatusMu.Lock()
+	defer s.guildMusicStatusMu.Unlock()
+	msg, ok := s.guildMusicStatus[guildID]
+	delete(s.guildMusicStatus, guildID)
+	return msg, ok
+}
+
+// restoreStatusMessage puts a detached message back, unless something has
+// registered a newer one in the meantime.
+func (s *Service) restoreStatusMessage(guildID string, msg guildMusicStatus) {
+	s.guildMusicStatusMu.Lock()
+	defer s.guildMusicStatusMu.Unlock()
+	if _, taken := s.guildMusicStatus[guildID]; !taken {
+		s.guildMusicStatus[guildID] = msg
+	}
 }
 
 // UpdatePlaybackStatus edits the guild's playback status message.

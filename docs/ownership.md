@@ -213,6 +213,27 @@ from its delivery.
 `discord.TestDispatchDoesNotRunTheCommandOnTheCallersGoroutine`,
 `TestTwoGuildsRunAtTheSameTime`, `TestOneGuildStaysSequential`.
 
+## 11. A guild's status message has one owner
+
+The voice service is the only thing that registers, replaces or drops a
+guild's status message, and `PlayNextAndAnnounce` is the only way one comes to
+exist. Commands hand it the interaction; they do not start playback and
+announce it as two steps of their own.
+
+**Because** the player announces Playing while `PlayNext` is still running,
+before the command's message exists, and the watcher renders Playing into
+whatever is registered at that moment. With the start split between the
+commands and the service, that was the previous status message: it got the new
+track written into it and stayed on that track for good. And a `/search` pick,
+announcing through its own interaction, registered the ephemeral chooser —
+visible to one person, and out of reach of every later edit.
+
+**Enforced by** compiler — `VoiceAPI` offers commands no way to register a
+message except through `PlayNextAndAnnounce` — and tested:
+`voice.TestStartingPlaybackLeavesThePreviousStatusMessageAlone`,
+`TestAPickStartsAPublicStatusMessage`,
+`TestSkippingMarksTheOldStatusMessageSkipped`.
+
 ---
 
 ## Not enforced
