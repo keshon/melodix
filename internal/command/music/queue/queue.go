@@ -69,6 +69,9 @@ func (c *Queue) Run(slashCtx *adapter.SlashInteractionContext) error {
 		embed.Footer = fmt.Sprintf("%d %s queued · up to %d per playlist link · skip with /next",
 			n, noun, youtube.MaxPlaylistItems)
 	}
-	slashCtx.FollowupEphemeral(embed)
+	// Public, as the queue has always been seen. This used to ask for an
+	// ephemeral followup, which a public deferral overrode; now that a private
+	// reply really is private, the visible behaviour is written down instead.
+	_ = slashCtx.Followup(embed) // a failure is reported by adapter as reply_failed
 	return nil
 }

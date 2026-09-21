@@ -24,10 +24,20 @@ type respondable interface {
 	Client() *bot.Client
 }
 
+// interactionREST is the part of disgo's REST client a Responder addresses by
+// application id and token: followups, and the original response once it
+// exists. An interface so the order of those calls can be tested.
+type interactionREST interface {
+	CreateFollowupMessage(applicationID snowflake.ID, interactionToken string, messageCreate discord.MessageCreate, opts ...rest.RequestOpt) (*discord.Message, error)
+	UpdateInteractionResponse(applicationID snowflake.ID, interactionToken string, messageUpdate discord.MessageUpdate, opts ...rest.RequestOpt) (*discord.Message, error)
+	DeleteInteractionResponse(applicationID snowflake.ID, interactionToken string, opts ...rest.RequestOpt) error
+}
+
 // Responder answers one interaction, and holds the event that answering it
 // needs.
 type Responder struct {
 	event respondable
+	rest  interactionREST
 	// component is set only for a component interaction, which is the one
 	// kind that can answer by rewriting the message it arrived on.
 	component *events.ComponentInteractionCreate
@@ -47,6 +57,7 @@ var _ adapter.Responder = (*Responder)(nil)
 func NewCommandResponder(e *events.ApplicationCommandInteractionCreate) *Responder {
 	return &Responder{
 		event: e,
+		rest:  e.Client().Rest,
 		appID: e.ApplicationID(),
 		token: e.Token(),
 	}
@@ -56,6 +67,7 @@ func NewCommandResponder(e *events.ApplicationCommandInteractionCreate) *Respond
 func NewComponentResponder(e *events.ComponentInteractionCreate) *Responder {
 	return &Responder{
 		event:     e,
+		rest:      e.Client().Rest,
 		component: e,
 		appID:     e.ApplicationID(),
 		token:     e.Token(),
@@ -91,17 +103,17 @@ func alreadyAcknowledged(err error) bool {
 func (r *Responder) AckDeferred(ephemeral bool) error {
 	err := r.event.DeferCreateMessage(ephemeral)
 	if alreadyAcknowledged(err) {
-		r.markDeferred()
+		r.markDeferred(ephemeral)
 		return nil
 	}
 	if err == nil {
-		r.markDeferred()
+		r.markDeferred(ephemeral)
 	}
 	return err
 }
 
-func (r *Responder) markDeferred() { r.response.deferredNow() }
-func (r *Responder) markAnswered() { r.response.answeredNow() }
+func (r *Responder) markDeferred(ephemeral bool) { r.response.deferredNow(ephemeral) }
+func (r *Responder) markAnswered()               { r.response.answeredNow() }
 
 // ResolveDeferred removes a placeholder that nothing answered -- no reply, no
 // edit, no followup. See responseState for what counts as answered.
@@ -109,7 +121,7 @@ func (r *Responder) ResolveDeferred() error {
 	if !r.response.takePending() {
 		return nil
 	}
-	return r.event.Client().Rest.DeleteInteractionResponse(r.appID, r.token)
+	return r.rest.DeleteInteractionResponse(r.appID, r.token)
 }
 
 // responseState tracks what became of an interaction's original response.
@@ -135,12 +147,16 @@ func (r *Responder) ResolveDeferred() error {
 type responseState struct {
 	mu       sync.Mutex
 	deferred bool
+	// private is whether the deferral was ephemeral, which decides who sees
+	// whatever first replaces the placeholder. See takePublicPlaceholder.
+	private  bool
 	answered bool
 }
 
-func (s *responseState) deferredNow() {
+func (s *responseState) deferredNow(ephemeral bool) {
 	s.mu.Lock()
 	s.deferred = true
+	s.private = ephemeral
 	s.mu.Unlock()
 }
 
@@ -148,6 +164,26 @@ func (s *responseState) answeredNow() {
 	s.mu.Lock()
 	s.answered = true
 	s.mu.Unlock()
+}
+
+// takePublicPlaceholder reports whether an ephemeral reply is about to be
+// posted where everyone will see it, and claims the placeholder if so.
+//
+// The first followup after a deferral replaces the "thinking" placeholder and
+// takes the deferral's visibility, not its own. So after a public deferral an
+// ephemeral followup was public: /play's voice errors, /next's, /stop's and the
+// dispatcher's own error replies all went to the whole channel. Deleting the
+// public placeholder first leaves the followup to stand on its own flags. The
+// order is the point -- deleting it afterwards would take the followup, which
+// by then is the original response, down with it.
+func (s *responseState) takePublicPlaceholder() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.deferred || s.private || s.answered {
+		return false
+	}
+	s.answered = true
+	return true
 }
 
 // takePending reports whether a placeholder is owed an answer, and claims it:
@@ -219,7 +255,7 @@ func (r *Responder) Followup(rep adapter.Reply) error {
 // AnswerEmbedMessage replaces the deferred placeholder with the embed, rather
 // than posting a followup beside it. See adapter.Responder.
 func (r *Responder) AnswerEmbedMessage(embed *adapter.Embed) (string, string, error) {
-	msg, err := r.event.Client().Rest.UpdateInteractionResponse(r.appID, r.token,
+	msg, err := r.rest.UpdateInteractionResponse(r.appID, r.token,
 		discord.MessageUpdate{Embeds: &[]discord.Embed{Embed(embed)}})
 	if err != nil {
 		return "", "", err
@@ -256,7 +292,12 @@ func (r *Responder) ReplaceMessage(embed *adapter.Embed) error {
 }
 
 func (r *Responder) followup(create discord.MessageCreate) (*discord.Message, error) {
-	msg, err := r.event.Client().Rest.CreateFollowupMessage(r.appID, r.token, create)
+	if create.Flags.Has(discord.MessageFlagEphemeral) && r.response.takePublicPlaceholder() {
+		// A failed delete still leaves a reply worth sending; it is public,
+		// which is the old behaviour rather than a lost message.
+		_ = r.rest.DeleteInteractionResponse(r.appID, r.token)
+	}
+	msg, err := r.rest.CreateFollowupMessage(r.appID, r.token, create)
 	if err == nil {
 		// The caller saw a reply, so the placeholder is spent. Deleting the
 		// original response now would take an ephemeral followup with it.
@@ -266,7 +307,7 @@ func (r *Responder) followup(create discord.MessageCreate) (*discord.Message, er
 }
 
 func (r *Responder) editResponse(update discord.MessageUpdate) error {
-	_, err := r.event.Client().Rest.UpdateInteractionResponse(r.appID, r.token, update)
+	_, err := r.rest.UpdateInteractionResponse(r.appID, r.token, update)
 	if err == nil {
 		r.markAnswered()
 	}

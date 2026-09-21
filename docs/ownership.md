@@ -234,6 +234,24 @@ message except through `PlayNextAndAnnounce` — and tested:
 `TestAPickStartsAPublicStatusMessage`,
 `TestSkippingMarksTheOldStatusMessageSkipped`.
 
+## 12. A private reply stays private
+
+The Responder records whether it deferred publicly. An ephemeral followup that
+would be the first thing to replace a public placeholder deletes the
+placeholder first, then posts.
+
+**Because** the first followup after a deferral replaces the placeholder and
+takes the deferral's visibility, not its own. Every command that defers
+publicly and then reports an error ephemerally — the voice errors of `/play`
+and `/next`, `/stop`'s, the dispatcher's own — posted that error to the whole
+channel. Deleting the placeholder after the followup instead would take the
+followup with it, since by then it is the original response.
+
+**Enforced by** tested: `reply.TestAnEphemeralReplyAfterAPublicDeferStaysPrivate`,
+`TestOnlyAPublicPlaceholderIsRemovedForAPrivateReply`, which pin the order of
+calls against a fake REST client. Discord's behaviour itself is outside any
+test; the release matrix checks it live.
+
 ---
 
 ## Not enforced
