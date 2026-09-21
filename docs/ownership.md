@@ -252,6 +252,21 @@ followup with it, since by then it is the original response.
 calls against a fake REST client. Discord's behaviour itself is outside any
 test; the release matrix checks it live.
 
+## 13. A click is an invocation of its command
+
+A component interaction runs the command that owns it through that command's
+middleware chain, like a slash invocation does. The `Adapter` at the bottom of
+the chain hands it to the component handler.
+
+**Because** clicks used to go straight to the handler. Nothing a command was
+registered with applied to its buttons: no click was audited, and disabling a
+command group left its choosers working. The group check had a branch for
+components that nothing could reach.
+
+**Enforced by** tested: `discord.TestAComponentRunsThroughItsCommandsMiddleware`
+drives the dispatcher; `middleware.TestAClickIsAudited` and
+`TestAClickInADisabledGroupIsRefused` drive the production chain.
+
 ---
 
 ## Not enforced

@@ -26,12 +26,22 @@ func (a *Adapter) UserPermissions() []int64 { return a.Cmd.UserPermissions() }
 // did nothing, ten times over, with nothing logged -- which is how two
 // dispatch paths stayed dead here long enough to be deleted rather than
 // noticed. Now the mismatch is one error, in one place.
+//
+// A component interaction arrives here too, after the same middleware a slash
+// invocation goes through, and is handed to the command's component handler.
 func (a *Adapter) Run(ctx context.Context, inv *command.Invocation) error {
-	slash, ok := inv.Data.(*SlashInteractionContext)
-	if !ok {
-		return fmt.Errorf("adapter: %s was dispatched with a %T, not a slash interaction", a.Name(), inv.Data)
+	switch data := inv.Data.(type) {
+	case *SlashInteractionContext:
+		return a.Cmd.Run(data)
+	case *ComponentInteractionContext:
+		ch, ok := a.Cmd.(ComponentInteractionHandler)
+		if !ok {
+			return fmt.Errorf("adapter: %s received a component interaction and has no handler for one", a.Name())
+		}
+		return ch.Component(data)
+	default:
+		return fmt.Errorf("adapter: %s was dispatched with a %T, not an interaction it handles", a.Name(), inv.Data)
 	}
-	return a.Cmd.Run(slash)
 }
 
 // SlashDefinition forwards the declaration in the form the interface declares

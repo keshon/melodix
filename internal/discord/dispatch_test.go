@@ -8,11 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/keshon/command"
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/queue"
+	"github.com/keshon/melodix/internal/middleware"
 )
 
 func newDispatchBot(t *testing.T, parallelism int) *Bot {
@@ -288,5 +290,46 @@ func TestAClosedQueueStillSaysItIsShuttingDown(t *testing.T) {
 
 	if got := r.only(t); !strings.Contains(got, "shutting down") {
 		t.Fatalf("a closed queue replied %q", got)
+	}
+}
+
+// buttonCommand is a registered command with a component handler, like /search.
+type buttonCommand struct{ clicks *int }
+
+func (buttonCommand) Name() string                               { return "fake" }
+func (buttonCommand) Description() string                        { return "a command with a button" }
+func (buttonCommand) Group() string                              { return "music" }
+func (buttonCommand) Category() string                           { return "test" }
+func (buttonCommand) UserPermissions() []int64                   { return nil }
+func (buttonCommand) Run(*adapter.SlashInteractionContext) error { return nil }
+func (b buttonCommand) Component(*adapter.ComponentInteractionContext) error {
+	*b.clicks++
+	return nil
+}
+
+type countingAudit struct{ rows int }
+
+func (a *countingAudit) LogCommand(_, _, _, _, _ string) error { a.rows++; return nil }
+
+// A click runs through the middleware the command was registered with. It
+// used to be handed straight to the component handler, so no click was ever
+// audited and a disabled group's buttons went on working.
+func TestAComponentRunsThroughItsCommandsMiddleware(t *testing.T) {
+	clicks := 0
+	audit := &countingAudit{}
+	registered := command.Apply(&adapter.Adapter{Cmd: buttonCommand{clicks: &clicks}},
+		middleware.WithGuildOnly(), middleware.WithCommandLogger(zerolog.Nop()))
+
+	err := runComponent(context.Background(), registered, &adapter.ComponentInteractionContext{
+		Invoker: inGuild("g1"), ComponentID: "fake:1", Audit: audit, AppLog: zerolog.Nop(),
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if clicks != 1 {
+		t.Fatalf("handler ran %d times, want 1", clicks)
+	}
+	if audit.rows != 1 {
+		t.Fatalf("audited %d rows for one click, want 1", audit.rows)
 	}
 }

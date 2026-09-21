@@ -154,23 +154,35 @@ func (b *Bot) onComponentInteraction(e *events.ComponentInteractionCreate, recor
 		return
 	}
 
-	handler, ok := command.Root(matched).(adapter.ComponentInteractionHandler)
-	if !ok {
+	if _, ok := command.Root(matched).(adapter.ComponentInteractionHandler); !ok {
 		b.log.Warn().Str("command", matched.Name()).Msg("component_handler_missing")
 		return
 	}
 
 	responder := reply.NewComponentResponder(e)
 	who := interactionInvoker(e)
+	cc := &adapter.ComponentInteractionContext{
+		Invoker:     who,
+		Responder:   responder,
+		API:         reply.NewSessionAPI(e.Client()),
+		ComponentID: customID,
+		Storage:     b.storage, Config: b.cfg, Audit: recorder, AppLog: b.log,
+	}
 
 	b.dispatchInteraction(who, responder, "component", matched.Name(), func(cmdCtx context.Context) error {
-		_ = cmdCtx
-		return handler.Component(&adapter.ComponentInteractionContext{
-			Invoker:     who,
-			Responder:   responder,
-			API:         reply.NewSessionAPI(e.Client()),
-			ComponentID: customID,
-			Storage:     b.storage, Config: b.cfg, Audit: recorder, AppLog: b.log,
-		})
+		return runComponent(cmdCtx, matched, cc)
 	})
+}
+
+// runComponent runs a click through the command it belongs to, middleware and
+// all, exactly as a slash invocation of that command would run.
+//
+// It used to call the component handler directly. That skipped every
+// middleware the command was registered with: no click was audited, and a
+// command group an admin had disabled went on answering its buttons -- a
+// /search chooser posted before music was switched off still started
+// playback. The group check even had a branch for components, which nothing
+// could reach.
+func runComponent(ctx context.Context, matched command.Command, cc *adapter.ComponentInteractionContext) error {
+	return matched.Run(ctx, &command.Invocation{Data: cc})
 }

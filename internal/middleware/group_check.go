@@ -27,18 +27,9 @@ func WithGroupAccessCheck() command.Middleware {
 				respond = func(msg string) { _ = cc.ReplyEphemeral(msg) }
 			}
 
-			// A component interaction is not run as a command: the check
-			// applies, and then it goes to the component handler instead.
-			if component, ok := inv.Data.(*adapter.ComponentInteractionContext); ok {
-				if disabledGroup(c, cc.GuildID(), cc.Store(), respond) {
-					return nil
-				}
-				if handler, ok := command.Root(c).(adapter.ComponentInteractionHandler); ok {
-					return handler.Component(component)
-				}
-				return nil
-			}
-
+			// Slash commands and component clicks alike: a click carries on
+			// down the chain to the rest of the middleware and the audit log,
+			// and the Adapter at the bottom hands it to the component handler.
 			if disabledGroup(c, cc.GuildID(), cc.Store(), respond) {
 				return nil
 			}
