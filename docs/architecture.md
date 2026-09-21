@@ -623,6 +623,17 @@ such a document that is usually missing.
   while already playing, which should give "Track(s) Added"; `/next`;
   `/stop` mid-track, which should return promptly; a natural queue end,
   which should give a single voice disconnect and "Playback Finished"; and
-  one `/play` per parser override.
+  one `/play` per parser override. Then the cases a behavioural spec of the
+  Discord layer turned up, each of which once failed:
+  - a `/search` pick, which should post a public Now Playing that everyone in
+    the channel sees and that later tracks edit, not the ephemeral chooser;
+  - `/next` while a status message is live, which should mark the old one
+    "⏭ Skipped" and post a new one, leaving the old one off the new track;
+  - a second listener joining the voice channel mid-track, who should hear
+    it — the DAVE session has to take in the new member;
+  - an error after a public defer (`/play` from outside a voice channel, say),
+    which only the caller should see;
+  - a button on a `/search` chooser after `/settings` has disabled the music
+    group, which should be refused.
 - `cmd/cli` exercises the whole engine minus Discord: `go run ./cmd/cli`,
   then `play <url>`, `next`, `stop`, `queue`, `status`.
