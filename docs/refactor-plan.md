@@ -39,10 +39,10 @@ Small commits, one bug each. Verified against the code at `779550a`.
 | 1.5 | ~~The disabled-group refusal points at `/commands status`, which does not exist~~ | `middleware/group_check.go` | `/settings commands status` — done in `b784e3d` |
 | 1.6 | ~~Three permission lists disagree (README, running.md, runtime); the recommended set lacks Connect and Speak~~ | `discord/perm/recommended.go`, `docs/running.md` | One list; the invite link is built from it — done in `006f054` |
 | 1.7 | ~~`DEVELOPER_ID` is parsed and never used; running.md promises developer-only commands~~ | `config.go`, `perm/permissions.go` | Remove it — done in `43eae08` |
-| 1.8 | Starting playback edits the *previous* status message to the new track, which then stays stuck there | `voice/service.go`, `player.go`, `command/music/playback` | Folded into 2.E |
-| 1.9 | A `/search` pick registers the ephemeral chooser as the status message: one person sees Now Playing, later edits fail | `command/music/search`, `voice/service.go` | Folded into 2.E |
-| 1.10 | "Ephemeral" replies after a public defer are public, including the dispatcher's own error replies | `adapter/reply_methods.go`, `reply/responder.go`, `handlers_common.go` | Folded into 2.C |
-| 1.11 | Component interactions bypass all middleware: no group check, no audit row | `discord/handlers.go`, `middleware/group_check.go` | Folded into 2.D |
+| 1.8 | ~~Starting playback edits the *previous* status message to the new track, which then stays stuck there~~ | `voice/service.go`, `player.go`, `command/music/playback` | Folded into 2.E — done in `65d5d8e` |
+| 1.9 | ~~A `/search` pick registers the ephemeral chooser as the status message: one person sees Now Playing, later edits fail~~ | `command/music/search`, `voice/service.go` | Folded into 2.E — done in `65d5d8e` |
+| 1.10 | ~~"Ephemeral" replies after a public defer are public, including the dispatcher's own error replies~~ | `adapter/reply_methods.go`, `reply/responder.go`, `handlers_common.go` | Folded into 2.C — done in `4daa0c1` |
+| 1.11 | ~~Component interactions bypass all middleware: no group check, no audit row~~ | `discord/handlers.go`, `middleware/group_check.go` | Folded into 2.D — done in `d223f7b` |
 
 **Suspected — proved or refuted before fixing:**
 
@@ -98,7 +98,7 @@ cannot be confused with another run's because they are not on `Player` at all.
 Rule 5's tests stay as the net, including the queue-end one; its
 text and the per-run-channel invariant in conventions.md are rewritten.
 
-### 2.C Reply visibility follows the deferral (fixes 1.10)
+### ~~2.C Reply visibility follows the deferral (fixes 1.10)~~ — `4daa0c1`
 
 The responder records whether the interaction was deferred publicly. An
 ephemeral reply after a public deferral deletes the placeholder first, then
@@ -106,14 +106,15 @@ sends the followup. Cheap checks (voice channel, permissions) move before
 `Defer()`. Checked: nothing in `internal/command` sends an ephemeral followup
 around the responder. Needs a live check.
 
-### 2.D Components go through the same pipeline as slash commands (fixes 1.11)
+### ~~2.D Components go through the same pipeline as slash commands (fixes 1.11)~~ — `d223f7b`
 
 `handlers.go` runs the matched command with the component context, so group
-check, guild-only and the audit logger apply; the dead branch in
-`group_check.go` becomes live. Tested: a button in a disabled group is refused
-and audited.
+check, guild-only, permissions and the audit logger apply; the `Adapter`
+hands a click to the component handler, and the group check's separate
+component branch is gone. Tested: a click is audited, and a click in a
+disabled group is refused.
 
-### 2.E The status message has one owner (fixes 1.8, 1.9)
+### ~~2.E The status message has one owner (fixes 1.8, 1.9)~~ — `65d5d8e`
 
 Registering, dropping and ordering against `StatusPlaying` all live in the
 voice service. Commands hand it the message they posted; the service decides.
