@@ -80,11 +80,12 @@ func bufferWrapReader(reader opus.Reader) (*opus.BufferedReader, bool) {
 	return buf, ok
 }
 
-// openWithParser opens the Opus packet stream for the given parser key.
-func openWithParser(track *parsers.Track, parser string, seekSec float64) (opus.Reader, func(), error) {
+// openWithParser opens the Opus packet stream for the given parser key. The
+// parser gets its own copy of the track, down to the parser list.
+func openWithParser(track parsers.Track, parser string, seekSec float64) (parsers.Opened, error) {
 	streamer, ok := Registry()[parser]
 	if !ok {
-		return nil, nil, fmt.Errorf("stream: no streamer for parser %q", parser)
+		return parsers.Opened{}, fmt.Errorf("stream: no streamer for parser %q", parser)
 	}
-	return streamer.Open(track, seekSec)
+	return streamer.Open(track.Clone(), seekSec)
 }

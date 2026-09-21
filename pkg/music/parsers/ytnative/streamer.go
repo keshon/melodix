@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/rs/zerolog"
 )
@@ -27,7 +26,7 @@ var (
 	streamClient = &http.Client{}
 )
 
-func (s *Streamer) Open(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
+func (s *Streamer) Open(track parsers.Track, seekSec float64) (parsers.Opened, error) {
 	return ytnativeLink(track, seekSec)
 }
 

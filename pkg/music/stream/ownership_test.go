@@ -10,10 +10,10 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-// A stream must not write the Track it was handed. Everything below it does
-// write one -- parsers fill in Title and Duration through the pointer they get
-// at open time, and recovery rewrites CurrentParser as fallbacks engage -- so
-// the property is that those writes land on the stream's own copy.
+// A stream must not write the Track it was handed. The Track itself now
+// arrives by value, and parsers report what they learn rather than writing
+// it, so what is left to share is the parser list's backing array -- and the
+// property is still that every write lands on the stream's own copy.
 func TestRecoveryStreamDoesNotWriteTheCallersTrack(t *testing.T) {
 	orig := SetRegistry(map[string]parsers.Streamer{
 		"p1": fakeStreamer{open: func(tr *parsers.Track, _ float64) (opus.Reader, func(), error) {
@@ -29,11 +29,11 @@ func TestRecoveryStreamDoesNotWriteTheCallersTrack(t *testing.T) {
 	})
 	defer SetRegistry(orig)
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Title:      "as resolved",
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}},
 	}
-	before := *track
+	before := track.Clone()
 
 	rs := NewRecoveryStream(track)
 	if _, err := rs.Start(0); err != nil {
@@ -43,8 +43,8 @@ func TestRecoveryStreamDoesNotWriteTheCallersTrack(t *testing.T) {
 		t.Fatalf("ReadPacket: %v", err)
 	}
 
-	if !reflect.DeepEqual(*track, before) {
-		t.Fatalf("the caller's track was written:\n before %+v\n after  %+v", before, *track)
+	if !reflect.DeepEqual(track, before) {
+		t.Fatalf("the caller's track was written:\n before %+v\n after  %+v", before, track)
 	}
 	if got := rs.track.Clone(); got.Title != "from p2" || !got.Passthrough {
 		t.Fatalf("the stream's own copy did not take the parser's writes: %+v", got)
@@ -69,7 +69,7 @@ func TestOpenInfoCarriesWhatTheParserLearned(t *testing.T) {
 	})
 	defer SetRegistry(orig)
 
-	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
+	track := parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
 	rs := NewRecoveryStream(track)
 
 	var confirmed []OpenInfo
@@ -131,7 +131,7 @@ func TestAStreamCannotBeStartedTwice(t *testing.T) {
 	})
 	defer SetRegistry(orig)
 
-	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}}}
+	track := parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}}}
 	rs := NewRecoveryStream(track)
 	defer rs.Close()
 

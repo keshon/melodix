@@ -11,9 +11,9 @@ import (
 )
 
 // Track is the playback entity that flows through the queue, parsers, and
-// sinks. It starts as a thin copy of the resolver's TrackInfo; parsers fill in
-// Title, Artist and Duration at open time, and recovery updates CurrentParser
-// as fallbacks engage.
+// sinks. It starts as a thin copy of the resolver's TrackInfo; parsers report
+// Title, Artist and Duration at open time (see Opened), and recovery updates
+// CurrentParser as fallbacks engage.
 //
 // A Track has exactly one writer at a time, and it is whoever is driving the
 // stream it describes. Anything that merely reads one -- a queue listing, a

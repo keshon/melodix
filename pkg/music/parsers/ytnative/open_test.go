@@ -34,8 +34,8 @@ func withPlayerResponse(t *testing.T, body string) {
 	t.Cleanup(func() { playerEndpoint, httpClient = origEndpoint, origClient })
 }
 
-func testTrack() *parsers.Track {
-	return &parsers.Track{
+func testTrack() parsers.Track {
+	return parsers.Track{
 		URL:        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 		SourceInfo: sources.TrackInfo{URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
 	}
@@ -80,12 +80,9 @@ func TestOpenAcceptsAVODThatCarriesAnHLSManifest(t *testing.T) {
 	// point of fetching the CDN URL, rather than bailing out early. The stub
 	// serves JSON rather than media, so a transport-shaped failure is expected
 	// and fine — a live-stream rejection is not.
-	_, _, err = ytnativeLink(track, 0)
+	_, err = ytnativeLink(track, 0)
 	if err != nil && errors.Is(err, ErrNotPlayable) {
 		t.Fatalf("VOD rejected as not playable: %v", err)
-	}
-	if track.Title != "A Song" {
-		t.Fatalf("title not filled from the player response: %q", track.Title)
 	}
 }
 
@@ -99,7 +96,7 @@ func TestOpenRejectsALiveBroadcast(t *testing.T) {
 		"streamingData": {"adaptiveFormats": []}
 	}`)
 
-	_, _, err := ytnativeLink(testTrack(), 0)
+	_, err := ytnativeLink(testTrack(), 0)
 	if err == nil {
 		t.Fatal("a live broadcast opened successfully")
 	}
@@ -234,14 +231,13 @@ func TestOpenPlaysAVODThroughTheChunkedFetcher(t *testing.T) {
 	cdn, log := rangedServer(t, media, nil)
 	withPlayerResponse(t, playerResponseFor(cdn.URL))
 
-	track := testTrack()
-	r, cleanup, err := ytnativeLink(track, 0)
+	opened, err := ytnativeLink(testTrack(), 0)
 	if err != nil {
 		t.Fatalf("ytnativeLink: %v", err)
 	}
-	defer cleanup()
+	defer opened.Cleanup()
 
-	got := readAllPackets(t, r)
+	got := readAllPackets(t, opened.Reader)
 	if len(got) != len(want) {
 		t.Fatalf("played %d packets, want %d", len(got), len(want))
 	}
@@ -250,8 +246,11 @@ func TestOpenPlaysAVODThroughTheChunkedFetcher(t *testing.T) {
 			t.Fatalf("packet %d differs across the chunk boundaries", i)
 		}
 	}
-	if !track.Passthrough {
-		t.Error("track not marked passthrough")
+	if !opened.Passthrough {
+		t.Error("open not reported as passthrough")
+	}
+	if opened.Title != "A Song" {
+		t.Errorf("title not taken from the player response: %q", opened.Title)
 	}
 	// More than one range means it really went through the chunked fetcher and
 	// not the single-response fallback.
@@ -271,19 +270,18 @@ func TestOpenPlaysASourceThatWillNotServeRanges(t *testing.T) {
 	defer cdn.Close()
 	withPlayerResponse(t, playerResponseFor(cdn.URL))
 
-	track := testTrack()
-	r, cleanup, err := ytnativeLink(track, 0)
+	opened, err := ytnativeLink(testTrack(), 0)
 	if err != nil {
 		t.Fatalf("ytnativeLink: %v", err)
 	}
-	defer cleanup()
+	defer opened.Cleanup()
 
-	got := readAllPackets(t, r)
+	got := readAllPackets(t, opened.Reader)
 	if len(got) != len(want) {
 		t.Fatalf("played %d packets over the streaming fallback, want %d", len(got), len(want))
 	}
-	if !track.Passthrough {
-		t.Error("track not marked passthrough")
+	if !opened.Passthrough {
+		t.Error("open not reported as passthrough")
 	}
 }
 
@@ -294,13 +292,13 @@ func TestOpenSeeksByDiscardingPackets(t *testing.T) {
 	withPlayerResponse(t, playerResponseFor(cdn.URL))
 
 	// 0.4s in: twenty 20ms packets discarded, the rest played.
-	r, cleanup, err := ytnativeLink(testTrack(), 0.4)
+	opened, err := ytnativeLink(testTrack(), 0.4)
 	if err != nil {
 		t.Fatalf("ytnativeLink: %v", err)
 	}
-	defer cleanup()
+	defer opened.Cleanup()
 
-	got := readAllPackets(t, r)
+	got := readAllPackets(t, opened.Reader)
 	if len(got) != len(want)-20 {
 		t.Fatalf("played %d packets after a 0.4s seek, want %d", len(got), len(want)-20)
 	}

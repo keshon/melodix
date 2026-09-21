@@ -15,8 +15,22 @@ type fakeStreamer struct {
 	open func(track *parsers.Track, seek float64) (opus.Reader, func(), error)
 }
 
-func (s fakeStreamer) Open(track *parsers.Track, seek float64) (opus.Reader, func(), error) {
-	return s.open(track, seek)
+// Open hands the closure a pointer to the parser's own copy, so a fake can
+// "learn" metadata the way the old parsers did, and reports what it wrote.
+func (s fakeStreamer) Open(track parsers.Track, seek float64) (parsers.Opened, error) {
+	track.Passthrough = false
+	r, cleanup, err := s.open(&track, seek)
+	if err != nil {
+		return parsers.Opened{}, err
+	}
+	return parsers.Opened{
+		Reader:      r,
+		Cleanup:     cleanup,
+		Passthrough: track.Passthrough,
+		Title:       track.Title,
+		Artist:      track.Artist,
+		Duration:    track.Duration,
+	}, nil
 }
 
 // pktReader yields the given packets, then io.EOF.
@@ -52,7 +66,7 @@ func TestRecoveryStream_ImmediateFail_SwitchesToNextParser(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
+	track := parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
 	rs := NewRecoveryStream(track)
 	if _, err := rs.Start(0); err != nil {
 		t.Fatalf("Open: %v", err)
@@ -84,7 +98,7 @@ func TestRecoveryStream_NaturalEOF_DoesNotFallback(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   1 * time.Microsecond, // tiny → EOF is a natural end
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}},
 	}
@@ -122,7 +136,7 @@ func TestRecoveryStream_ParserConfirmed_NamesThePlayingParser(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
+	track := parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1", "p2"}}}
 	rs := NewRecoveryStream(track)
 
 	var confirmed []string
@@ -161,7 +175,7 @@ func TestRecoveryStream_RequestReopen_ReConfirms(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	track := &parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}}}
+	track := parsers.Track{SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}}}
 	rs := NewRecoveryStream(track)
 
 	var confirmed []string
@@ -222,7 +236,7 @@ func TestRecoveryStream_MidStreamTransportError_Reopens(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   20 * time.Second,
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
@@ -267,7 +281,7 @@ func TestRecoveryStream_ClosedStream_DoesNotReopen(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   20 * time.Second,
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
@@ -331,7 +345,7 @@ func TestRecoveryStream_BufferCoversTheReconnectGap(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   20 * time.Second, // 1000 packets
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
@@ -386,7 +400,7 @@ func TestRecoveryStream_PacketsIsStable(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	rs := NewRecoveryStream(&parsers.Track{
+	rs := NewRecoveryStream(parsers.Track{
 		Duration:   time.Second,
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	})
@@ -421,7 +435,7 @@ func TestRecoveryStream_LiveStreamReconnects(t *testing.T) {
 	defer func() { SetRegistry(orig) }()
 
 	// No duration: that is what "live" looks like from here.
-	track := &parsers.Track{
+	track := parsers.Track{
 		SourceInfo: sources.TrackInfo{
 			SourceName:       sources.Radio,
 			AvailableParsers: []string{"radio"},
@@ -466,7 +480,7 @@ func TestRecoveryStream_LiveStreamGivesUpEventually(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	rs := NewRecoveryStream(&parsers.Track{
+	rs := NewRecoveryStream(parsers.Track{
 		SourceInfo: sources.TrackInfo{
 			SourceName:       sources.Radio,
 			AvailableParsers: []string{"radio"},
@@ -500,7 +514,7 @@ func TestRecoveryStream_FiniteTrackNearTheEndIsDone(t *testing.T) {
 	})
 	defer func() { SetRegistry(orig) }()
 
-	rs := NewRecoveryStream(&parsers.Track{
+	rs := NewRecoveryStream(parsers.Track{
 		Duration:   20 * time.Second, // 1000 packets; 990 is inside the last 5%
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	})

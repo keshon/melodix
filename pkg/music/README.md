@@ -216,7 +216,7 @@ parser stream; the buffer sits outside it, around `RecoveryStream` itself:
 - **Custom resolver**: implement `player.Resolver` to support new sources or search.
 - **Ranked search**: implement `sources.Searcher` (`Search(query, limit) ([]SearchResult, error)`) on a source that has results worth choosing between. Deliberately not part of `Source`: radio has nothing to rank.
 - **Custom sink**: implement `sink.AudioSink` / `sink.Provider` to support new outputs.
-- **New parser**: implement `parsers.Streamer.Open` (returning an `opus.Reader`) and add it to `stream.registryEntries`.
+- **New parser**: implement `parsers.Streamer.Open` (returning a `parsers.Opened`: the `opus.Reader` plus whatever the parser learned) and add it to `stream.registryEntries`.
 
 ## Requirements
 

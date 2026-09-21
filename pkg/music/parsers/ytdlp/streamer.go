@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/rs/zerolog"
 )
@@ -98,7 +97,7 @@ const (
 // resort.
 type Streamer struct{ Mode Mode }
 
-func (s *Streamer) Open(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
+func (s *Streamer) Open(track parsers.Track, seekSec float64) (parsers.Opened, error) {
 	if s.Mode == ModePipe {
 		return ytdlpPipe(track, seekSec)
 	}

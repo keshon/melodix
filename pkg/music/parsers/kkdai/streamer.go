@@ -3,7 +3,6 @@ package kkdai
 import (
 	"sync/atomic"
 
-	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/kkdai/youtube/v2"
 	"github.com/rs/zerolog"
@@ -65,7 +64,7 @@ func logger() zerolog.Logger {
 	return zerolog.Nop()
 }
 
-func (s *Streamer) Open(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
+func (s *Streamer) Open(track parsers.Track, seekSec float64) (parsers.Opened, error) {
 	if s.Mode == ModePipe {
 		return kkdaiPipe(track, seekSec)
 	}

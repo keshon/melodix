@@ -21,8 +21,22 @@ type fakeStreamer struct {
 	open func(track *parsers.Track, seek float64) (opus.Reader, func(), error)
 }
 
-func (s fakeStreamer) Open(track *parsers.Track, seek float64) (opus.Reader, func(), error) {
-	return s.open(track, seek)
+// Open hands the closure a pointer to the parser's own copy, so a fake can
+// "learn" metadata the way the old parsers did, and reports what it wrote.
+func (s fakeStreamer) Open(track parsers.Track, seek float64) (parsers.Opened, error) {
+	track.Passthrough = false
+	r, cleanup, err := s.open(&track, seek)
+	if err != nil {
+		return parsers.Opened{}, err
+	}
+	return parsers.Opened{
+		Reader:      r,
+		Cleanup:     cleanup,
+		Passthrough: track.Passthrough,
+		Title:       track.Title,
+		Artist:      track.Artist,
+		Duration:    track.Duration,
+	}, nil
 }
 
 func swapRegistry(t *testing.T, reg map[string]parsers.Streamer) {

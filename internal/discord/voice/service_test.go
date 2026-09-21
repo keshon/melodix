@@ -118,11 +118,14 @@ func (r *silentReader) Close() error                { return nil }
 
 type silentStreamer struct{}
 
-func (silentStreamer) Open(track *parsers.Track, _ float64) (opus.Reader, func(), error) {
-	track.Title = track.SourceInfo.Title
+func (silentStreamer) Open(track parsers.Track, _ float64) (parsers.Opened, error) {
 	r := &silentReader{closed: make(chan struct{})}
 	var once sync.Once
-	return r, func() { once.Do(func() { close(r.closed) }) }, nil
+	return parsers.Opened{
+		Reader:  r,
+		Cleanup: func() { once.Do(func() { close(r.closed) }) },
+		Title:   track.SourceInfo.Title,
+	}, nil
 }
 
 type heldSink struct{}

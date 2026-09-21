@@ -27,12 +27,13 @@ const (
 // next 20ms Opus packet with recovery applied; Read/Close expose the same
 // stream as decoded PCM (io.ReadCloser) for consumers that still want samples.
 type RecoveryStream struct {
-	// track is this stream's own copy, not the caller's. Parsers fill in
-	// Title, Duration and Passthrough through the pointer they are handed at
-	// open time, and recovery rewrites CurrentParser as fallbacks engage --
-	// all of that used to land in the Track the player publishes to the UI,
-	// from whichever goroutine happened to be driving the reads. Runtime
-	// facts travel back up as an OpenInfo value instead; see confirmOpen.
+	// track is this stream's own copy, taken by value. What a parser learns
+	// at open time comes back as a parsers.Opened and is applied here, and
+	// recovery rewrites CurrentParser as fallbacks engage. All of that used
+	// to land in the Track the player publishes to the UI, from whichever
+	// goroutine happened to be driving the reads, because parsers wrote
+	// through a pointer. Runtime facts travel back up as an OpenInfo value
+	// instead; see confirmOpen.
 	track       parsers.Track
 	parserIndex int
 	reader      opus.Reader    // active packet stream
@@ -80,13 +81,13 @@ type RecoveryStream struct {
 }
 
 // NewRecoveryStream creates a resilient wrapper for a track.
-func NewRecoveryStream(track *parsers.Track) *RecoveryStream {
+func NewRecoveryStream(track parsers.Track) *RecoveryStream {
 	return NewRecoveryStreamWithLogger(track, zerolog.Nop())
 }
 
 // NewRecoveryStreamWithLogger creates a resilient wrapper using the given
 // logger.
-func NewRecoveryStreamWithLogger(track *parsers.Track, log zerolog.Logger) *RecoveryStream {
+func NewRecoveryStreamWithLogger(track parsers.Track, log zerolog.Logger) *RecoveryStream {
 	return &RecoveryStream{
 		track:     track.Clone(),
 		retries:   make(map[string]int),
@@ -158,17 +159,16 @@ func (rs *RecoveryStream) open(seek float64) (OpenInfo, error) {
 			rs.log.Warn().Str("parser", parser).Msg("parser_exceeded_recovery_attempts")
 			continue
 		}
-		rs.track.Passthrough = false // parser sets true if it opens passthrough
-		rs.track.Cached = false
-		reader, cleanup, err := openWithParser(&rs.track, parser, seek)
+		opened, err := openWithParser(rs.track, parser, seek)
 		if err != nil {
 			rs.log.Warn().Str("parser", parser).Err(err).Msg("stream_open_failed")
 			rs.retries[parser]++
 			continue
 		}
+		rs.learn(opened)
 		rs.startCacheWrite(seek)
 		rs.parserIndex = i
-		rs.setActive(reader, cleanup)
+		rs.setActive(opened.Reader, opened.Cleanup)
 		rs.seekSec = seek
 		rs.curParser = parser
 		rs.track.CurrentParser = parser
@@ -178,6 +178,24 @@ func (rs *RecoveryStream) open(seek float64) (OpenInfo, error) {
 		return rs.openInfo(), nil
 	}
 	return OpenInfo{}, errors.New("stream: all parsers failed or exceeded recovery attempts")
+}
+
+// learn takes on what a parser reported about the track it just opened. How
+// the audio is carried is replaced outright; the metadata only where the
+// parser had something to say, so a parser that learned no title does not
+// erase the resolver's.
+func (rs *RecoveryStream) learn(opened parsers.Opened) {
+	rs.track.Passthrough = opened.Passthrough
+	rs.track.Cached = false
+	if opened.Title != "" {
+		rs.track.Title = opened.Title
+	}
+	if opened.Artist != "" {
+		rs.track.Artist = opened.Artist
+	}
+	if opened.Duration > 0 {
+		rs.track.Duration = opened.Duration
+	}
 }
 
 // startCacheWrite begins caching a clean from-start play of an as-yet-uncached

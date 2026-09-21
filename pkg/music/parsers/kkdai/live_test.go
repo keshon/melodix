@@ -18,8 +18,8 @@ import (
 
 const vodURL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-func liveTrack(url string) *parsers.Track {
-	return &parsers.Track{URL: url, SourceInfo: sources.TrackInfo{URL: url}}
+func liveTrack(url string) parsers.Track {
+	return parsers.Track{URL: url, SourceInfo: sources.TrackInfo{URL: url}}
 }
 
 func skipUnlessLive(t *testing.T) {
@@ -34,20 +34,19 @@ func skipUnlessLive(t *testing.T) {
 func TestLivePipeOpensAnOrdinaryVideo(t *testing.T) {
 	skipUnlessLive(t)
 
-	track := liveTrack(vodURL)
-	r, cleanup, err := kkdaiPipe(track, 0)
+	opened, err := kkdaiPipe(liveTrack(vodURL), 0)
 	if err != nil {
 		t.Fatalf("kkdai pipe refused an ordinary video: %v", err)
 	}
-	defer cleanup()
+	defer opened.Cleanup()
 
-	if _, err := r.ReadPacket(); err != nil {
+	if _, err := opened.Reader.ReadPacket(); err != nil {
 		t.Fatalf("no packet from a video that opened: %v", err)
 	}
-	if track.Title == "" {
-		t.Error("title not filled in at open time")
+	if opened.Title == "" {
+		t.Error("no title learned at open time")
 	}
-	t.Logf("pipe opened %q, duration %s", track.Title, track.Duration)
+	t.Logf("pipe opened %q, duration %s", opened.Title, opened.Duration)
 }
 
 // The link path hands ffmpeg a CDN URL. Same requirement: an ordinary video
@@ -55,15 +54,14 @@ func TestLivePipeOpensAnOrdinaryVideo(t *testing.T) {
 func TestLiveLinkOpensAnOrdinaryVideo(t *testing.T) {
 	skipUnlessLive(t)
 
-	track := liveTrack(vodURL)
-	r, cleanup, err := kkdaiLink(track, 0)
+	opened, err := kkdaiLink(liveTrack(vodURL), 0)
 	if err != nil {
 		t.Fatalf("kkdai link refused an ordinary video: %v", err)
 	}
-	defer cleanup()
+	defer opened.Cleanup()
 
-	if _, err := r.ReadPacket(); err != nil {
+	if _, err := opened.Reader.ReadPacket(); err != nil {
 		t.Fatalf("no packet from a video that opened: %v", err)
 	}
-	t.Logf("link opened %q, duration %s", track.Title, track.Duration)
+	t.Logf("link opened %q, duration %s", opened.Title, opened.Duration)
 }

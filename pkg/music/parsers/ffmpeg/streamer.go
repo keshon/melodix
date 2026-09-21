@@ -1,7 +1,6 @@
 package ffmpeg
 
 import (
-	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 )
 
@@ -15,6 +14,10 @@ const (
 type Streamer struct{}
 
 // Open ignores seekSec — radio streams are live.
-func (s *Streamer) Open(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
-	return ffmpegLink(track.URL)
+func (s *Streamer) Open(track parsers.Track, seekSec float64) (parsers.Opened, error) {
+	r, cleanup, err := ffmpegLink(track.URL)
+	if err != nil {
+		return parsers.Opened{}, err
+	}
+	return parsers.Opened{Reader: r, Cleanup: cleanup}, nil
 }

@@ -9,29 +9,27 @@ import (
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 )
 
-func ytnativeLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
+func ytnativeLink(track parsers.Track, seekSec float64) (parsers.Opened, error) {
 	videoID, err := extractVideoID(track.URL)
 	if err != nil {
-		return nil, nil, err
+		return parsers.Opened{}, err
 	}
 
 	pr, err := fetchPlayer(httpClient, playerEndpoint, videoID)
 	if err != nil {
 		l := logger()
 		l.Warn().Str("video_id", videoID).Str("client_version", clientVersion).Err(err).Msg("ytnative_player_failed")
-		return nil, nil, err
+		return parsers.Opened{}, err
 	}
 
-	if pr.VideoDetails.Title != "" {
-		track.Title = pr.VideoDetails.Title
-	}
+	learned := parsers.Opened{Title: pr.VideoDetails.Title}
 
 	// No live-stream gate here on purpose. A live broadcast never reaches this
 	// point: fetchPlayer rejects it upstream, because VISIONOS answers one with
 	// UNPLAYABLE and no formats at all. See StreamingData.HLSManifestURL for the
 	// check that used to live here and why it was exactly backwards.
 	if secs, err := strconv.Atoi(pr.VideoDetails.LengthSeconds); err == nil && secs > 0 {
-		track.Duration = time.Duration(secs) * time.Second
+		learned.Duration = time.Duration(secs) * time.Second
 	}
 
 	// Passthrough: forward YouTube's WebM/Opus straight to Discord — no ffmpeg,
@@ -41,9 +39,9 @@ func ytnativeLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), e
 		r, cleanup, err := openPassthrough(f.URL, seekSec)
 		l := logger()
 		if err == nil {
-			track.Passthrough = true
 			l.Info().Str("video_id", videoID).Int("bitrate", f.Bitrate).Msg("ytnative_passthrough")
-			return r, cleanup, nil
+			learned.Reader, learned.Cleanup, learned.Passthrough = r, cleanup, true
+			return learned, nil
 		}
 		l.Warn().Str("video_id", videoID).Err(err).Msg("ytnative_passthrough_failed_ffmpeg_fallback")
 	}
@@ -51,10 +49,15 @@ func ytnativeLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), e
 	// Fallback: ffmpeg-encode the best available audio format.
 	f, err := pickAudioFormat(pr.StreamingData.AdaptiveFormats)
 	if err != nil {
-		return nil, nil, err
+		return parsers.Opened{}, err
 	}
 	cmd := ffmpegparser.NewPCMCommandUA(f.URL, seekSec, true, "ytnative-link", clientUserAgent)
-	return ffmpegparser.OpusReader(cmd, "ytnative")
+	r, cleanup, err := ffmpegparser.OpusReader(cmd, "ytnative")
+	if err != nil {
+		return parsers.Opened{}, err
+	}
+	learned.Reader, learned.Cleanup = r, cleanup
+	return learned, nil
 }
 
 // openPassthrough streams the WebM/Opus URL and demuxes it to Opus packets (no

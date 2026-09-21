@@ -8,15 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 )
 
-func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
+func ytdlpLink(track parsers.Track, seekSec float64) (parsers.Opened, error) {
 	output, err := runJSON(exec.Command(YtdlpPath, args("-j", "-f", audioFormatSelector, track.URL)...), "get url")
 	if err != nil {
-		return nil, nil, err
+		return parsers.Opened{}, err
 	}
 
 	type fragment struct {
@@ -38,7 +37,7 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 
 	var info ytdlpInfo
 	if err := json.Unmarshal(output, &info); err != nil {
-		return nil, nil, fmt.Errorf("ytdlp: decode json: %w", err)
+		return parsers.Opened{}, fmt.Errorf("ytdlp: decode json: %w", err)
 	}
 
 	// If the root duration is empty, we try to take it from the first fragment of
@@ -56,17 +55,23 @@ func ytdlpLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 		headers = info.Formats[0].HTTPHeaders
 	}
 	if link == "" {
-		return nil, nil, errors.New("ytdlp: empty url returned")
+		return parsers.Opened{}, errors.New("ytdlp: empty url returned")
 	}
-
-	track.Duration = time.Duration(info.Duration * float64(time.Second))
 
 	// yt-dlp reports the headers it used in http_headers so the fetch can be
 	// handed off; passing the UA on keeps ffmpeg's request faithful to the one
 	// that resolved the URL. Measured against googlevideo, the UA does not decide
 	// a 403 — the issuing InnerTube client does — so this is hygiene, not a fix.
 	cmd := ffmpegparser.NewPCMCommandUA(link, seekSec, true, "ytdlp-link", headerValue(headers, "User-Agent"))
-	return ffmpegparser.OpusReader(cmd, "ytdlp")
+	r, cleanup, err := ffmpegparser.OpusReader(cmd, "ytdlp")
+	if err != nil {
+		return parsers.Opened{}, err
+	}
+	return parsers.Opened{
+		Reader:   r,
+		Cleanup:  cleanup,
+		Duration: time.Duration(info.Duration * float64(time.Second)),
+	}, nil
 }
 
 // headerValue looks up an HTTP header case-insensitively, returning "" when the

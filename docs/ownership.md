@@ -44,18 +44,23 @@ pointer shares the writes; a value cannot.
 into the engine — and checked:
 `player.TestNoExportedMethodHandsOutATrackPointer`.
 
-## 2. A stream owns its Track; findings travel back as values
+## 2. A Track goes down by value; findings come back as values
 
-`RecoveryStream` copies the Track it is given. Parsers write through the
-pointer they are handed, and it lands on that copy. What the stream learned
-returns as a `stream.OpenInfo`, from `Start` and from the confirmation
-callback, which the player applies under its own lock.
+`Streamer.Open` takes the Track by value and returns what the parser learned
+in a `parsers.Opened`. `RecoveryStream` is built from a Track value, applies
+each `Opened` to its own copy, and reports what it learned as a
+`stream.OpenInfo` -- from `Start` and from the confirmation callback -- which
+the player applies under its own lock.
 
-**Because** `Streamer.Open(track *Track, …)` is an out-parameter, and five
-parser packages write through it. If that pointer belongs to the player, the
-parsers are writing the player's state.
+**Because** `Open` used to take a `*Track` as an out-parameter, and five
+parser packages wrote through it. Whoever owned that pointer had its state
+written by a parser, from whichever goroutine was reading the stream.
 
-**Enforced by** tested: `stream.TestRecoveryStreamDoesNotWriteTheCallersTrack`.
+**Enforced by** compiler -- no parser or stream is handed a pointer it could
+write through -- and checked:
+`parsers.TestStreamerOpenTakesTheTrackByValue` pins the shape of the
+interface. `stream.TestRecoveryStreamDoesNotWriteTheCallersTrack` still
+covers the one thing a value shares, the parser list's backing array.
 
 ## 3. A stream's run state has one writer, and it is whoever reads it
 

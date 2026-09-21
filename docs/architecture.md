@@ -140,7 +140,9 @@ type Source interface {
 
 // pkg/music/parsers — track → 20ms Opus packets (opus.Reader)
 type Streamer interface {
-    Open(track *Track, seekSec float64) (opus.Reader, func(), error)
+    // The track is a copy; what the parser learns comes back in Opened
+    // (reader, cleanup, passthrough, title/artist/duration).
+    Open(track Track, seekSec float64) (Opened, error)
 }
 
 // pkg/music/sink — Opus packets → audio output

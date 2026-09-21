@@ -562,9 +562,12 @@ func (p *Player) startTrack(track *parsers.Track, resumed bool) error {
 	p.currTrack = track
 	p.announcedParser = ""
 	p.recorded = false
+	// The stream's copy is taken here, under the lock: once it is released,
+	// the confirmation callback may write currTrack from the reader.
+	opening := track.Clone()
 	p.mu.Unlock()
 
-	rs := stream.NewRecoveryStreamWithLogger(track, p.log)
+	rs := stream.NewRecoveryStreamWithLogger(opening, p.log)
 	rs.SetOnParserConfirmed(func(info stream.OpenInfo) { p.onParserConfirmed(gen, info) })
 	info, err := rs.Start(0)
 	if err != nil {

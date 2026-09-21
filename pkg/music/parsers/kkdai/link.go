@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	ffmpegparser "github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
 
 	"github.com/kkdai/youtube/v2"
 )
 
-func kkdaiLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
+func kkdaiLink(track parsers.Track, seekSec float64) (parsers.Opened, error) {
 	videoID, err := extractYouTubeID(track.URL)
 	if err != nil {
-		return nil, nil, err
+		return parsers.Opened{}, err
 	}
 
 	type res struct {
@@ -55,20 +54,17 @@ func kkdaiLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 	}
 
 	if client == nil || video == nil {
-		return nil, nil, fmt.Errorf("kkdai: youtube client: %w", lastErr)
+		return parsers.Opened{}, fmt.Errorf("kkdai: youtube client: %w", lastErr)
 	}
-
-	track.Duration = video.Duration
-	track.Title = video.Title
 
 	formats := video.Formats.WithAudioChannels()
 	if len(formats) == 0 {
-		return nil, nil, errors.New("kkdai: no audio formats found")
+		return parsers.Opened{}, errors.New("kkdai: no audio formats found")
 	}
 
 	link, err := client.GetStreamURL(video, &formats[0])
 	if err != nil {
-		return nil, nil, fmt.Errorf("kkdai: get stream url: %w", err)
+		return parsers.Opened{}, fmt.Errorf("kkdai: get stream url: %w", err)
 	}
 
 	// Hand ffmpeg the same User-Agent kkdai used to obtain the URL, matching what
@@ -77,5 +73,9 @@ func kkdaiLink(track *parsers.Track, seekSec float64) (opus.Reader, func(), erro
 	// rather than a fix; don't reach for it when a 403 turns up. DefaultClient is
 	// what the zero-value youtube.Client above resolves to (kkdai assureClient).
 	cmd := ffmpegparser.NewPCMCommandUA(link, seekSec, true, "kkdai-link", youtube.DefaultClient.UserAgent)
-	return ffmpegparser.OpusReader(cmd, "kkdai")
+	r, cleanup, err := ffmpegparser.OpusReader(cmd, "kkdai")
+	if err != nil {
+		return parsers.Opened{}, err
+	}
+	return parsers.Opened{Reader: r, Cleanup: cleanup, Title: video.Title, Duration: video.Duration}, nil
 }

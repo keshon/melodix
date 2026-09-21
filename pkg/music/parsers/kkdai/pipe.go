@@ -17,37 +17,40 @@ import (
 // isn't forwardable, it errors and recovery falls through to kkdai-link.
 // The InnerTube client this rides on is set in streamer.go, and the choice
 // decides whether the CDN answers at all — see VisionOSClient.
-func kkdaiPipe(track *parsers.Track, seekSec float64) (opus.Reader, func(), error) {
+func kkdaiPipe(track parsers.Track, seekSec float64) (parsers.Opened, error) {
 	videoID, err := extractYouTubeID(track.URL)
 	if err != nil {
-		return nil, nil, err
+		return parsers.Opened{}, err
 	}
 
 	client := &youtube.Client{}
 	video, err := client.GetVideo(videoID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("kkdai: youtube client: %w", err)
+		return parsers.Opened{}, fmt.Errorf("kkdai: youtube client: %w", err)
 	}
-	track.Duration = video.Duration
-	track.Title = video.Title
 
 	f, ok := pickOpusFormat(video.Formats.WithAudioChannels())
 	if !ok {
-		return nil, nil, errors.New("kkdai: no webm/opus format for passthrough")
+		return parsers.Opened{}, errors.New("kkdai: no webm/opus format for passthrough")
 	}
 	stream, _, err := client.GetStream(video, &f)
 	if err != nil {
-		return nil, nil, fmt.Errorf("kkdai: get stream: %w", err)
+		return parsers.Opened{}, fmt.Errorf("kkdai: get stream: %w", err)
 	}
 
 	r, err := opus.Passthrough(stream, opus.SeekPackets(seekSec))
 	if err != nil {
-		return nil, nil, err // Passthrough closed stream
+		return parsers.Opened{}, err // Passthrough closed stream
 	}
-	track.Passthrough = true
 	l := logger()
 	l.Info().Str("video_id", videoID).Msg("kkdai_passthrough")
-	return r, func() { _ = r.Close() }, nil
+	return parsers.Opened{
+		Reader:      r,
+		Cleanup:     func() { _ = r.Close() },
+		Passthrough: true,
+		Title:       video.Title,
+		Duration:    video.Duration,
+	}, nil
 }
 
 // pickOpusFormat returns the highest-bitrate WebM/Opus format (itag

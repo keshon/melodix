@@ -23,8 +23,8 @@ func newTestCacheStore(t *testing.T) *cache.Store {
 	return s
 }
 
-func ytTrack(url string, parsersList ...string) *parsers.Track {
-	return &parsers.Track{
+func ytTrack(url string, parsersList ...string) parsers.Track {
+	return parsers.Track{
 		URL:        url,
 		SourceInfo: sources.TrackInfo{SourceName: sources.YouTube, AvailableParsers: parsersList},
 	}

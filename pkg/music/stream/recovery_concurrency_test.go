@@ -41,7 +41,7 @@ func TestRequestReopenDoesNotRaceTheReadAheadProducer(t *testing.T) {
 	SetBufferAhead(200)
 	defer SetBufferAhead(0)
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   time.Hour, // finite, so an early end is recoverable
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
@@ -98,7 +98,7 @@ func TestCloseDuringPendingReopenDoesNotHang(t *testing.T) {
 	SetBufferAhead(200)
 	defer SetBufferAhead(0)
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   time.Hour,
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
@@ -135,7 +135,7 @@ func TestRepeatedReopensDoNotExhaustParserRecovery(t *testing.T) {
 	})
 	defer SetRegistry(orig)
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   time.Hour,
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
@@ -173,7 +173,7 @@ func TestReopenResumesAtTheCurrentPosition(t *testing.T) {
 	})
 	defer SetRegistry(orig)
 
-	track := &parsers.Track{
+	track := parsers.Track{
 		Duration:   time.Hour,
 		SourceInfo: sources.TrackInfo{AvailableParsers: []string{"p1"}},
 	}
