@@ -175,7 +175,7 @@ func TestASupersededRunDoesNotClearTheCurrentOne(t *testing.T) {
 	}
 
 	p.mu.Lock()
-	stale := p.gen
+	stale := p.run
 	p.mu.Unlock()
 
 	if err := p.PlayNext(""); err != nil {
@@ -183,7 +183,7 @@ func TestASupersededRunDoesNotClearTheCurrentOne(t *testing.T) {
 	}
 
 	// The older run's goroutine, arriving late.
-	p.clearIfCurrent(stale)
+	p.finish(stale)
 
 	if !p.IsPlaying() {
 		t.Fatal("a finished run cleared the run that replaced it")
@@ -216,7 +216,7 @@ func TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt(t *testing.T) {
 		t.Fatalf("play first: %v", err)
 	}
 	p.mu.Lock()
-	finishing := p.gen
+	finishing := p.run
 	p.mu.Unlock()
 
 	// What /play does when it arrives at the boundary.
@@ -362,7 +362,7 @@ func TestAQueueEndTeardownKeepsATrackQueuedAfterTheQueueEmptied(t *testing.T) {
 		t.Fatalf("play first: %v", err)
 	}
 	p.mu.Lock()
-	finishing := p.gen
+	finishing := p.run
 	p.mu.Unlock()
 	// The run is over; nothing newer has started.
 	_ = p.Stop(false)

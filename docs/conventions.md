@@ -154,11 +154,11 @@ knows the result.
 `player.Options`, and never touched again. They are read from the playback
 goroutine without a lock, which is only safe because of that.
 
-**[invariant]** Every goroutine has an owner and a clear way to exit. Per-run
-channels (`stopPlayback`/`playbackDone`) belong to exactly one playback run,
-and a run names itself by its generation rather than by reading anything
-shared — otherwise a goroutine scheduled late acts on a newer run's track. See
-[ownership.md](ownership.md) rule 5.
+**[invariant]** Every goroutine has an owner and a clear way to exit. A
+playback run is a `*run` holding its own stop and done channels, track and
+flags; the goroutines serving it are handed that run rather than reading one
+off the player — otherwise a goroutine scheduled late acts on a newer run's
+track. See [ownership.md](ownership.md) rule 5.
 
 **[practice]** Package-level loggers use `atomic.Pointer[zerolog.Logger]` with
 `SetLogger` and a `Nop` fallback (see `parsers/ffmpeg/pcm.go`), wired once in

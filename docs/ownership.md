@@ -98,35 +98,37 @@ quiet exactly when someone puts one back.
 **Limit:** it does not follow calls. A helper called under the lock that itself
 does I/O passes this and is still wrong.
 
-## 5. A run resets only its own state
+## 5. A run changes only its own state
 
-Every playback run carries a generation. `Stop`, `clearIfCurrent`, the
-confirmation callback and the queue-end teardown all compare against it before
-writing.
+A playback run is a `*run`: its stop and done channels, its track, its phase,
+the parser the UI was told about and whether history has a row. The player
+holds the latest one as `p.run`. The playback goroutine, the confirmation
+callback and the queue-end teardown are each handed their run, and whether it
+is still in charge is `p.run == r`.
 
 **Because** `Stop` waits up to ten seconds for the playback goroutine to exit.
 A track can end and the next begin inside that wait, so the run that is current
-when it finishes is not the one it was called for.
+when it finishes is not the one it was called for. When those fields lived on
+the player, every run wrote the same ones, and a generation counter compared
+before each write was all that kept a late run off a newer run's state.
 
-`Stop` checks twice, and the two halves need different pressure to reach. The
-first refuses a stop aimed at a generation that is no longer current. The
-second is the one that matters here: after the wait, the stop compares again
-before writing, because the run it waited for may have been replaced while it
-waited. Reaching that needs a track to end *on its own* mid-wait, which only
-happens when tracks are short enough for the completion chain to fire inside a
-skip — long tracks exercise the first check and never the second.
+A run ending now writes only that run: `finish(r)` sets `r`'s phase and
+nothing else, and a `Stop` that was overtaken ends the run it captured, not
+the one that replaced it. What still needs the identity check is what belongs
+to the player rather than to a run -- the queue and the voice channel -- so a
+teardown aimed at one run does nothing once another is in charge.
 
-**Enforced by** tested: `player.TestStopDoesNotResetANewerRun`,
+**Enforced by** compiler -- per-run state is not on `Player`, and a run's
+goroutines are passed their `*run` -- and tested: `player.TestStopDoesNotResetANewerRun`,
 `TestASupersededRunDoesNotClearTheCurrentOne`,
-`TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt` for the first check;
-`TestAStopNeverResetsARunItDidNotAskAbout` for the second, which measures six
-concurrent runs into one sink when the check is removed and one when it is
-there.
+`TestAStopNeverResetsARunItDidNotAskAbout`, and
+`TestAQueueEndTeardownDoesNotStopTheTrackThatFollowedIt`, which fails when the
+teardown's identity check is removed.
 
-The generation has one blind spot, and the queue-end teardown covers it
+Run identity has one blind spot, and the queue-end teardown covers it
 separately: `/play` enqueues before it starts a run, so between the two the
-generation still matches while the queue is no longer empty. A teardown that
-finds tracks queued stands down rather than clearing them. Tested:
+run still matches while the queue is no longer empty. A teardown that finds
+tracks queued stands down rather than clearing them. Tested:
 `TestAQueueEndTeardownKeepsATrackQueuedAfterTheQueueEmptied`.
 
 ## 6. Nothing reachable from a Player has session lifetime

@@ -288,7 +288,7 @@ sequenceDiagram
   P->>RS: Start(0) — first parser that opens
   RS-->>P: OpenInfo (which parser, passthrough, cached, title)
   P->>P: apply OpenInfo to the track under p.mu
-  P->>P: spawn runPlayback goroutine (generation N)
+  P->>P: spawn runPlayback goroutine for run N
   P-->>H: nil (track started)
   H->>H: render "Now Playing" synchronously
   S->>RS: ReadPacket (first)
@@ -303,10 +303,10 @@ sequenceDiagram
   RS-->>S: EOF
   P->>P: completion goroutine → PlayNext
   alt queue non-empty
-    P->>RS: next track (new goroutine, generation N+1)
+    P->>RS: next track (new goroutine, run N+1)
     P->>P: emit StatusPlaying → watcher edits status message
   else queue empty
-    P->>P: stop(true, generation N) → ReleaseSink (leave VC)
+    P->>P: stop(true, run N) → ReleaseSink (leave VC)
     P->>P: watcher edits "Playback Finished"
   end
 ```
@@ -320,10 +320,10 @@ Key mechanics:
   goroutines rather than recursion, and queue-end disconnect has exactly one
   decision point: `PlayNext` returning `ErrNoTracksInQueue` leads straight to
   `Stop(true)`.
-- **Per-run ownership** — each run gets its own `stopPlayback`/`playbackDone`
-  channels and its own track pointer, so a stale run's goroutine can never
-  clobber a newer run's state (`clearIfCurrent` checks track identity before
-  resetting anything).
+- **Per-run ownership** — each run is a `*run` with its own stop and done
+  channels, track and flags, and its goroutines are handed it. A stale run's
+  goroutine can only end its own run, never a newer one; `p.run == r` answers
+  whether it is still in charge (see [ownership.md](ownership.md) rule 5).
 - **Discord sink** — reads 20ms Opus packets and forwards them to `OpusSend`
   with no encoding step: a 10-packet warm-up primes the pipeline, then any
   leading near-silent packets (tiny under VBR) get skipped as dead air.
