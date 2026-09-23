@@ -3,8 +3,8 @@ package settings
 import (
 	"fmt"
 
-	"github.com/keshon/melodix/internal/command/core/commands"
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/command/core/commands"
 	"github.com/keshon/melodix/internal/discord/perm"
 
 	"github.com/keshon/melodix/internal/storage"

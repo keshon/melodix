@@ -11,8 +11,8 @@ import (
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/rs/zerolog"
 
-	"github.com/keshon/melodix/internal/command/music/common"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/command/music/common"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/pkg/music/player"
 )

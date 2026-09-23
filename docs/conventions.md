@@ -130,8 +130,8 @@ different reason but just as hard. The format is
 `search:<source>:<payload>`, and a chooser that has already been posted
 keeps sitting in a channel: its ids come back whenever someone presses a
 button, possibly long after a restart or a deploy. So the source tags (`yt`,
-`sc` in `internal/command/music/search`) can gain new values but must never
-be renamed or re-pointed. Pinned by the same test.
+`sc` in `internal/discord/command/music/search`) can gain new values but must
+never be renamed or re-pointed. Pinned by the same test.
 
 **[invariant]** An unrecognised tag has to fail closed — telling the user to
 run `/search` again — rather than resolve as some default source. A tag that

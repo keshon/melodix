@@ -13,8 +13,8 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/middleware"
 	"github.com/keshon/melodix/internal/discord/queue"
-	"github.com/keshon/melodix/internal/middleware"
 )
 
 func newDispatchBot(t *testing.T, parallelism int) *Bot {

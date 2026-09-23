@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/keshon/melodix/internal/command/music/common"
-	"github.com/keshon/melodix/internal/command/music/playback"
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/command/music/common"
+	"github.com/keshon/melodix/internal/discord/command/music/playback"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/sources"
 )

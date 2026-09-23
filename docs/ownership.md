@@ -281,11 +281,11 @@ drives the dispatcher; `middleware.TestAClickIsAudited` and
 Known gaps. An honest list is worth more than a clean one.
 
 - **Rule 4 does not follow calls** into helpers invoked under the lock.
-- **Reply errors** are ignored at every call site in `internal/command`, which
-  is defensible — the interaction is gone by the time one fails — but means no
-  command can act on one. What was the actual defect, the silence, is fixed:
-  `adapter` reports every failed reply as `reply_failed` before returning
-  it.
+- **Reply errors** are ignored at every call site in
+  `internal/discord/command`, which is defensible — the interaction is gone
+  by the time one fails — but means no command can act on one. What was the
+  actual defect, the silence, is fixed: `adapter` reports every failed reply
+  as `reply_failed` before returning it.
 - **`kkdai`'s `init()`** rewrites a third-party package's global for the whole
   process on import. The library offers no narrower knob.
 - **A UDP write failing with anything but a closed socket** is logged by disgo

@@ -381,7 +381,7 @@ var frozenPackages = map[string]map[string]string{
 // so cannot be read as constants from another package. file is relative to the
 // repo root; each entry must appear in it verbatim.
 var frozenLiterals = map[string][]string{
-	"internal/command/music/search/search.go": {
+	"internal/discord/command/music/search/search.go": {
 		`sourceYouTube    = "yt"`,
 		`sourceSoundCloud = "sc"`,
 	},

@@ -16,7 +16,7 @@ import (
 	"github.com/keshon/datastore"
 	"github.com/keshon/melodix/internal/applog"
 	"github.com/keshon/melodix/internal/config"
-	"github.com/keshon/melodix/internal/musicwire"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
@@ -70,7 +70,7 @@ func main() {
 			defer func() { _ = store.Close() }()
 		}
 	}
-	if err := musicwire.Apply(cfg, store, log); err != nil {
+	if err := music.ApplyLayers(cfg, store, log); err != nil {
 		log.Fatal().Err(err).Msg("playback_layers_init_failed")
 	}
 

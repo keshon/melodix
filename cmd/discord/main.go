@@ -13,24 +13,24 @@ import (
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/applog"
-	"github.com/keshon/melodix/internal/command/core/about"
-	"github.com/keshon/melodix/internal/command/core/help"
-	"github.com/keshon/melodix/internal/command/core/maintenance"
-	"github.com/keshon/melodix/internal/command/settings"
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/discord/command/core/about"
+	"github.com/keshon/melodix/internal/discord/command/core/help"
+	"github.com/keshon/melodix/internal/discord/command/core/maintenance"
+	"github.com/keshon/melodix/internal/discord/command/settings"
 
-	"github.com/keshon/melodix/internal/command/music/history"
-	"github.com/keshon/melodix/internal/command/music/next"
-	"github.com/keshon/melodix/internal/command/music/play"
-	"github.com/keshon/melodix/internal/command/music/queue"
-	"github.com/keshon/melodix/internal/command/music/search"
-	"github.com/keshon/melodix/internal/command/music/stop"
+	"github.com/keshon/melodix/internal/discord/command/music/history"
+	"github.com/keshon/melodix/internal/discord/command/music/next"
+	"github.com/keshon/melodix/internal/discord/command/music/play"
+	"github.com/keshon/melodix/internal/discord/command/music/queue"
+	"github.com/keshon/melodix/internal/discord/command/music/search"
+	"github.com/keshon/melodix/internal/discord/command/music/stop"
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
+	"github.com/keshon/melodix/internal/discord/middleware"
 	"github.com/keshon/melodix/internal/discord/session"
-	"github.com/keshon/melodix/internal/middleware"
-	"github.com/keshon/melodix/internal/musicwire"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
@@ -83,7 +83,7 @@ func main() {
 
 	// Optional playback layers (cache + anti-skip buffer), set once before
 	// sessions run.
-	if err := musicwire.Apply(cfg, store, log); err != nil {
+	if err := music.ApplyLayers(cfg, store, log); err != nil {
 		log.Fatal().Err(err).Msg("playback_layers_init_failed")
 	}
 

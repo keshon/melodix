@@ -1,7 +1,6 @@
-// Package musicwire installs the optional playback layers — the anti-skip
-// buffer and the global track cache — into the stream engine from config. It is
-// shared by the Discord bot and the CLI so both behave identically.
-package musicwire
+// Package music is the application layer the CLI and the Discord bot share, so
+// both behave identically on top of the pkg/music engine.
+package music
 
 import (
 	"github.com/keshon/melodix/internal/config"
@@ -12,11 +11,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Apply sets the anti-skip read-ahead depth and, when CACHE_ENABLED, builds and
+// ApplyLayers installs the optional playback layers into the stream engine: it
+// sets the anti-skip read-ahead depth and, when CACHE_ENABLED, builds and
 // installs the global track cache. Call once at startup, before any playback. A
 // nil store still enables the cache, but its index is in-memory only — that is
 // the CLI's fallback when the bot holds the data directory lock.
-func Apply(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error {
+func ApplyLayers(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error {
 	stream.SetBufferAhead(cfg.BufferAheadMs)
 	ytnative.SetMaxBitrate(cfg.MaxAudioBitrate)
 	if !cfg.CacheEnabled {

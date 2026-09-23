@@ -99,7 +99,9 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
 | `internal/discord/queue` | How commands get scheduled: one FIFO lane per guild, drained off the gateway read goroutine so a guild's commands stay ordered and never overlap, plus the global cap on how many run at once across every guild |
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
-| `internal/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
+| `internal/discord/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
+| `internal/discord/middleware` | The chain every command and click runs through: guild-only, permissions, disabled groups, the command log |
+| `internal/music` | The application layer the CLI and the bot share; today the optional playback layers (cache, anti-skip read-ahead) |
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
 | `internal/storage` | Persistence: schema (guild settings, command log, playback rows, cache index) and the collections/indexes declared on the embedded datastore |
 
@@ -544,8 +546,8 @@ Real tradeoffs, written down so they are not rediscovered as bugs.
   behave like a cache rather than an archive — but it remains a real
   tradeoff, not a footnote.
 - **`/play`'s `source` and `parser` choice lists are maintained by hand**
-  (`internal/command/music/play/play.go`) and can drift from the resolver and
-  `stream.registryEntries`. Nothing checks this.
+  (`internal/discord/command/music/play/play.go`) and can drift from the
+  resolver and `stream.registryEntries`. Nothing checks this.
 - **Pause and resume are not supported** — the sink owns the read loop; see
   Playback pipeline. Commands that try get `ErrPauseNotSupported`.
 - **One process per storage directory.** The CLI falls back to an in-memory
