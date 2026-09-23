@@ -4,17 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
-	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
-	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
-	"github.com/keshon/melodix/pkg/music/resolve"
-	"github.com/keshon/melodix/pkg/music/sink"
-	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/rs/zerolog"
 )
 
@@ -23,16 +17,6 @@ import (
 // survives reconnects: a restart replaces the session, and everything here
 // asks again rather than holding a handle that has gone stale.
 type APIGetter func() adapter.BotAPI
-
-// SinkProviderFactory builds the audio path for one guild. It is supplied by
-// whatever is holding the connection -- the service itself does not know which
-// library carries the packets, and does not need to.
-//
-// What it returns lives as long as the guild's player does, and reaches the
-// live session itself. Caching one here used to be the bug: the provider was
-// built on a session, the cache outlived the session, and a guild that had
-// played once before a reconnect could never play again.
-type SinkProviderFactory func(guildID string) sink.Provider
 
 // UserVoiceState is where a user is connected, in the shape a caller needs to
 // join them: the channel, and who was asked about.
@@ -70,19 +54,13 @@ type guildMusicStatus struct {
 	MessageID string
 }
 
-// Service provides voice/music for a Discord bot: players, sink providers,
-// resolver, and guild music status. It is pluggable: a bot without voice can
-// omit it.
+// Service is the Discord side of music: where a guild's playback is shown and
+// who is in which voice channel. The players themselves belong to
+// music.Service; this one is plugged into it as the watcher and the failure
+// report. It is pluggable: a bot without voice can omit it.
 type Service struct {
-	getAPI          APIGetter
-	newSinkProvider SinkProviderFactory
-	cfg             *config.Config
-	store           *storage.Storage
-	log             zerolog.Logger
-	mu              sync.RWMutex
-	players         map[string]*player.Player
-	sinkProviders   map[string]sink.Provider
-	resolver        *resolve.Resolver
+	getAPI APIGetter
+	log    zerolog.Logger
 
 	guildMusicStatus map[string]guildMusicStatus
 	// guildMusicNotifyChannel is the text channel of the last music slash (/play,
@@ -93,38 +71,20 @@ type Service struct {
 }
 
 // NewVoiceService creates a voice service. getAPI reaches the current
-// connection and newSinkProvider builds a guild's audio path; between them
-// they are the entire contact with whichever library is running.
-func NewVoiceService(getAPI APIGetter, newSinkProvider SinkProviderFactory, cfg *config.Config, store *storage.Storage, log zerolog.Logger) *Service {
+// connection, which is the service's entire contact with whichever library is
+// running.
+func NewVoiceService(getAPI APIGetter, log zerolog.Logger) *Service {
 	return &Service{
 		getAPI:                  getAPI,
-		newSinkProvider:         newSinkProvider,
-		cfg:                     cfg,
-		store:                   store,
 		log:                     log,
-		players:                 make(map[string]*player.Player),
-		sinkProviders:           make(map[string]sink.Provider),
 		guildMusicStatus:        make(map[string]guildMusicStatus),
 		guildMusicNotifyChannel: make(map[string]string),
 	}
 }
 
-type playbackRecorder struct {
-	store *storage.Storage
-	log   zerolog.Logger
-}
-
-func (r playbackRecorder) Record(guildID string, playedAt time.Time, track parsers.Track) {
-	if r.store == nil {
-		return
-	}
-	if _, err := r.store.AppendMusicPlayback(guildID, track, playedAt); err != nil {
-		r.log.Warn().Str("guild_id", guildID).Err(err).Msg("playback_history_append_failed")
-	}
-}
-
-// notifyPlaybackFailed is wired as player.Options.OnPlaybackFailed at player construction.
-func (s *Service) notifyPlaybackFailed(guildID string, track parsers.Track, err error) {
+// NotifyPlaybackFailed is music.Hooks.OnFailed: it shows a failure that
+// happened after the track had started.
+func (s *Service) NotifyPlaybackFailed(guildID string, track parsers.Track, err error) {
 	api := s.getAPI()
 	if api == nil {
 		return
@@ -180,51 +140,13 @@ func (s *Service) deliverPlaybackFailureEmbed(api adapter.BotAPI, guildID string
 	s.log.Warn().Str("guild_id", guildID).Msg("playback_failed_no_ui_target")
 }
 
-// GetOrCreatePlayer returns an existing player for the guild or creates a new
-// one.
-func (s *Service) GetOrCreatePlayer(guildID string) *player.Player {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.sinkProviders == nil {
-		s.sinkProviders = make(map[string]sink.Provider)
-	}
-	if p, ok := s.players[guildID]; ok {
-		return p
-	}
-	if s.resolver == nil {
-		s.resolver = resolve.New()
-	}
-	provider, ok := s.sinkProviders[guildID]
-	if !ok {
-		provider = s.newSinkProvider(guildID)
-		s.sinkProviders[guildID] = provider
-	}
-	recoveryMode, ok := player.ParseTransportRecoveryMode(s.cfg.PlayerTransportRecoveryMode)
-	if !ok {
-		s.log.Warn().Str("value", s.cfg.PlayerTransportRecoveryMode).Msg("unknown_transport_recovery_mode_using_hard")
-	}
-	p := player.NewWithOptions(provider, s.resolver, player.Options{
-		Logger:                s.log,
-		TransportRecoveryMode: recoveryMode,
-		TransportSoftAttempts: s.cfg.PlayerTransportSoftAttempts,
-		OnPlaybackFailed:      s.notifyPlaybackFailed,
-	})
-	p.SetGuildID(guildID)
-	if s.store != nil {
-		p.SetRecorder(playbackRecorder{store: s.store, log: s.log})
-	}
-	s.players[guildID] = p
-	go s.watchPlayerStatus(guildID, p)
-	return p
-}
-
-// watchPlayerStatus is the single long-lived consumer of the player's status
-// channel (one per guild, for the player's lifetime). Interaction-driven starts
-// are rendered by PlayNextAndAnnounce, which detaches the old status message
-// first so this watcher cannot write the new track into it; what is left here
-// is the asynchronous half -- auto-advance, parser corrections, queue end.
-func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
+// WatchPlayerStatus is music.Hooks.Watch: the single long-lived consumer of the
+// player's status channel (one per guild, for the player's lifetime).
+// Interaction-driven starts are rendered by PlayNextAndAnnounce, which detaches
+// the old status message first so this watcher cannot write the new track into
+// it; what is left here is the asynchronous half -- auto-advance, parser
+// corrections, queue end.
+func (s *Service) WatchPlayerStatus(guildID string, p *player.Player) {
 	for status := range p.PlayerStatus {
 		if s.getAPI() == nil {
 			// Silence here used to make a stale embed undiagnosable: the
@@ -280,17 +202,6 @@ func (s *Service) watchPlayerStatus(guildID string, p *player.Player) {
 			// resume. Listed so a new status has to be placed here too.
 		}
 	}
-}
-
-// ResolveTracks resolves input to tracks using the service's shared resolver.
-func (s *Service) ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
-	s.mu.Lock()
-	if s.resolver == nil {
-		s.resolver = resolve.New()
-	}
-	r := s.resolver
-	s.mu.Unlock()
-	return r.Resolve(input, source, parser)
 }
 
 // SetGuildMusicNotifyChannel records the text channel id for guild (slash
@@ -446,52 +357,4 @@ func (s *Service) rememberNotifyChannel(guildID, channelID string) {
 	}
 	s.guildMusicNotifyChannel[guildID] = channelID
 	s.guildMusicStatusMu.Unlock()
-}
-
-// StopAllPlayers stops playback and disconnects voice for all guilds. Call on
-// shutdown.
-func (s *Service) StopAllPlayers() {
-	s.mu.Lock()
-	players := make(map[string]*player.Player, len(s.players))
-	for k, v := range s.players {
-		players[k] = v
-	}
-	s.players = make(map[string]*player.Player)
-	s.sinkProviders = nil // reinitialized on next GetOrCreatePlayer if needed
-	s.mu.Unlock()
-
-	// In parallel, because each Stop leaves a voice channel and that waits on
-	// the voice gateway. Sequentially, one guild whose gateway has stopped
-	// answering spends the whole shutdown budget on its own and every guild
-	// behind it is left in its channel -- and a server that has stopped
-	// answering one connection is not answering the others either, so the
-	// slow case is the case where they are all slow.
-	var stopping sync.WaitGroup
-	for _, p := range players {
-		stopping.Add(1)
-		go func(p *player.Player) {
-			defer stopping.Done()
-			_ = p.Stop(true)
-		}(p)
-	}
-	stopping.Wait()
-}
-
-// InvalidateAllSinks disconnects and forgets current voice connections for all
-// guilds, without stopping players or clearing queues. Intended for session
-// restarts.
-func (s *Service) InvalidateAllSinks() {
-	s.mu.RLock()
-	providers := make([]sink.Provider, 0, len(s.sinkProviders))
-	for _, p := range s.sinkProviders {
-		providers = append(providers, p)
-	}
-	s.mu.RUnlock()
-
-	for _, p := range providers {
-		if p == nil {
-			continue
-		}
-		p.InvalidateSink()
-	}
 }

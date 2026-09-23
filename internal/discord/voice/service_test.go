@@ -11,8 +11,10 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/pkg/music/opus"
 	"github.com/keshon/melodix/pkg/music/parsers"
+	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/sources"
 	"github.com/keshon/melodix/pkg/music/stream"
@@ -141,24 +143,25 @@ func (heldProvider) Sink(string) (sink.AudioSink, error) { return heldSink{}, ni
 func (heldProvider) ReleaseSink(string)                  {}
 func (heldProvider) InvalidateSink()                     {}
 
-func newTestService(t *testing.T) (*Service, *recordingAPI) {
+// newTestService wires the service into a music.Service the way the bot does,
+// and returns guild g1's player.
+func newTestService(t *testing.T) (*Service, *recordingAPI, *player.Player) {
 	t.Helper()
 	previous := stream.SetRegistry(map[string]parsers.Streamer{"silent": silentStreamer{}})
 	t.Cleanup(func() { stream.SetRegistry(previous) })
 
 	api := &recordingAPI{}
-	s := NewVoiceService(
-		func() adapter.BotAPI { return api },
-		func(string) sink.Provider { return heldProvider{} },
-		&config.Config{},
-		nil,
-		zerolog.Nop(),
-	)
-	t.Cleanup(s.StopAllPlayers)
-	return s, api
+	s := NewVoiceService(func() adapter.BotAPI { return api }, zerolog.Nop())
+	m := music.New(&config.Config{}, nil, zerolog.Nop(), music.Hooks{
+		NewSink:  func(string) sink.Provider { return heldProvider{} },
+		Watch:    s.WatchPlayerStatus,
+		OnFailed: s.NotifyPlaybackFailed,
+	})
+	t.Cleanup(m.StopAll)
+	return s, api, m.Player("g1")
 }
 
-func queue(t *testing.T, s *Service, titles ...string) {
+func queue(t *testing.T, p *player.Player, titles ...string) {
 	t.Helper()
 	infos := make([]sources.TrackInfo, 0, len(titles))
 	for _, title := range titles {
@@ -167,7 +170,7 @@ func queue(t *testing.T, s *Service, titles ...string) {
 			SourceName: sources.YouTube, AvailableParsers: []string{"silent"},
 		})
 	}
-	if err := s.GetOrCreatePlayer("g1").EnqueueTrackInfos(infos); err != nil {
+	if err := p.EnqueueTrackInfos(infos); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 }
@@ -193,12 +196,12 @@ func mentions(embeds []*adapter.Embed, text string) bool {
 // the old registration and wrote the new track into it. That message then
 // stayed on that track for good, above the one that went on being updated.
 func TestStartingPlaybackLeavesThePreviousStatusMessageAlone(t *testing.T) {
-	s, api := newTestService(t)
+	s, api, p := newTestService(t)
 	s.guildMusicStatus["g1"] = guildMusicStatus{ChannelID: "text1", MessageID: "old"}
-	queue(t, s, "fresh")
+	queue(t, p, "fresh")
 
 	to := &fakeInteraction{answerID: "new", latency: 200 * time.Millisecond}
-	if err := s.PlayNextAndAnnounce(to, s.GetOrCreatePlayer("g1"), "g1", "vc1", 1, nil); err != nil {
+	if err := s.PlayNextAndAnnounce(to, p, "g1", "vc1", 1, nil); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond) // let the watcher act on anything left
@@ -216,11 +219,11 @@ func TestStartingPlaybackLeavesThePreviousStatusMessageAlone(t *testing.T) {
 // one person, and every later edit went to a message the channel endpoint
 // cannot reach. The status message has to be public.
 func TestAPickStartsAPublicStatusMessage(t *testing.T) {
-	s, api := newTestService(t)
-	queue(t, s, "picked")
+	s, api, p := newTestService(t)
+	queue(t, p, "picked")
 
 	to := &fakeInteraction{component: true, answerID: "chooser"}
-	if err := s.PlayNextAndAnnounce(to, s.GetOrCreatePlayer("g1"), "g1", "vc1", 1, nil); err != nil {
+	if err := s.PlayNextAndAnnounce(to, p, "g1", "vc1", 1, nil); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 
@@ -245,9 +248,8 @@ func TestAPickStartsAPublicStatusMessage(t *testing.T) {
 // used to go on saying that track is playing, above the message for the one
 // that replaced it.
 func TestSkippingMarksTheOldStatusMessageSkipped(t *testing.T) {
-	s, api := newTestService(t)
-	queue(t, s, "first", "second")
-	p := s.GetOrCreatePlayer("g1")
+	s, api, p := newTestService(t)
+	queue(t, p, "first", "second")
 	if err := s.PlayNextAndAnnounce(&fakeInteraction{answerID: "m1"}, p, "g1", "vc1", 2, nil); err != nil {
 		t.Fatalf("start: %v", err)
 	}

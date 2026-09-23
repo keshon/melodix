@@ -12,8 +12,8 @@ func (b *Bot) makeSessionUnhealthyNotifier(disconnected chan struct{}) func() {
 	var unhealthyWindowStart time.Time
 
 	invalidateSinks := func() {
-		if b.voice != nil {
-			b.voice.InvalidateAllSinks()
+		if b.music != nil {
+			b.music.InvalidateSinks()
 		}
 	}
 

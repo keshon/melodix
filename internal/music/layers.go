@@ -6,17 +6,26 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/keshon/melodix/pkg/music/cache"
+	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
+	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
+	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
 	"github.com/keshon/melodix/pkg/music/parsers/ytnative"
+	"github.com/keshon/melodix/pkg/music/soundcloudapi"
 	"github.com/keshon/melodix/pkg/music/stream"
 	"github.com/rs/zerolog"
 )
 
-// ApplyLayers installs the optional playback layers into the stream engine: it
-// sets the anti-skip read-ahead depth and, when CACHE_ENABLED, builds and
+// ApplyLayers sets up the engine from config: it points the parsers' logs at
+// log, sets the anti-skip read-ahead depth and, when CACHE_ENABLED, builds and
 // installs the global track cache. Call once at startup, before any playback. A
 // nil store still enables the cache, but its index is in-memory only — that is
 // the CLI's fallback when the bot holds the data directory lock.
 func ApplyLayers(cfg *config.Config, store *storage.Storage, log zerolog.Logger) error {
+	kkdai.SetLogger(log)
+	ffmpeg.SetLogger(log)
+	soundcloudapi.SetLogger(log)
+	ytnative.SetLogger(log)
+	ytdlp.SetLogger(log)
 	stream.SetBufferAhead(cfg.BufferAheadMs)
 	ytnative.SetMaxBitrate(cfg.MaxAudioBitrate)
 	if !cfg.CacheEnabled {

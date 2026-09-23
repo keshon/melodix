@@ -4,7 +4,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -18,8 +17,8 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
-	"github.com/keshon/melodix/pkg/music/resolve"
 	"github.com/keshon/melodix/pkg/music/sink"
 )
 
@@ -37,20 +36,6 @@ func main() {
 
 	provider := sink.NewSpeakerProviderWithLogger(log)
 	defer provider.Close()
-
-	res := resolve.New()
-	recoveryMode, ok := player.ParseTransportRecoveryMode(cfg.PlayerTransportRecoveryMode)
-	if !ok {
-		log.Warn().Str("value", cfg.PlayerTransportRecoveryMode).Msg("unknown_transport_recovery_mode_using_hard")
-	}
-	p := player.NewWithOptions(provider, res, player.Options{
-		Logger:                log,
-		TransportRecoveryMode: recoveryMode,
-		TransportSoftAttempts: cfg.PlayerTransportSoftAttempts,
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Optional playback layers (cache + anti-skip buffer), shared with the bot.
 	// Storage is only needed to persist the cache index. The data directory takes
@@ -74,41 +59,19 @@ func main() {
 		log.Fatal().Err(err).Msg("playback_layers_init_failed")
 	}
 
-	// Print status updates (e.g. "Now playing: ...") in the background
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case status, ok := <-p.PlayerStatus:
-				if !ok {
-					return
-				}
-				switch status {
-				case player.StatusPlaying:
-					if track, ok := p.CurrentTrack(); ok {
-						fmt.Println("▶", track.Title)
-					}
-				case player.StatusAdded:
-					fmt.Println("🎶 Added to queue")
-				case player.StatusStopped:
-					fmt.Println("⏹ Stopped")
-				case player.StatusError:
-					fmt.Println("❌ Error")
-				case player.StatusPaused, player.StatusResumed:
-					// The player supports neither.
-				}
-			}
-		}
-	}()
+	svc := music.New(cfg, store, log, music.Hooks{
+		NewSink:  func(string) sink.Provider { return provider },
+		Watch:    printStatus,
+		OnFailed: func(_ string, track parsers.Track, err error) { fmt.Println("❌", track.Title+":", err) },
+	})
+	p := svc.Player(scope)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sig
 		fmt.Println("\nShutting down...")
-		cancel()
-		_ = p.Stop(true)
+		svc.StopAll()
 		os.Exit(0)
 	}()
 
@@ -191,6 +154,30 @@ func main() {
 	}
 	if err := scanner.Err(); err != nil {
 		log.Error().Err(err).Msg("cli_stdin_error")
+	}
+}
+
+// scope is the CLI's one player, and the key its plays are recorded under.
+const scope = "cli"
+
+// printStatus is the player's single status consumer: it prints each change
+// as it happens.
+func printStatus(_ string, p *player.Player) {
+	for status := range p.PlayerStatus {
+		switch status {
+		case player.StatusPlaying:
+			if track, ok := p.CurrentTrack(); ok {
+				fmt.Println("▶", track.Title)
+			}
+		case player.StatusAdded:
+			fmt.Println("🎶 Added to queue")
+		case player.StatusStopped:
+			fmt.Println("⏹ Stopped")
+		case player.StatusError:
+			fmt.Println("❌ Error")
+		case player.StatusPaused, player.StatusResumed:
+			// The player supports neither.
+		}
 	}
 }
 

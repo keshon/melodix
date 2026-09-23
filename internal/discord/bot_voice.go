@@ -45,10 +45,10 @@ type UserVoiceState = voice.UserVoiceState
 // GetOrCreatePlayer returns an existing player for the guild or creates a new
 // one (delegates to voice service).
 func (b *Bot) GetOrCreatePlayer(guildID string) *player.Player {
-	if b.voice == nil {
+	if b.music == nil {
 		return nil
 	}
-	return b.voice.GetOrCreatePlayer(guildID)
+	return b.music.Player(guildID)
 }
 
 // FindUserVoiceState returns the voice channel a user is currently in, or an
@@ -65,13 +65,12 @@ func (b *Bot) FindUserVoiceState(guildID, userID string) (*UserVoiceState, error
 	return b.voice.FindUserVoiceState(guildID, userID)
 }
 
-// ResolveTracks resolves input to tracks using the bot's shared resolver
-// (delegates to voice service).
+// ResolveTracks resolves input to tracks using the shared resolver.
 func (b *Bot) ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
-	if b.voice == nil {
-		return nil, fmt.Errorf("voice service not available")
+	if b.music == nil {
+		return nil, fmt.Errorf("music service not available")
 	}
-	return b.voice.ResolveTracks(guildID, input, source, parser)
+	return b.music.Resolve(input, source, parser)
 }
 
 // PlayNextAndAnnounce starts the next track and registers the answer as the

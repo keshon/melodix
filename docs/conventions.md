@@ -152,9 +152,10 @@ about style rather than about ownership, and is not repeated there: two
 documents restating the same rule is how one of them ends up wrong.
 
 **[invariant]** `Player.PlayerStatus` has exactly one long-lived consumer per
-player — the voice service's `watchPlayerStatus`, or the CLI's own loop. Don't
-attach per-interaction listeners: competing receivers steal events from each
-other, so a status update simply goes missing rather than failing loudly.
+player — the `Hooks.Watch` a frontend hands `music.Service`, which starts it
+once per player: the voice service's `WatchPlayerStatus`, or the CLI's printer.
+Don't attach per-interaction listeners: competing receivers steal events from
+each other, so a status update simply goes missing rather than failing loudly.
 Interaction outcomes get rendered synchronously by the handler that already
 knows the result.
 

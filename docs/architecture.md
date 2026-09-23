@@ -91,7 +91,7 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `pkg/music/cache` | Optional global, content-keyed track cache: tees played Opus packets to disk blobs and serves them on later plays (any guild); LRU size cap, persistent by default |
 | `pkg/music/sink` | `AudioSink`/`Provider` interfaces + speaker implementation |
 | `internal/discord` | The `Bot`: session lifecycle, handlers, health watchdogs, voice service |
-| `internal/discord/voice` | Per-guild players and sink providers; guild status messages; **survives session restarts** |
+| `internal/discord/voice` | Guild status messages, voice state, failure reports — the hooks the bot plugs into `music.Service`; **survives session restarts** |
 | `internal/discord/voice/voicesink` | Joins a voice channel and forwards a track's Opus packets to it (no encode); holds frames the transport cannot protect |
 | `internal/discord/adapter` | Bridges melodix command types to the `keshon/command` registry/middleware framework |
 | `internal/discord/slashsync` | Per-guild slash-command diff sync (create/edit/delete) |
@@ -101,7 +101,7 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
 | `internal/discord/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
 | `internal/discord/middleware` | The chain every command and click runs through: guild-only, permissions, disabled groups, the command log |
-| `internal/music` | The application layer the CLI and the bot share; today the optional playback layers (cache, anti-skip read-ahead) |
+| `internal/music` | The application layer the CLI and the bot share: one player per scope (guild or terminal) with its sink provider, the shared resolver, history recording, and the optional playback layers (cache, anti-skip read-ahead) |
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
 | `internal/storage` | Persistence: schema (guild settings, command log, playback rows, cache index) and the collections/indexes declared on the embedded datastore |
 
@@ -339,9 +339,9 @@ Key mechanics:
 ### Status delivery (single-consumer contract)
 
 `Player.PlayerStatus` is a buffered channel meant to have exactly one
-long-lived consumer per player. On the bot side that's
-`voice.Service.watchPlayerStatus`, spawned once when the guild's player is
-created; it only handles *asynchronous* transitions (auto-advance →
+long-lived consumer per player, passed to `music.Service` as `Hooks.Watch`
+and spawned once when the scope's player is created. On the bot side that's
+`voice.Service.WatchPlayerStatus`; it only handles *asynchronous* transitions (auto-advance →
 edit "Now Playing", natural queue end → "Playback Finished"). Anything
 interaction-driven — "Now Playing" after `/play`, "Track(s) Added" — is
 instead rendered synchronously by the handler, since it already knows what
@@ -391,8 +391,9 @@ There are three distinct failure classes here, each with its own mechanism:
    watchdog (`WS_SILENCE_TIMEOUT`) marks the session unhealthy, and
    `DISCORD_UNHEALTHY_MODE` decides what happens next (`restart-session`,
    `restart-voice`, or `ignore`). `main.go` runs `RunSession` in a restart
-   loop, and since the voice service outlives individual sessions, queues and
-   players survive reconnects — sinks just get invalidated and re-acquired.
+   loop, and since `music.Service` and the voice service outlive individual
+   sessions, queues and players survive reconnects — sinks just get
+   invalidated and re-acquired.
 
    What makes that true rather than merely intended is that a sink provider
    holds nothing belonging to a session. A voice manager belongs to one
@@ -420,7 +421,7 @@ There are three distinct failure classes here, each with its own mechanism:
 On the user-facing side: synchronous failures get answered directly by the
 handler, as an ephemeral embed. Asynchronous failures — a track dying
 mid-play — travel through
-`runPlayback → markPlaybackFailed → Options.OnPlaybackFailed → voice.Service.notifyPlaybackFailed`,
+`runPlayback → markPlaybackFailed → Options.OnPlaybackFailed → voice.Service.NotifyPlaybackFailed`,
 which edits the guild status message, falling back to a public message in
 the last-used command channel if needed. `reply.ClampEmbedText` cuts the raw
 error text to something Discord will accept in an embed.

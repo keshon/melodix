@@ -13,13 +13,9 @@ import (
 	"github.com/keshon/melodix/internal/discord/queue"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/discord/voice/voicesink"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/internal/storage"
-	"github.com/keshon/melodix/pkg/music/parsers/ffmpeg"
-	"github.com/keshon/melodix/pkg/music/parsers/kkdai"
-	"github.com/keshon/melodix/pkg/music/parsers/ytdlp"
-	"github.com/keshon/melodix/pkg/music/parsers/ytnative"
 	"github.com/keshon/melodix/pkg/music/sink"
-	"github.com/keshon/melodix/pkg/music/soundcloudapi"
 	"github.com/rs/zerolog"
 )
 
@@ -30,19 +26,18 @@ func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *B
 		storage: storage,
 		log:     log,
 	}
-	// Voice service must outlive a single Discord session so playback/queues
-	// survive reconnects. It is handed two functions rather than a connection:
-	// one that reaches the live one, and one that builds a guild's audio path.
-	// Between them they are the service's entire contact with the library
-	// underneath.
-	b.voice = voice.NewVoiceService(b.sessionAPI, b.newSinkProvider, cfg, storage, log)
+	// Players and the voice service must outlive a single Discord session so
+	// playback and queues survive reconnects. Neither holds a connection: the
+	// voice service reaches the live one through sessionAPI, and each guild's
+	// audio path through newSinkProvider.
+	b.voice = voice.NewVoiceService(b.sessionAPI, log)
+	b.music = music.New(cfg, storage, log, music.Hooks{
+		NewSink:  b.newSinkProvider,
+		Watch:    b.voice.WatchPlayerStatus,
+		OnFailed: b.voice.NotifyPlaybackFailed,
+	})
 	b.commands = queue.New(log, cfg.CommandParallelism)
 	b.setSessionContext(context.Background())
-	kkdai.SetLogger(log)
-	ffmpeg.SetLogger(log)
-	soundcloudapi.SetLogger(log)
-	ytnative.SetLogger(log)
-	ytdlp.SetLogger(log)
 	return b
 }
 
@@ -62,8 +57,8 @@ func (b *Bot) drainCommands() {
 // stopAllPlayers stops playback and disconnects voice for all guilds. Call on
 // shutdown.
 func (b *Bot) stopAllPlayers() {
-	if b.voice != nil {
-		b.voice.StopAllPlayers()
+	if b.music != nil {
+		b.music.StopAll()
 	}
 	b.log.Info().Msg("players_all_stopped")
 }

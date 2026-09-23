@@ -46,12 +46,9 @@ internal/
 2. ~~**Moves only.** `command` and `middleware` under `internal/discord`,
    `musicwire` → `internal/music/layers.go`; then
    `[enforced: frontend-boundary]` (`TestFrontendsStayApart`).~~
-3. **`music.Service`.**
-   - Move in player construction, the registry, the sink providers, the
-     recorder and the parser `SetLogger` calls.
-   - `voice.Service` keeps status messages, voice state and rendering.
-   - `cmd/cli` uses `music.Service`, which removes the duplicated config
-     parsing.
+3. ~~**`music.Service`.** Players, sinks, resolver, recorder and parser
+   loggers moved in; `voice.Service` is plugged in as `Hooks`; `cmd/cli` uses
+   it.~~
 4. **`music.Add` / `Search` / history.**
    - Move in `play_input.go`, the history-id lookup, source → `Searcher`
      selection, and timeline/count rows.

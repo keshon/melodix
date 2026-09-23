@@ -9,6 +9,7 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/queue"
 	"github.com/keshon/melodix/internal/discord/voice"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
 )
@@ -19,6 +20,7 @@ type Bot struct {
 	storage *storage.Storage
 	cfg     *config.Config
 	voice   *voice.Service
+	music   *music.Service
 	log     zerolog.Logger
 
 	// commands runs command bodies off the gateway read goroutine. Process
