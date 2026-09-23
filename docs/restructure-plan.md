@@ -54,11 +54,9 @@ internal/
    shrank onto them.~~
 5. ~~**Discord catalog.** `catalog.Register` (with the slash-refs test),
    types named `Command`, `common` → `tracklist` plus `reply.ClampEmbedText`.~~
-6. **CLI frontend.**
-   - Add `cli.Command` (`Name`, `Aliases`, `Category`, `Usage`, `Run`),
-     `Context`, `Registry` and the REPL.
-   - Commands: play, next, stop, queue, search, history, help.
-   - Add `cli/command/catalog`.
+6. ~~**CLI frontend.** `cli.Command`/`Context`/`Registry`/`Run`, status and
+   failure printers; about, help, play, search, next, queue, stop, history
+   under `cli/command`, mirroring the bot's layout; `cli/command/catalog`.~~
 7. **`cmd/readme`.**
    - Split `readme` into its shared core plus `discord.go` and `cli.go`.
    - The template gets `{{ .DiscordCommands }}` and `{{ .CLICommands }}`.
