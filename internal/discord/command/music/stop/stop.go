@@ -30,14 +30,15 @@ func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 		return fmt.Errorf("failed to defer response: %w", err)
 	}
 
-	player := c.Bot.GetOrCreatePlayer(slashCtx.GuildID())
-	if player == nil {
+	svc := c.Bot.Music()
+	if svc == nil {
 		_ = slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
 		return nil
 	}
+	player := svc.Player(slashCtx.GuildID())
 	if err := player.Stop(true); err != nil {
 		slashCtx.AppLog.Warn().Err(err).Msg("player_stop_failed")
 	}

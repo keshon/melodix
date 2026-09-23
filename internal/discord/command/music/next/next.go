@@ -56,14 +56,15 @@ func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	c.Bot.SetGuildMusicNotifyChannel(guildID, slashCtx.ChannelID())
 
-	player := c.Bot.GetOrCreatePlayer(guildID)
-	if player == nil {
+	svc := c.Bot.Music()
+	if svc == nil {
 		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
 		return nil
 	}
+	player := svc.Player(guildID)
 	queue := player.Queue()
 	if len(queue) == 0 {
 		slashCtx.FollowupEphemeral(&adapter.Embed{

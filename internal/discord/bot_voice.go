@@ -12,10 +12,6 @@ import (
 
 // VoiceAPI is the interface the Discord bot exposes for voice/music commands.
 type VoiceAPI interface {
-	// GetOrCreatePlayer returns an existing player for the guild or creates a new
-	// one.
-	GetOrCreatePlayer(guildID string) *player.Player
-
 	// FindUserVoiceState returns the voice channel a user is currently in, or an
 	// error if none.
 	FindUserVoiceState(guildID, userID string) (*UserVoiceState, error)
@@ -42,15 +38,6 @@ var ErrAnnounceFailed = voice.ErrAnnounceFailed
 // UserVoiceState holds minimal voice channel state for a user. Aliased from
 // the voice service so a caller keeps naming it discord.UserVoiceState.
 type UserVoiceState = voice.UserVoiceState
-
-// GetOrCreatePlayer returns an existing player for the guild or creates a new
-// one (delegates to voice service).
-func (b *Bot) GetOrCreatePlayer(guildID string) *player.Player {
-	if b.music == nil {
-		return nil
-	}
-	return b.music.Player(guildID)
-}
 
 // FindUserVoiceState returns the voice channel a user is currently in, or an
 // error if none (delegates to voice service).

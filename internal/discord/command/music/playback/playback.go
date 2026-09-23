@@ -55,14 +55,15 @@ func Join(bot discord.VoiceAPI, ctx adapter.Interaction) (Target, bool) {
 	// Where async playback failures should be announced later.
 	bot.SetGuildMusicNotifyChannel(guildID, ctx.ChannelID())
 
-	p := bot.GetOrCreatePlayer(guildID)
-	if p == nil {
+	svc := bot.Music()
+	if svc == nil {
 		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
 		})
 		return Target{}, false
 	}
+	p := svc.Player(guildID)
 
 	return Target{Player: p, ChannelID: voiceState.ChannelID, GuildID: guildID}, true
 }
