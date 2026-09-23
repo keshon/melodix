@@ -60,6 +60,16 @@ var project = struct {
 	// discordTransport. Matched as substrings of the import path, so a
 	// library's subpackages are covered by naming it once.
 	discordLibraries []string
+	// modulePath is this module's import path, which frontends and
+	// assemblers below are relative to.
+	modulePath string
+	// frontends are the directories holding one frontend each, checked by
+	// TestFrontendsStayApart: none imports another, and nothing else imports
+	// any of them except the assemblers.
+	frontends []string
+	// assemblers are the only places allowed to import frontends: the
+	// binaries, and tooling that describes all of them at once.
+	assemblers []string
 }{
 	docPath:              []string{"docs", "conventions.md"},
 	libraryPrefix:        "pkg/music/",
@@ -75,6 +85,9 @@ var project = struct {
 		"internal/discord/voice/voicesink",
 	},
 	discordLibraries: []string{"disgoorg/disgo", "bwmarrin/discordgo"},
+	modulePath:       "github.com/keshon/melodix",
+	frontends:        []string{"internal/cli", "internal/discord"},
+	assemblers:       []string{"cmd", "internal/readme"},
 }
 
 // maxCommentCols is the wrap width docs/conventions.md states for comments. A
@@ -128,7 +141,9 @@ func rules() []rule {
 
 // ownedElsewhere are rules this package tags in the document but checks in a
 // test of its own rather than through rules().
-var ownedElsewhere = []string{"frozen-identifiers", "discord-free", "adapter-boundary"}
+var ownedElsewhere = []string{
+	"frozen-identifiers", "discord-free", "adapter-boundary", "frontend-boundary",
+}
 
 // checkedByOtherTools are tags in the document whose enforcement lives outside
 // this package. Each names the file that must prove the tool actually runs:
@@ -565,6 +580,62 @@ func TestDiscordStaysBehindTheAdapter(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestFrontendsStayApart holds the shape that makes the CLI and the bot equal:
+// each is a frontend over the shared layer, and neither reaches into the
+// other. Shared code importing a frontend is the same failure from the other
+// side -- the layer both stand on starts leaning on one of them.
+func TestFrontendsStayApart(t *testing.T) {
+	root := repoRoot(t)
+	fset := token.NewFileSet()
+	for _, f := range collectGoFiles(t, root) {
+		if slices.ContainsFunc(project.assemblers, func(dir string) bool {
+			return underDir(f.path, dir)
+		}) {
+			continue
+		}
+		own := ""
+		for _, fe := range project.frontends {
+			if underDir(f.path, fe) {
+				own = fe
+			}
+		}
+		file, err := parser.ParseFile(fset, filepath.Join(root, filepath.FromSlash(f.path)),
+			nil, parser.ImportsOnly)
+		if err != nil {
+			t.Errorf("parse %s: %v", f.path, err)
+			continue
+		}
+		for _, imp := range file.Imports {
+			ip, err := strconv.Unquote(imp.Path.Value)
+			if err != nil {
+				continue
+			}
+			rel, ok := strings.CutPrefix(ip, project.modulePath+"/")
+			if !ok {
+				continue
+			}
+			for _, fe := range project.frontends {
+				if fe == own || !underDir(rel, fe) {
+					continue
+				}
+				if own != "" {
+					t.Errorf("%s imports %q — frontends never import each other; "+
+						"move what both need into the shared layer", f.path, ip)
+				} else {
+					t.Errorf("%s imports %q — only %s may import a frontend; "+
+						"shared code must not lean on one of them",
+						f.path, ip, strings.Join(project.assemblers, ", "))
+				}
+			}
+		}
+	}
+}
+
+// underDir reports whether the slash-separated path p is dir or inside it.
+func underDir(p, dir string) bool {
+	return p == dir || strings.HasPrefix(p, dir+"/")
 }
 
 // --- the document ---

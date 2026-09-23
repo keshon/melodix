@@ -65,6 +65,12 @@ Discord through `adapter`'s neutral types, so swapping the library is the
 transport's problem rather than the whole tree's. Checked by
 `TestDiscordStaysBehindTheAdapter`.
 
+**[enforced: frontend-boundary]** The CLI (`internal/cli`) and the bot
+(`internal/discord`) are equal frontends over the shared `internal/music`
+layer. Neither imports the other, and nothing outside `cmd` and
+`internal/readme` imports either: shared code that leans on one frontend has
+stopped being shared. Checked by `TestFrontendsStayApart`.
+
 **[practice]** Go stays minimal here. No frameworks, no speculative
 abstraction — an interface only exists if it has two real implementations or a
 real test seam behind it. Everything else stays concrete.
