@@ -14,18 +14,25 @@ import (
 // did themselves.
 func StatusPrinter(out io.Writer) func(scope string, p *player.Player) {
 	return func(_ string, p *player.Player) {
+		// played is whether a track has started since playback last finished.
+		// Stop announces Stopped whether or not anything was playing -- quitting
+		// an idle CLI stops the player too -- and a finish nobody saw start is
+		// not one.
+		played := false
 		for status := range p.PlayerStatus {
 			switch status {
 			case player.StatusPlaying:
+				played = true
 				if track, ok := p.CurrentTrack(); ok {
 					_, _ = fmt.Fprintln(out, "▶ Now playing:", track.Title)
 				}
 			case player.StatusStopped:
 				// A transient Stopped fires between tracks; only the final
 				// one means the queue ran out.
-				if p.IsPlaying() || len(p.Queue()) > 0 {
+				if !played || p.IsPlaying() || len(p.Queue()) > 0 {
 					continue
 				}
+				played = false
 				_, _ = fmt.Fprintln(out, "⏹ Playback finished.")
 			case player.StatusAdded, player.StatusError, player.StatusPaused, player.StatusResumed:
 				// The command that queued tracks says so, a failure comes
