@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,11 +51,13 @@ var project = struct {
 	// bannedLibraryImports are packages the library surface must never import,
 	// checked by TestLibraryStaysDiscordFree.
 	bannedLibraryImports []string
-	// discordAdapterPrefix is the one package allowed to name a Discord
-	// client library, checked by TestDiscordStaysBehindTheAdapter.
-	discordAdapterPrefix string
+	// discordTransport are the packages allowed to name a Discord client
+	// library, checked by TestDiscordStaysBehindTheAdapter. Listed one by one
+	// rather than as a prefix: commands and middleware live under
+	// internal/discord too, and a prefix would exempt them without a word.
+	discordTransport []string
 	// discordLibraries are the client libraries that must not appear outside
-	// discordAdapterPrefix. Matched as substrings of the import path, so a
+	// discordTransport. Matched as substrings of the import path, so a
 	// library's subpackages are covered by naming it once.
 	discordLibraries []string
 }{
@@ -62,8 +65,16 @@ var project = struct {
 	libraryPrefix:        "pkg/music/",
 	skipDirs:             []string{".git"},
 	bannedLibraryImports: []string{"discordgo", "disgo", "melodix/internal"},
-	discordAdapterPrefix: "internal/discord/",
-	discordLibraries:     []string{"disgoorg/disgo", "bwmarrin/discordgo"},
+	discordTransport: []string{
+		"internal/discord",
+		"internal/discord/audit",
+		"internal/discord/perm",
+		"internal/discord/reply",
+		"internal/discord/session",
+		"internal/discord/slashsync",
+		"internal/discord/voice/voicesink",
+	},
+	discordLibraries: []string{"disgoorg/disgo", "bwmarrin/discordgo"},
 }
 
 // maxCommentCols is the wrap width docs/conventions.md states for comments. A
@@ -514,9 +525,10 @@ func TestLibraryStaysDiscordFree(t *testing.T) {
 }
 
 // TestDiscordStaysBehindTheAdapter holds the boundary the disgo migration is
-// being done behind: one package names the client library, and everything
-// above it speaks adapter's neutral types. Absolute for the same reason as
-// the check above: a single import outside the adapter undoes the property.
+// being done behind: the transport packages name the client library, and
+// everything else speaks adapter's neutral types. Absolute for the same
+// reason as the check above: a single import outside the transport undoes the
+// property.
 //
 // This catches an import, which is the cheap half. The expensive half is a
 // context struct handing out a library value through a field, which no import
@@ -529,7 +541,7 @@ func TestDiscordStaysBehindTheAdapter(t *testing.T) {
 	root := repoRoot(t)
 	fset := token.NewFileSet()
 	for _, f := range collectGoFiles(t, root) {
-		if strings.HasPrefix(f.path, project.discordAdapterPrefix) {
+		if slices.Contains(project.discordTransport, path.Dir(f.path)) {
 			continue
 		}
 		file, err := parser.ParseFile(fset, filepath.Join(root, filepath.FromSlash(f.path)),
@@ -545,9 +557,10 @@ func TestDiscordStaysBehindTheAdapter(t *testing.T) {
 			}
 			for _, lib := range project.discordLibraries {
 				if strings.Contains(path, lib) {
-					t.Errorf("%s imports %q — only %s may name a Discord client "+
-						"library; reach it through adapter's neutral types",
-						f.path, path, project.discordAdapterPrefix)
+					t.Errorf("%s imports %q — only the transport packages (%s) "+
+						"may name a Discord client library; reach it through "+
+						"adapter's neutral types", f.path, path,
+						strings.Join(project.discordTransport, ", "))
 				}
 			}
 		}

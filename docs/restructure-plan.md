@@ -40,19 +40,20 @@ internal/
 
 ## Steps
 
-1. **Conventions first.**
-   - In `TestDiscordStaysBehindTheAdapter`, replace the `internal/discord/`
-     prefix with an allowlist of the packages that import disgo: root,
-     `reply`, `session`, `slashsync`, `perm`, `audit`, `voice/voicesink`.
-   - Add checks: `music` imports no frontend; `cli` and `discord` don't
-     import each other; only `cmd/*` and `readme` may import both.
-   - Update `conventions.md` to match.
+1. ~~**Adapter boundary as an allowlist.** `TestDiscordStaysBehindTheAdapter`
+   lists the transport packages instead of exempting the `internal/discord/`
+   prefix.~~
 2. **Moves only** (`git mv`, import fixes, nothing else):
    - `internal/command` → `internal/discord/command`
    - `internal/middleware` → `internal/discord/middleware`
    - `internal/musicwire` → `internal/music/layers.go`
    - Update the frozen search path in `conventions_test.go` and
      `conventions.md` in the same commit.
+   - Then, in its own commit, `[enforced: frontend-boundary]`: nothing
+     outside `cmd/*` and `readme` imports a frontend, and frontends don't
+     import each other. It lands here because until the moves,
+     `internal/command` and `internal/middleware` import `discord` from
+     outside it.
 3. **`music.Service`.**
    - Move in player construction, the registry, the sink providers, the
      recorder and the parser `SetLogger` calls.

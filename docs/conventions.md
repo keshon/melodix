@@ -57,10 +57,12 @@ the proof it holds — same engine, no Discord in sight. Anything
 Discord-specific belongs in `internal/`. Checked by
 `TestLibraryStaysDiscordFree`.
 
-**[enforced: adapter-boundary]** Only `internal/discord` names a Discord
-client library. Everything else — commands, middleware, readme generation,
-`cmd` — reaches Discord through `adapter`'s neutral types, so swapping the
-library is one package's problem rather than the whole tree's. Checked by
+**[enforced: adapter-boundary]** Only the Discord transport names a Discord
+client library: the `internal/discord` root, `audit`, `perm`, `reply`,
+`session`, `slashsync` and `voice/voicesink`, listed package by package.
+Everything else — commands, middleware, readme generation, `cmd` — reaches
+Discord through `adapter`'s neutral types, so swapping the library is the
+transport's problem rather than the whole tree's. Checked by
 `TestDiscordStaysBehindTheAdapter`.
 
 **[practice]** Go stays minimal here. No frameworks, no speculative
