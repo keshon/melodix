@@ -6,30 +6,29 @@ import (
 
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
-	"github.com/keshon/melodix/internal/discord/command/music/common"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	musicplayer "github.com/keshon/melodix/pkg/music/player"
 )
 
-type Next struct {
+type Command struct {
 	Bot discord.VoiceAPI
 }
 
-func (c *Next) Name() string             { return "next" }
-func (c *Next) Description() string      { return "Skip to the next track" }
-func (c *Next) Group() string            { return "music" }
-func (c *Next) Category() string         { return "🎵 Music" }
-func (c *Next) UserPermissions() []int64 { return []int64{} }
+func (c *Command) Name() string             { return "next" }
+func (c *Command) Description() string      { return "Skip to the next track" }
+func (c *Command) Group() string            { return "music" }
+func (c *Command) Category() string         { return "🎵 Music" }
+func (c *Command) UserPermissions() []int64 { return []int64{} }
 
-func (c *Next) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *Next) Run(slashCtx *adapter.SlashInteractionContext) error {
+func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	guildID := slashCtx.GuildID()
 
@@ -89,7 +88,7 @@ func (c *Next) Run(slashCtx *adapter.SlashInteractionContext) error {
 		if errors.Is(err, musicplayer.ErrTrackStartFailed) {
 			slashCtx.FollowupEphemeral(&adapter.Embed{
 				Title:       "🎵 Playback Error",
-				Description: common.PlaybackErrorDescription(err),
+				Description: reply.ClampEmbedText(err.Error()),
 				Color:       reply.EmbedColor,
 			})
 			return nil

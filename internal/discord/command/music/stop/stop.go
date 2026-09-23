@@ -7,24 +7,24 @@ import (
 	"github.com/keshon/melodix/internal/discord/adapter"
 )
 
-type Stop struct {
+type Command struct {
 	Bot discord.VoiceAPI
 }
 
-func (c *Stop) Name() string             { return "stop" }
-func (c *Stop) Description() string      { return "Stop playback and clear queue" }
-func (c *Stop) Group() string            { return "music" }
-func (c *Stop) Category() string         { return "🎵 Music" }
-func (c *Stop) UserPermissions() []int64 { return []int64{} }
+func (c *Command) Name() string             { return "stop" }
+func (c *Command) Description() string      { return "Stop playback and clear queue" }
+func (c *Command) Group() string            { return "music" }
+func (c *Command) Category() string         { return "🎵 Music" }
+func (c *Command) UserPermissions() []int64 { return []int64{} }
 
-func (c *Stop) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *Stop) Run(slashCtx *adapter.SlashInteractionContext) error {
+func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to defer response: %w", err)

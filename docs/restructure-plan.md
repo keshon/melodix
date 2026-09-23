@@ -52,10 +52,8 @@ internal/
 4. ~~**`music.Add` / `Search` / history.** `ParseInput`, history ids, source →
    searcher, timeline and counts moved in; `/play`, `/search`, `/history`
    shrank onto them.~~
-5. **Discord catalog.**
-   - `registerCommands` → `discord/command/catalog`.
-   - Rename types to `Command`.
-   - Dissolve `common`: formatters go to a package named for what they do.
+5. ~~**Discord catalog.** `catalog.Register` (with the slash-refs test),
+   types named `Command`, `common` → `tracklist` plus `reply.ClampEmbedText`.~~
 6. **CLI frontend.**
    - Add `cli.Command` (`Name`, `Aliases`, `Category`, `Usage`, `Run`),
      `Context`, `Registry` and the REPL.

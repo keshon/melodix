@@ -7,17 +7,17 @@ import (
 	"github.com/keshon/melodix/internal/discord/perm"
 )
 
-type Maintenance struct{}
+type Command struct{}
 
-func (c *Maintenance) Name() string        { return "maintenance" }
-func (c *Maintenance) Description() string { return "Bot maintenance commands" }
-func (c *Maintenance) Group() string       { return "core" }
-func (c *Maintenance) Category() string    { return "⚙️ Settings" }
-func (c *Maintenance) UserPermissions() []int64 {
+func (c *Command) Name() string        { return "maintenance" }
+func (c *Command) Description() string { return "Bot maintenance commands" }
+func (c *Command) Group() string       { return "core" }
+func (c *Command) Category() string    { return "⚙️ Settings" }
+func (c *Command) UserPermissions() []int64 {
 	return []int64{perm.Administrator}
 }
 
-func (c *Maintenance) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -41,7 +41,7 @@ func (c *Maintenance) SlashDefinition() *adapter.SlashCommand {
 	}
 }
 
-func (c *Maintenance) Run(context *adapter.SlashInteractionContext) error {
+func (c *Command) Run(context *adapter.SlashInteractionContext) error {
 
 	storage := context.Storage
 

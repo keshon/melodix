@@ -1,4 +1,4 @@
-package main
+package catalog
 
 import (
 	"go/ast"
@@ -32,7 +32,7 @@ var slashRef = regexp.MustCompile("`/([a-z][a-z-]*(?: [a-z][a-z-]*)*)")
 // Only string literals are read. Comments may mention commands from other
 // projects, and do.
 func TestRepliesNameCommandsThatExist(t *testing.T) {
-	registerCommands(nil, zerolog.Nop())
+	Register(nil, zerolog.Nop())
 
 	valid := map[string]bool{}
 	for _, c := range command.DefaultRegistry.GetAll() {
@@ -48,7 +48,7 @@ func TestRepliesNameCommandsThatExist(t *testing.T) {
 		t.Fatal("no slash definitions registered; the check would pass vacuously")
 	}
 
-	root := filepath.Join("..", "..")
+	root := filepath.Join("..", "..", "..", "..")
 	for _, dir := range []string{"internal", "cmd"} {
 		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {

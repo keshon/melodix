@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/command/music/common"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/pkg/music/player"
 )
@@ -134,7 +133,7 @@ func renderStartError(ctx adapter.Interaction, err error) {
 	case errors.Is(err, player.ErrTrackStartFailed):
 		ctx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Playback Error",
-			Description: common.PlaybackErrorDescription(err),
+			Description: reply.ClampEmbedText(err.Error()),
 			Color:       reply.EmbedColor,
 		})
 	case errors.Is(err, player.ErrNoTracksInQueue):

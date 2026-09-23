@@ -13,22 +13,10 @@ import (
 	"github.com/keshon/buildinfo"
 	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/applog"
-	"github.com/keshon/melodix/internal/discord/adapter"
-	"github.com/keshon/melodix/internal/discord/command/core/about"
-	"github.com/keshon/melodix/internal/discord/command/core/help"
-	"github.com/keshon/melodix/internal/discord/command/core/maintenance"
-	"github.com/keshon/melodix/internal/discord/command/settings"
-
-	"github.com/keshon/melodix/internal/discord/command/music/history"
-	"github.com/keshon/melodix/internal/discord/command/music/next"
-	"github.com/keshon/melodix/internal/discord/command/music/play"
-	"github.com/keshon/melodix/internal/discord/command/music/queue"
-	"github.com/keshon/melodix/internal/discord/command/music/search"
-	"github.com/keshon/melodix/internal/discord/command/music/stop"
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord"
-	"github.com/keshon/melodix/internal/discord/middleware"
+	"github.com/keshon/melodix/internal/discord/command/catalog"
 	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/internal/readme"
@@ -46,7 +34,7 @@ func main() {
 	flag.Parse()
 	if *genReadme {
 		log := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
-		registerCommands(nil, log)
+		catalog.Register(nil, log)
 		if err := readme.UpdateReadme(command.DefaultRegistry, config.CategoryWeights, log); err != nil {
 			log.Error().Err(err).Msg("readme_update_failed")
 			os.Exit(1)
@@ -89,7 +77,7 @@ func main() {
 
 	bot := discord.NewBot(cfg, store, log)
 
-	registerCommands(bot, log)
+	catalog.Register(bot, log)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -136,29 +124,6 @@ func main() {
 	}
 
 	log.Info().Msg("bot_exit")
-}
-
-func defaultMiddleware(log zerolog.Logger) []command.Middleware {
-	return []command.Middleware{
-		middleware.WithGroupAccessCheck(),
-		middleware.WithGuildOnly(),
-		middleware.WithUserPermissionCheck(),
-		middleware.WithCommandLogger(log),
-	}
-}
-
-func registerCommands(bot *discord.Bot, log zerolog.Logger) {
-	mw := defaultMiddleware(log)
-	adapter.Register(&settings.SettingsCommand{}, mw...)
-	adapter.Register(&about.About{}, mw...)
-	adapter.Register(&help.Help{}, mw...)
-	adapter.Register(&maintenance.Maintenance{}, mw...)
-	adapter.Register(&play.Play{Bot: bot}, mw...)
-	adapter.Register(&search.Search{Bot: bot}, mw...)
-	adapter.Register(&next.Next{Bot: bot}, mw...)
-	adapter.Register(&queue.Queue{Bot: bot}, mw...)
-	adapter.Register(&stop.Stop{Bot: bot}, mw...)
-	adapter.Register(&history.History{Bot: bot}, mw...)
 }
 
 // runConnectionCheck connects and reports what it can see, registering

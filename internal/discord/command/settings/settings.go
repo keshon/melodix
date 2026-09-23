@@ -10,17 +10,17 @@ import (
 	"github.com/keshon/melodix/internal/storage"
 )
 
-type SettingsCommand struct{}
+type Command struct{}
 
-func (c *SettingsCommand) Name() string        { return "settings" }
-func (c *SettingsCommand) Description() string { return "Server settings" }
-func (c *SettingsCommand) Group() string       { return "core" }
-func (c *SettingsCommand) Category() string    { return "⚙️ Settings" }
-func (c *SettingsCommand) UserPermissions() []int64 {
+func (c *Command) Name() string        { return "settings" }
+func (c *Command) Description() string { return "Server settings" }
+func (c *Command) Group() string       { return "core" }
+func (c *Command) Category() string    { return "⚙️ Settings" }
+func (c *Command) UserPermissions() []int64 {
 	return []int64{perm.Administrator}
 }
 
-func (c *SettingsCommand) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -35,7 +35,7 @@ func (c *SettingsCommand) SlashDefinition() *adapter.SlashCommand {
 	}
 }
 
-func (c *SettingsCommand) Run(context *adapter.SlashInteractionContext) error {
+func (c *Command) Run(context *adapter.SlashInteractionContext) error {
 
 	st := context.Storage
 

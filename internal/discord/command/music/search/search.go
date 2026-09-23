@@ -6,8 +6,8 @@ import (
 
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
-	"github.com/keshon/melodix/internal/discord/command/music/common"
 	"github.com/keshon/melodix/internal/discord/command/music/playback"
+	"github.com/keshon/melodix/internal/discord/command/music/tracklist"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/pkg/music/sources"
@@ -50,21 +50,21 @@ func buttonID(source, payload string) (string, bool) {
 // The dispatcher reaches the click handler through this interface; asserting it
 // here turns a signature drift into a build failure rather than buttons that
 // quietly stop responding.
-var _ adapter.ComponentInteractionHandler = (*Search)(nil)
+var _ adapter.ComponentInteractionHandler = (*Command)(nil)
 
-// Search offers a pick-one chooser for a query instead of /play's
+// Command is /search: a pick-one chooser for a query instead of /play's
 // take-the-first-hit. Radio is absent on purpose: a stream has nothing to rank.
-type Search struct {
+type Command struct {
 	Bot discord.VoiceAPI
 }
 
-func (c *Search) Name() string             { return componentPrefix }
-func (c *Search) Description() string      { return "Search and pick a track to play" }
-func (c *Search) Group() string            { return "music" }
-func (c *Search) Category() string         { return "🎵 Music" }
-func (c *Search) UserPermissions() []int64 { return []int64{} }
+func (c *Command) Name() string             { return componentPrefix }
+func (c *Command) Description() string      { return "Search and pick a track to play" }
+func (c *Command) Group() string            { return "music" }
+func (c *Command) Category() string         { return "🎵 Music" }
+func (c *Command) UserPermissions() []int64 { return []int64{} }
 
-func (c *Search) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -88,7 +88,7 @@ func (c *Search) SlashDefinition() *adapter.SlashCommand {
 	}
 }
 
-func (c *Search) Run(slashCtx *adapter.SlashInteractionContext) error {
+func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 	query := strings.TrimSpace(slashCtx.StringOption("query"))
 	wanted := slashCtx.StringOption("source")
 	tag, ok := tagOf(wanted)
@@ -132,7 +132,7 @@ func (c *Search) Run(slashCtx *adapter.SlashInteractionContext) error {
 			continue
 		}
 		pos := len(lines) + 1
-		lines = append(lines, common.FormatSearchLine(pos, h.Title, h.URL, h.Author, h.Duration))
+		lines = append(lines, tracklist.SearchLine(pos, h.Title, h.URL, h.Author, h.Duration))
 		buttons = append(buttons, adapter.Button{
 			Label:    fmt.Sprintf("%d", pos),
 			CustomID: id,
@@ -160,7 +160,7 @@ func (c *Search) Run(slashCtx *adapter.SlashInteractionContext) error {
 }
 
 // Component handles a click on one of the chooser's buttons.
-func (c *Search) Component(compCtx *adapter.ComponentInteractionContext) error {
+func (c *Command) Component(compCtx *adapter.ComponentInteractionContext) error {
 	tag, payload, ok := parseButtonID(compCtx.CustomID())
 	if !ok {
 		return nil

@@ -1,4 +1,6 @@
-package common
+// Package tracklist renders tracks as the lines of a music embed -- the
+// queue, search results, history -- in Discord's markdown.
+package tracklist
 
 import (
 	"fmt"
@@ -13,14 +15,14 @@ import (
 // than pagination: there is no stable page to come back to.
 const queueLinesShown = 15
 
-// FormatQueueBody renders the /queue embed body: the now-playing line, the
+// QueueBody renders the /queue embed body: the now-playing line, the
 // first queueLinesShown upcoming rows, and a remainder count. current may be
 // nil.
 //
 // Queued tracks have not been opened yet, so Title and Duration are whatever
 // the resolver supplied — often an empty title and a zero duration, since
 // parsers fill both at open time. Every field is therefore treated as optional.
-func FormatQueueBody(current *parsers.Track, upcoming []parsers.Track) string {
+func QueueBody(current *parsers.Track, upcoming []parsers.Track) string {
 	var b strings.Builder
 
 	if current != nil {
@@ -46,7 +48,7 @@ func FormatQueueBody(current *parsers.Track, upcoming []parsers.Track) string {
 	}
 	lines := make([]string, 0, len(shown))
 	for i, t := range shown {
-		lines = append(lines, FormatQueueLine(i+1, t.Title, t.URL, t.Duration))
+		lines = append(lines, QueueLine(i+1, t.Title, t.URL, t.Duration))
 	}
 	b.WriteString(strings.Join(lines, "\n"))
 
@@ -56,8 +58,8 @@ func FormatQueueBody(current *parsers.Track, upcoming []parsers.Track) string {
 	return b.String()
 }
 
-// FormatQueueLine renders one upcoming row: `pos` [title](url) `duration`.
-func FormatQueueLine(pos int, title, url string, d time.Duration) string {
+// QueueLine renders one upcoming row: `pos` [title](url) `duration`.
+func QueueLine(pos int, title, url string, d time.Duration) string {
 	return fmt.Sprintf("`%d` %s", pos, trackLabel(title, url, d))
 }
 
@@ -108,10 +110,10 @@ func formatQueueDuration(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
-// FormatSearchLine renders one chooser row: a queue row plus the uploader,
+// SearchLine renders one chooser row: a queue row plus the uploader,
 // which is often the only thing telling two near-identical hits apart.
-func FormatSearchLine(pos int, title, url, author string, d time.Duration) string {
-	line := FormatQueueLine(pos, title, url, d)
+func SearchLine(pos int, title, url, author string, d time.Duration) string {
+	line := QueueLine(pos, title, url, d)
 	if a := strings.TrimSpace(author); a != "" {
 		line += " `" + a + "`"
 	}

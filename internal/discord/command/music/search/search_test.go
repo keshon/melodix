@@ -35,7 +35,7 @@ func TestButtonIDPrefixMatchesCommandName(t *testing.T) {
 	t.Parallel()
 	// internal/discord routes a component to the command whose name prefixes the
 	// customID, so these two drifting apart would silently orphan every button.
-	c := &Search{}
+	c := &Command{}
 	if componentPrefix != c.Name() {
 		t.Fatalf("componentPrefix = %q, command name = %q", componentPrefix, c.Name())
 	}

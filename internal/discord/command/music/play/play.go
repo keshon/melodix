@@ -11,17 +11,17 @@ import (
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
-type Play struct {
+type Command struct {
 	Bot discord.VoiceAPI
 }
 
-func (c *Play) Name() string             { return "play" }
-func (c *Play) Description() string      { return "Play a music track" }
-func (c *Play) Group() string            { return "music" }
-func (c *Play) Category() string         { return "🎵 Music" }
-func (c *Play) UserPermissions() []int64 { return []int64{} }
+func (c *Command) Name() string             { return "play" }
+func (c *Command) Description() string      { return "Play a music track" }
+func (c *Command) Group() string            { return "music" }
+func (c *Command) Category() string         { return "🎵 Music" }
+func (c *Command) UserPermissions() []int64 { return []int64{} }
 
-func (c *Play) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -60,7 +60,7 @@ func (c *Play) SlashDefinition() *adapter.SlashCommand {
 	}
 }
 
-func (c *Play) Run(slashCtx *adapter.SlashInteractionContext) error {
+func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 	input := slashCtx.StringOption("input")
 	source := slashCtx.StringOption("source")
 	parser := slashCtx.StringOption("parser")

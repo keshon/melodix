@@ -5,30 +5,30 @@ import (
 
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
-	"github.com/keshon/melodix/internal/discord/command/music/common"
+	"github.com/keshon/melodix/internal/discord/command/music/tracklist"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
-type Queue struct {
+type Command struct {
 	Bot discord.VoiceAPI
 }
 
-func (c *Queue) Name() string             { return "queue" }
-func (c *Queue) Description() string      { return "Show what is playing and what is queued next" }
-func (c *Queue) Group() string            { return "music" }
-func (c *Queue) Category() string         { return "🎵 Music" }
-func (c *Queue) UserPermissions() []int64 { return []int64{} }
+func (c *Command) Name() string             { return "queue" }
+func (c *Command) Description() string      { return "Show what is playing and what is queued next" }
+func (c *Command) Group() string            { return "music" }
+func (c *Command) Category() string         { return "🎵 Music" }
+func (c *Command) UserPermissions() []int64 { return []int64{} }
 
-func (c *Queue) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
 	}
 }
 
-func (c *Queue) Run(slashCtx *adapter.SlashInteractionContext) error {
+func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	if err := slashCtx.Defer(); err != nil {
 		return fmt.Errorf("failed to send deferred response: %w", err)
@@ -46,7 +46,7 @@ func (c *Queue) Run(slashCtx *adapter.SlashInteractionContext) error {
 	// Read-only view: no voice state or permission check, and nothing is mutated.
 	current, playing := p.CurrentTrack()
 	upcoming := p.Queue()
-	// FormatQueueBody reads nil as "nothing playing". The pointer is to this
+	// tracklist.QueueBody reads nil as "nothing playing". The pointer is to this
 	// function's own copy, which nothing else writes.
 	var nowPlaying *parsers.Track
 	if playing {
@@ -55,7 +55,7 @@ func (c *Queue) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	embed := &adapter.Embed{
 		Title:       "🎵 Queue",
-		Description: common.FormatQueueBody(nowPlaying, upcoming),
+		Description: tracklist.QueueBody(nowPlaying, upcoming),
 		Color:       reply.EmbedColor,
 	}
 	if n := len(upcoming); n > 0 {

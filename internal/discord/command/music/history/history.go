@@ -7,27 +7,27 @@ import (
 
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
-	"github.com/keshon/melodix/internal/discord/command/music/common"
+	"github.com/keshon/melodix/internal/discord/command/music/tracklist"
 	"github.com/keshon/melodix/internal/discord/reply"
 	"github.com/keshon/melodix/internal/music"
 )
 
-type History struct {
+type Command struct {
 	Bot discord.VoiceAPI
 }
 
-func (c *History) Name() string { return "history" }
-func (c *History) Description() string {
+func (c *Command) Name() string { return "history" }
+func (c *Command) Description() string {
 	return "Show recently played tracks (replay by id with /play)"
 }
-func (c *History) Group() string            { return "music" }
-func (c *History) Category() string         { return "🎵 Music" }
-func (c *History) UserPermissions() []int64 { return []int64{} }
+func (c *Command) Group() string            { return "music" }
+func (c *Command) Category() string         { return "🎵 Music" }
+func (c *Command) UserPermissions() []int64 { return []int64{} }
 
 // discordgo requires a pointer for MinValue on slash options.
 var historyPageMinValue = 1.0
 
-func (c *History) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -57,7 +57,7 @@ const historyLinesPerPage = 15
 
 const historyFooterReplay = "replay with `/play <id>`."
 
-func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
+func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 	var view = "timeline"
 	if v := strings.TrimSpace(slashCtx.StringOption("view")); v != "" {
 		view = v
@@ -123,14 +123,14 @@ func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 		embedTitle = "🎵 Playback history (by URL)"
 		footerExtra = historyFooterReplay
 		for _, r := range counts {
-			lines = append(lines, common.FormatCountsLine(r.ID, r.Title, r.URL, r.Count))
+			lines = append(lines, tracklist.CountsLine(r.ID, r.Title, r.URL, r.Count))
 		}
 	default:
 		totalRows = len(rows)
 		embedTitle = "🎵 Playback history (timeline)"
 		footerExtra = "Newest first; " + historyFooterReplay
 		for _, r := range rows {
-			lines = append(lines, common.FormatTimelineLine(r.ID, r.Title, r.URL, r.PlayedAt))
+			lines = append(lines, tracklist.TimelineLine(r.ID, r.Title, r.URL, r.PlayedAt))
 		}
 	}
 

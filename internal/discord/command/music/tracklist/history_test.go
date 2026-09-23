@@ -1,4 +1,4 @@
-package common
+package tracklist
 
 import (
 	"strings"
@@ -22,17 +22,17 @@ func TestTruncateTitleMiddle(t *testing.T) {
 	}
 }
 
-func TestFormatTimelineLineShape(t *testing.T) {
+func TestTimelineLineShape(t *testing.T) {
 	t.Parallel()
-	s := FormatTimelineLine(7, "Hi", "https://x.test/a", time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC))
+	s := TimelineLine(7, "Hi", "https://x.test/a", time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC))
 	if !strings.Contains(s, "`7`") || !strings.Contains(s, "[Hi]") || !strings.Contains(s, "`15 Mar 2026`") {
 		t.Fatalf("got %q", s)
 	}
 }
 
-func TestFormatCountsLineNoDate(t *testing.T) {
+func TestCountsLineNoDate(t *testing.T) {
 	t.Parallel()
-	s := FormatCountsLine(9, "Song", "https://y.test/b", 4)
+	s := CountsLine(9, "Song", "https://y.test/b", 4)
 	if strings.Contains(s, "2020") || strings.Contains(s, "Jan") {
 		t.Fatalf("counts line should not include date: %q", s)
 	}

@@ -1,4 +1,4 @@
-package common
+package tracklist
 
 import (
 	"fmt"
@@ -62,10 +62,10 @@ func historyLine(id uint64, title, url, tail string) string {
 	return fmt.Sprintf("`%d` %s `%s`", id, title, tail)
 }
 
-// FormatTimelineLine renders one chronological history row. It takes plain
+// TimelineLine renders one chronological history row. It takes plain
 // values rather than a persisted struct so this presentation package stays
 // independent of the storage schema.
-func FormatTimelineLine(id uint64, title, url string, playedAt time.Time) string {
+func TimelineLine(id uint64, title, url string, playedAt time.Time) string {
 	tail := playedAt.Format("02 Jan 2006")
 	name := displayTrackTitle(title)
 	build := func(tt string) string {
@@ -75,9 +75,9 @@ func FormatTimelineLine(id uint64, title, url string, playedAt time.Time) string
 	return build(name)
 }
 
-// FormatCountsLine renders one row of the "by URL" view, tailed with the play
+// CountsLine renders one row of the "by URL" view, tailed with the play
 // count.
-func FormatCountsLine(id uint64, title, url string, count int) string {
+func CountsLine(id uint64, title, url string, count int) string {
 	tail := fmt.Sprintf("×%d", count)
 	name := displayTrackTitle(title)
 	build := func(tt string) string {

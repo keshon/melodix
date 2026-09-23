@@ -6,17 +6,17 @@ import (
 	"github.com/keshon/melodix/internal/discord/reply"
 )
 
-type Help struct{}
+type Command struct{}
 
-func (c *Help) Name() string        { return "help" }
-func (c *Help) Description() string { return "Get a list of available commands" }
-func (c *Help) Group() string       { return "core" }
-func (c *Help) Category() string    { return "ℹ️ Information" }
-func (c *Help) UserPermissions() []int64 {
+func (c *Command) Name() string        { return "help" }
+func (c *Command) Description() string { return "Get a list of available commands" }
+func (c *Command) Group() string       { return "core" }
+func (c *Command) Category() string    { return "ℹ️ Information" }
+func (c *Command) UserPermissions() []int64 {
 	return []int64{}
 }
 
-func (c *Help) SlashDefinition() *adapter.SlashCommand {
+func (c *Command) SlashDefinition() *adapter.SlashCommand {
 	return &adapter.SlashCommand{
 		Name:        c.Name(),
 		Description: c.Description(),
@@ -40,7 +40,7 @@ func (c *Help) SlashDefinition() *adapter.SlashCommand {
 	}
 }
 
-func (c *Help) Run(context *adapter.SlashInteractionContext) error {
+func (c *Command) Run(context *adapter.SlashInteractionContext) error {
 
 	if err := context.DeferEphemeral(); err != nil {
 		context.AppLog.Error().Err(err).Msg("help_defer_failed")
