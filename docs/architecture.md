@@ -5,19 +5,30 @@
 > system works.
 
 Melodix is a Discord music bot built on top of a playback engine that doesn't
-know Discord exists. The repo ships two binaries against that same engine:
+know Discord exists. Two frontends share one application layer,
+`internal/music`, over that engine, and each has its own binary:
 
-- **`cmd/discord`** — the actual Discord bot: slash commands, voice, persistence,
-  health watchdogs.
-- **`cmd/cli`** — a small REPL that plays to your local speaker. It's a debugging
-  tool, and also the proof that `pkg/music` really has no Discord dependency.
+- **`cmd/discord`** — the Discord bot (`internal/discord`): slash commands,
+  voice, persistence, health watchdogs.
+- **`cmd/cli`** — the terminal player (`internal/cli`): the bot's music
+  commands in a REPL, playing to your local speaker. It is also the proof
+  that the layers under it have no Discord dependency.
+
+A third binary, **`cmd/readme`**, regenerates the README's command lists from
+both frontends' catalogs.
+
+Each frontend is laid out the same way: a root package that owns the
+transport (the gateway and voice for the bot, stdin and the speaker for the
+CLI), a `command/` tree with one package per command, and
+`command/catalog`, the single list its binary registers.
 
 ```mermaid
 flowchart TB
-  subgraph Consumers
-    DiscordBot["cmd/discord + internal/*"]
-    CLI["cmd/cli"]
+  subgraph Frontends
+    DiscordBot["internal/discord"]
+    CLI["internal/cli"]
   end
+  Music["internal/music<br/>(players per scope, Add, Search, History)"]
   subgraph Engine["pkg/music (Discord-agnostic)"]
     Resolver["resolve.Resolver<br/>(input → TrackInfo)"]
     Player["player.Player<br/>(queue + playback loop)"]
@@ -25,8 +36,9 @@ flowchart TB
     Parsers["parsers: ytnative | scnative | kkdai | ytdlp | ffmpeg<br/>(track → 20ms Opus packets)"]
     SinkIface["sink.AudioSink"]
   end
-  DiscordBot --> Player
-  CLI --> Player
+  DiscordBot --> Music
+  CLI --> Music
+  Music --> Player
   Player --> Resolver
   Player --> Stream
   Stream --> Parsers
@@ -48,7 +60,7 @@ Stated once, because most of what follows is downstream of it:
 - **No hard dependency on external binaries for YouTube.** ffmpeg and yt-dlp
   are optional; the passthrough paths need neither.
 - **An engine that does not know Discord exists.** `pkg/music` is reusable on
-  its own terms and `cmd/cli` is the standing proof.
+  its own terms and the CLI is the standing proof.
 - **Expendable parsers.** Any single extraction path can break without notice
   when a platform changes. The fallback chain is what makes playback
   reliable — no individual parser is.
@@ -99,9 +111,12 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | `internal/discord/reply` | Embed/response helpers shared by handlers and the voice service |
 | `internal/discord/queue` | How commands get scheduled: one FIFO lane per guild, drained off the gateway read goroutine so a guild's commands stay ordered and never overlap, plus the global cap on how many run at once across every guild |
 | `internal/discord/watchdog` | Gateway-silence detection and WS/ready tracking |
-| `internal/discord/command` | Command implementations (`play`, `next`, `stop`, `history`, `help`, `settings`, …) |
+| `internal/discord/command` | The bot's commands, one package each (`music/play`, `core/help`, `settings`, …); `catalog` registers them all |
 | `internal/discord/middleware` | The chain every command and click runs through: guild-only, permissions, disabled groups, the command log |
-| `internal/music` | The application layer the CLI and the bot share: one player per scope (guild or terminal) with its sink provider, the shared resolver, history recording, and the optional playback layers (cache, anti-skip read-ahead) |
+| `internal/cli` | The terminal frontend: the REPL, `Command`/`Context`/`Registry`, and the player's status printer |
+| `internal/cli/command` | The CLI's commands, mirroring the bot's layout (`music/play`, `core/help`, …); `catalog` registers them all |
+| `internal/readme` | Renders both frontends' command lists into `README.md` for `cmd/readme` |
+| `internal/music` | The application layer the CLI and the bot share: one player per scope (guild or terminal) with its sink provider; `Add` (history ids, links, queries), `Search`, `History`; history recording; the optional playback layers (cache, anti-skip read-ahead). It never starts playback — each frontend does, so it can announce the start its own way |
 | `internal/config` | Env-driven config (`caarlos0/env` + `.env`); all runtime knobs live here |
 | `internal/storage` | Persistence: schema (guild settings, command log, playback rows, cache index) and the collections/indexes declared on the embedded datastore |
 
@@ -491,9 +506,9 @@ ID and keyed `"<guildID>:<zero-padded id>"`, so reading an index returns a
 guild's rows in chronological order; the IDs themselves come from the
 store's persisted `tx.NextID` counters.
 
-The storage directory is locked to a single process, so the CLI falls back
-to an in-memory cache index if the bot already holds the lock, rather than
-just refusing to start.
+The storage directory is locked to a single process, so if the bot already
+holds the lock the CLI plays on without playback history and with an
+in-memory cache index, rather than refusing to start.
 
 Only tracks that actually start playing get recorded, through the
 `PlaybackRecorder` hook.
@@ -551,9 +566,9 @@ Real tradeoffs, written down so they are not rediscovered as bugs.
   resolver and `stream.registryEntries`. Nothing checks this.
 - **Pause and resume are not supported** — the sink owns the read loop; see
   Playback pipeline. Commands that try get `ErrPauseNotSupported`.
-- **One process per storage directory.** The CLI falls back to an in-memory
-  cache index when the bot already holds the lock, rather than refusing to
-  start.
+- **One process per storage directory.** The CLI runs without history and
+  with an in-memory cache index when the bot already holds the lock, rather
+  than refusing to start.
 - **The convention checks ratchet per file, not per line** — see
   [conventions.md](conventions.md#formatting--ci).
 
@@ -638,5 +653,5 @@ such a document that is usually missing.
     which only the caller should see;
   - a button on a `/search` chooser after `/settings` has disabled the music
     group, which should be refused.
-- `cmd/cli` exercises the whole engine minus Discord: `go run ./cmd/cli`,
-  then `play <url>`, `next`, `stop`, `queue`, `status`.
+- `cmd/cli` exercises everything but Discord: `go run ./cmd/cli`, then
+  `play <url>`, `search <query>`, `next`, `queue`, `history`, `stop`.
