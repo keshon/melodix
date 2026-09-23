@@ -1,1 +1,1 @@
-go run cmd\discord\main.go -readme=true
+go run ./cmd/readme

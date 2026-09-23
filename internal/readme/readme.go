@@ -11,8 +11,8 @@ import (
 	"unicode"
 
 	"github.com/keshon/command"
-	"github.com/keshon/melodix/internal/discord/adapter"
 
+	"github.com/keshon/melodix/internal/cli"
 	"github.com/keshon/melodix/internal/discord/perm"
 	"github.com/rs/zerolog"
 )
@@ -62,76 +62,36 @@ func plainCategory(s string) string {
 	return s
 }
 
-// UpdateReadme generates README.md from the command registry and category
-// ordering. categoryWeights maps category name to sort order (lower first).
-func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, log zerolog.Logger) error {
-	commands := registry.GetAll()
+// entry is one command as the README lists it: enough to place it, and how
+// to render its lines.
+type entry struct {
+	name     string
+	category string
+	render   func(buf *bytes.Buffer)
+}
 
-	sort.Slice(commands, func(i, j int) bool {
-		metaI, _ := command.Root(commands[i]).(adapter.Meta)
-		metaJ, _ := command.Root(commands[j]).(adapter.Meta)
-
-		catI := ""
-		catJ := ""
-
-		if metaI != nil {
-			catI = metaI.Category()
-		}
-		if metaJ != nil {
-			catJ = metaJ.Category()
-		}
-
-		wi := categoryWeights[catI]
-		wj := categoryWeights[catJ]
-
-		if wi == wj {
-			return commands[i].Name() < commands[j].Name()
-		}
-		return wi < wj
-	})
-
-	var buf bytes.Buffer
-	currentCategory := ""
-
-	for _, c := range commands {
-		root := command.Root(c)
-
-		meta, _ := root.(adapter.Meta)
-		cat := ""
-		if meta != nil {
-			cat = meta.Category()
-		}
-
-		if cat != currentCategory {
-			if currentCategory != "" {
-				buf.WriteString("\n")
-			}
-			currentCategory = cat
-			fmt.Fprintf(&buf, "### %s\n\n", plainCategory(currentCategory))
-		}
-
-		renderDiscordCommand(&buf, root)
-	}
-
-	tmplPath := filepath.Join(".", "README.md.tmpl")
-	outPath := filepath.Join(".", "README.md")
-
-	tmpl, err := template.ParseFiles(tmplPath)
+// Generate renders README.md.tmpl into README.md, in the working directory,
+// with both frontends' command lists. Each list is grouped under the same
+// category headings in the same order: categoryWeights, lower first.
+func Generate(bot *command.Registry, terminal *cli.Registry, categoryWeights map[string]int, log zerolog.Logger) error {
+	tmpl, err := template.ParseFiles(filepath.Join(".", "README.md.tmpl"))
 	if err != nil {
 		return err
 	}
 
 	data := struct {
-		CommandSections    string
+		DiscordCommands    string
+		CLICommands        string
 		BotPermissions     int64
 		BotPermissionsList string
 	}{
-		CommandSections:    buf.String(),
+		DiscordCommands:    section(discordEntries(bot), categoryWeights),
+		CLICommands:        section(cliEntries(terminal), categoryWeights),
 		BotPermissions:     perm.RecommendedBotMask(),
 		BotPermissionsList: strings.Join(perm.RecommendedBotNames(), ", "),
 	}
 
-	f, err := os.Create(outPath)
+	f, err := os.Create(filepath.Join(".", "README.md"))
 	if err != nil {
 		return err
 	}
@@ -145,54 +105,28 @@ func UpdateReadme(registry *command.Registry, categoryWeights map[string]int, lo
 	return nil
 }
 
-func renderDiscordCommand(buf *bytes.Buffer, c command.Command) {
-	name := c.Name()
-	display := name
-	if !hasSpace(name) && !startsWithUpper(name) {
-		display = "/" + display
-	}
-
-	fmt.Fprintf(buf, "- **%s** — %s\n", display, c.Description())
-
-	sp, ok := c.(adapter.SlashProvider)
-	if !ok {
-		return
-	}
-
-	def := sp.SlashDefinition()
-	if def == nil {
-		return
-	}
-
-	var sub strings.Builder
-	adapter.AppendSlashSubcommands(&sub, def.Name, def.Options, "")
-	for _, line := range strings.Split(sub.String(), "\n") {
-		// Lines look like:  `/help category` - description
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+// section renders entries under category headings, categories by weight and
+// commands by name within one.
+func section(entries []entry, categoryWeights map[string]int) string {
+	sort.SliceStable(entries, func(i, j int) bool {
+		wi, wj := categoryWeights[entries[i].category], categoryWeights[entries[j].category]
+		if wi == wj {
+			return entries[i].name < entries[j].name
 		}
-		line = strings.TrimPrefix(line, "`")
-		parts := strings.SplitN(line, "` - ", 2)
-		if len(parts) == 2 {
-			fmt.Fprintf(buf, "  - **%s** — %s\n", parts[0], parts[1])
-		}
-	}
-}
+		return wi < wj
+	})
 
-func hasSpace(s string) bool {
-	for _, r := range s {
-		if r == ' ' {
-			return true
+	var buf bytes.Buffer
+	currentCategory := ""
+	for i, e := range entries {
+		if i == 0 || e.category != currentCategory {
+			if i > 0 {
+				buf.WriteString("\n")
+			}
+			currentCategory = e.category
+			fmt.Fprintf(&buf, "#### %s\n\n", plainCategory(currentCategory))
 		}
+		e.render(&buf)
 	}
-	return false
-}
-
-func startsWithUpper(s string) bool {
-	if s == "" {
-		return false
-	}
-	r := rune(s[0])
-	return r >= 'A' && r <= 'Z'
+	return strings.TrimRight(buf.String(), "\n")
 }

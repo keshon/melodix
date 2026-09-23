@@ -98,9 +98,11 @@ the bot, invite link, every config knob, Docker — is in
 
 ## Commands
 
+### Discord
+
 <!-- generated -->
 
-{{ .CommandSections }}
+{{ .DiscordCommands }}
 
 <!-- /generated -->
 
@@ -121,6 +123,18 @@ Any link carrying a `list=` queues the whole list, up to 100 tracks, and
 (`watch?v=...&list=...`) starts at that video and continues through the rest,
 the same as opening it on YouTube. To play a single track, link it without the
 `list=` part.
+
+### Terminal
+
+`melodix-cli` mirrors the bot's music commands. Search lists numbered results
+and asks which one to queue. Playback history works too, except while the bot
+is running on the same data directory.
+
+<!-- generated -->
+
+{{ .CLICommands }}
+
+<!-- /generated -->
 
 ## Under the hood
 

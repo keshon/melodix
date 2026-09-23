@@ -98,9 +98,11 @@ the bot, invite link, every config knob, Docker — is in
 
 ## Commands
 
+### Discord
+
 <!-- generated -->
 
-### Information
+#### Information
 
 - **/about** — Discover the origin of this bot
 - **/help** — Get a list of available commands
@@ -108,7 +110,7 @@ the bot, invite link, every config knob, Docker — is in
   - **/help group** — View commands grouped by group
   - **/help flat** — View all commands as a flat list
 
-### Music
+#### Music
 
 - **/history** — Show recently played tracks (replay by id with /play)
 - **/next** — Skip to the next track
@@ -117,7 +119,7 @@ the bot, invite link, every config knob, Docker — is in
 - **/search** — Search and pick a track to play
 - **/stop** — Stop playback and clear queue
 
-### Settings
+#### Settings
 
 - **/maintenance** — Bot maintenance commands
   - **/maintenance ping** — Check bot latency
@@ -148,6 +150,30 @@ Any link carrying a `list=` queues the whole list, up to 100 tracks, and
 (`watch?v=...&list=...`) starts at that video and continues through the rest,
 the same as opening it on YouTube. To play a single track, link it without the
 `list=` part.
+
+### Terminal
+
+`melodix-cli` mirrors the bot's music commands. Search lists numbered results
+and asks which one to queue. Playback history works too, except while the bot
+is running on the same data directory.
+
+<!-- generated -->
+
+#### Information
+
+- **`about`** — Discover the origin of this bot
+- **`help`** — Get a list of available commands (also `?`)
+
+#### Music
+
+- **`history [timeline|counts] [page]`** — Show recently played tracks (replay by id with play)
+- **`next`** — Skip to the next track (also `n`, `skip`)
+- **`play <link|query|history ids> [source=youtube|soundcloud|radio] [parser=…]`** — Play a music track (also `p`)
+- **`queue`** — Show what is playing and what is queued next
+- **`search <query> [source=youtube|soundcloud]`** — Search and pick a track to play
+- **`stop`** — Stop playback and clear queue (also `s`)
+
+<!-- /generated -->
 
 ## Under the hood
 

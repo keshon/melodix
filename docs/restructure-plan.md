@@ -57,14 +57,9 @@ internal/
 6. ~~**CLI frontend.** `cli.Command`/`Context`/`Registry`/`Run`, status and
    failure printers; about, help, play, search, next, queue, stop, history
    under `cli/command`, mirroring the bot's layout; `cli/command/catalog`.~~
-7. **`cmd/readme`.**
-   - Split `readme` into its shared core plus `discord.go` and `cli.go`.
-   - The template gets `{{ .DiscordCommands }}` and `{{ .CLICommands }}`.
-   - Both sections use the same category headings and order
-     (`config.CategoryWeights`, `plainCategory`), taken from each command's
-     `Category()`.
-   - Drop `-readme` from `cmd/discord`; `build-readme.bat` becomes
-     `go run ./cmd/readme`.
+7. ~~**`cmd/readme`.** `readme.Generate` renders both catalogs through one
+   `section`; the template has a Discord and a Terminal list; `-readme` is
+   gone from the bot and `build-readme.bat` runs `./cmd/readme`.~~
 8. **Docs.**
    - Update `architecture.md` (package map, CLI section), the `ownership.md`
      paths, and the `PlayerStatus` invariant wording.

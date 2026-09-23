@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/keshon/buildinfo"
-	"github.com/keshon/command"
 	"github.com/keshon/melodix/internal/applog"
 
 	"github.com/keshon/melodix/internal/config"
@@ -19,7 +18,6 @@ import (
 	"github.com/keshon/melodix/internal/discord/command/catalog"
 	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/music"
-	"github.com/keshon/melodix/internal/readme"
 	"github.com/keshon/melodix/internal/storage"
 	"github.com/rs/zerolog"
 )
@@ -27,20 +25,8 @@ import (
 func main() {
 	info := buildinfo.Get()
 
-	// -readme regenerates README.md from the command registry as a dev step
-	// (run from the repo root); the bot never writes files at runtime.
-	genReadme := flag.Bool("readme", false, "regenerate README.md from the command registry and exit")
 	checkConn := flag.Bool("check", false, "connect, report what the gateway sees, and exit without registering or sending anything")
 	flag.Parse()
-	if *genReadme {
-		log := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
-		catalog.Register(nil, log)
-		if err := readme.UpdateReadme(command.DefaultRegistry, config.CategoryWeights, log); err != nil {
-			log.Error().Err(err).Msg("readme_update_failed")
-			os.Exit(1)
-		}
-		return
-	}
 
 	// Root context cancels on SIGINT/SIGTERM.
 	rootCtx, stopSignal := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

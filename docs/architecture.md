@@ -468,9 +468,9 @@ became load-bearing in the same change rather than redundant: `Ready` syncs
 on the gateway goroutine while `/commands enable` syncs on a worker.
 Slash-command sync is handled by `slashsync.Syncer`, which diffs desired
 against existing per-guild commands by name, type, and fingerprint whenever
-`INIT_SLASH_COMMANDS=true`. And `go run ./cmd/discord -readme` regenerates
-the command listing in `README.md` straight from the registry — that's a dev
-step, run from the repo root; the bot itself never writes files at runtime.
+`INIT_SLASH_COMMANDS=true`. And `go run ./cmd/readme` regenerates both
+command listings in `README.md` from the bot's and the CLI's catalogs — that's
+a dev step, run from the repo root; neither binary writes files at runtime.
 
 ---
 
