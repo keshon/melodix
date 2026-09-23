@@ -5,9 +5,9 @@ import (
 
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/voice"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/pkg/music/parsers"
 	"github.com/keshon/melodix/pkg/music/player"
-	"github.com/keshon/melodix/pkg/music/sources"
 )
 
 // VoiceAPI is the interface the Discord bot exposes for voice/music commands.
@@ -20,8 +20,9 @@ type VoiceAPI interface {
 	// error if none.
 	FindUserVoiceState(guildID, userID string) (*UserVoiceState, error)
 
-	// Resolve resolves input to tracks using the bot's shared resolver.
-	ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error)
+	// Music is the service the guilds' players live in, or nil when the bot
+	// runs without voice.
+	Music() *music.Service
 
 	// PlayNextAndAnnounce starts the next queued track and makes the answer
 	// to the interaction the guild's playback status message, so the
@@ -65,12 +66,9 @@ func (b *Bot) FindUserVoiceState(guildID, userID string) (*UserVoiceState, error
 	return b.voice.FindUserVoiceState(guildID, userID)
 }
 
-// ResolveTracks resolves input to tracks using the shared resolver.
-func (b *Bot) ResolveTracks(guildID, input, source, parser string) ([]sources.TrackInfo, error) {
-	if b.music == nil {
-		return nil, fmt.Errorf("music service not available")
-	}
-	return b.music.Resolve(input, source, parser)
+// Music is the service the guilds' players live in.
+func (b *Bot) Music() *music.Service {
+	return b.music
 }
 
 // PlayNextAndAnnounce starts the next track and registers the answer as the

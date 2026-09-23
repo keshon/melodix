@@ -49,10 +49,9 @@ internal/
 3. ~~**`music.Service`.** Players, sinks, resolver, recorder and parser
    loggers moved in; `voice.Service` is plugged in as `Hooks`; `cmd/cli` uses
    it.~~
-4. **`music.Add` / `Search` / history.**
-   - Move in `play_input.go`, the history-id lookup, source → `Searcher`
-     selection, and timeline/count rows.
-   - The Discord commands shrink to use them.
+4. ~~**`music.Add` / `Search` / history.** `ParseInput`, history ids, source →
+   searcher, timeline and counts moved in; `/play`, `/search`, `/history`
+   shrank onto them.~~
 5. **Discord catalog.**
    - `registerCommands` → `discord/command/catalog`.
    - Rename types to `Command`.

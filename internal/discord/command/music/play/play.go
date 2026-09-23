@@ -6,9 +6,8 @@ import (
 
 	"github.com/keshon/melodix/internal/discord"
 	"github.com/keshon/melodix/internal/discord/adapter"
-	"github.com/keshon/melodix/internal/discord/command/music/common"
 	"github.com/keshon/melodix/internal/discord/command/music/playback"
-	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/pkg/music/sources"
 )
 
@@ -62,9 +61,6 @@ func (c *Play) SlashDefinition() *adapter.SlashCommand {
 }
 
 func (c *Play) Run(slashCtx *adapter.SlashInteractionContext) error {
-
-	store := slashCtx.Storage
-
 	input := slashCtx.StringOption("input")
 	source := slashCtx.StringOption("source")
 	parser := slashCtx.StringOption("parser")
@@ -76,9 +72,9 @@ func (c *Play) Run(slashCtx *adapter.SlashInteractionContext) error {
 		})
 	}
 
-	parsed, err := common.ParsePlayInput(input)
+	in, err := music.ParseInput(input)
 	if err != nil {
-		if errors.Is(err, common.ErrPlayInputTooManyItems) {
+		if errors.Is(err, music.ErrTooManyItems) {
 			return slashCtx.RespondEphemeral(&adapter.Embed{
 				Title:       "🎵 Error",
 				Description: "Too many tracks in one command.",
@@ -94,82 +90,14 @@ func (c *Play) Run(slashCtx *adapter.SlashInteractionContext) error {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	guildID := slashCtx.GuildID()
 	target, ok := playback.Join(c.Bot, slashCtx)
 	if !ok {
 		return nil
 	}
-	p := target.Player
-	added := 0
-
-	switch parsed.Kind {
-	case common.PlayInputKindHistoryIDs:
-		if store == nil {
-			slashCtx.FollowupEphemeral(&adapter.Embed{
-				Title:       "🎵 Error",
-				Description: "Music history storage is not available.",
-			})
-			return nil
-		}
-		// Collected first, enqueued once: a batch emits a single queue update.
-		batch := make([]sources.TrackInfo, 0, len(parsed.HistoryIDs))
-		for _, hid := range parsed.HistoryIDs {
-			mp, gerr := store.MusicPlayback(guildID, hid)
-			if gerr != nil {
-				if errors.Is(gerr, storage.ErrMusicPlaybackNotFound) {
-					slashCtx.FollowupEphemeral(&adapter.Embed{
-						Title:       "🎵 History",
-						Description: "Unknown history id. It may have been removed when the list was trimmed, or the id is wrong.",
-					})
-				} else {
-					slashCtx.FollowupEphemeral(&adapter.Embed{
-						Title:       "🎵 History",
-						Description: fmt.Sprintf("Could not load history entry: %v", gerr),
-					})
-				}
-				return nil
-			}
-			batch = append(batch, storage.TrackInfoFromMusicPlayback(mp))
-		}
-		if err := p.EnqueueTrackInfos(batch); err != nil {
-			playback.QueueError(slashCtx, err)
-			return nil
-		}
-		added = len(batch)
-
-	case common.PlayInputKindURLs:
-		batch := make([]sources.TrackInfo, 0, len(parsed.URLs))
-		for _, u := range parsed.URLs {
-			tracks, resErr := c.Bot.ResolveTracks(guildID, u, source, parser)
-			if resErr != nil || len(tracks) == 0 {
-				slashCtx.FollowupEphemeral(&adapter.Embed{
-					Title:       "🎵 Error",
-					Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
-				})
-				return nil
-			}
-			batch = append(batch, tracks...)
-		}
-		if err := p.EnqueueTrackInfos(batch); err != nil {
-			playback.QueueError(slashCtx, err)
-			return nil
-		}
-		added = len(batch)
-
-	case common.PlayInputKindQuery:
-		tracks, resErr := c.Bot.ResolveTracks(guildID, parsed.Query, source, parser)
-		if resErr != nil || len(tracks) == 0 {
-			slashCtx.FollowupEphemeral(&adapter.Embed{
-				Title:       "🎵 Error",
-				Description: fmt.Sprintf("Failed to resolve track: %v", resErr),
-			})
-			return nil
-		}
-		if err := p.EnqueueTrackInfos(tracks); err != nil {
-			playback.QueueError(slashCtx, err)
-			return nil
-		}
-		added = len(tracks)
+	added, err := c.Bot.Music().Add(target.GuildID, in, source, parser)
+	if err != nil {
+		playback.AddError(slashCtx, err)
+		return nil
 	}
 
 	playback.StartAndRender(c.Bot, slashCtx, slashCtx.AppLog, target, added)

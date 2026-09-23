@@ -7,8 +7,10 @@ package playback
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/keshon/melodix/internal/discord/adapter"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/rs/zerolog"
 
 	"github.com/keshon/melodix/internal/discord"
@@ -99,12 +101,32 @@ func StartAndRender(bot discord.VoiceAPI, ctx adapter.Interaction, log zerolog.L
 	}
 }
 
-// QueueError reports a failed enqueue.
-func QueueError(ctx adapter.Interaction, err error) {
-	ctx.FollowupEphemeral(&adapter.Embed{
-		Title:       "🎵 Queue Error",
-		Description: fmt.Sprintf("%v", err),
-	})
+// AddError answers a failed music.Add with what went wrong, in the words the
+// bot has always used for each case.
+func AddError(ctx adapter.Interaction, err error) {
+	embed := &adapter.Embed{Title: "🎵 Error", Description: fmt.Sprintf("%v", err)}
+	switch {
+	case errors.Is(err, music.ErrHistoryUnavailable):
+		embed.Description = "Music history storage is not available."
+	case errors.Is(err, music.ErrUnknownHistoryID):
+		embed.Title = "🎵 History"
+		embed.Description = "Unknown history id. It may have been removed when the list was trimmed, or the id is wrong."
+	case errors.Is(err, music.ErrHistoryLoad):
+		embed.Title = "🎵 History"
+		embed.Description = "Could not load history entry: " + cause(err, music.ErrHistoryLoad)
+	case errors.Is(err, music.ErrResolve):
+		embed.Description = "Failed to resolve track: " + cause(err, music.ErrResolve)
+	case errors.Is(err, music.ErrQueue):
+		embed.Title = "🎵 Queue Error"
+		embed.Description = cause(err, music.ErrQueue)
+	}
+	ctx.FollowupEphemeral(embed)
+}
+
+// cause is err's text without the kind it was wrapped in, for a sentence that
+// names the kind itself.
+func cause(err, kind error) string {
+	return strings.TrimPrefix(err.Error(), kind.Error()+": ")
 }
 
 func renderStartError(ctx adapter.Interaction, err error) {

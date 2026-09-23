@@ -10,7 +10,8 @@ import (
 	"github.com/keshon/melodix/pkg/music/player"
 	"github.com/keshon/melodix/pkg/music/resolve"
 	"github.com/keshon/melodix/pkg/music/sink"
-	"github.com/keshon/melodix/pkg/music/sources"
+	"github.com/keshon/melodix/pkg/music/sources/soundcloud"
+	"github.com/keshon/melodix/pkg/music/sources/youtube"
 	"github.com/rs/zerolog"
 )
 
@@ -45,6 +46,9 @@ type Service struct {
 	players  map[string]*player.Player
 	sinks    map[string]sink.Provider
 	resolver *resolve.Resolver
+
+	youtube    *youtube.Searcher
+	soundcloud *soundcloud.Searcher
 }
 
 // New creates a service. store may be nil, in which case nothing is recorded
@@ -58,6 +62,9 @@ func New(cfg *config.Config, store *storage.Storage, log zerolog.Logger, hooks H
 		players:  make(map[string]*player.Player),
 		sinks:    make(map[string]sink.Provider),
 		resolver: resolve.New(),
+
+		youtube:    youtube.NewSearcher(),
+		soundcloud: soundcloud.NewSearcher(),
 	}
 }
 
@@ -93,11 +100,6 @@ func (s *Service) Player(scope string) *player.Player {
 		go s.hooks.Watch(scope, p)
 	}
 	return p
-}
-
-// Resolve turns input into tracks with the resolver every player shares.
-func (s *Service) Resolve(input, source, parser string) ([]sources.TrackInfo, error) {
-	return s.resolver.Resolve(input, source, parser)
 }
 
 // StopAll stops every player and forgets it, leaving voice for the bot. Call

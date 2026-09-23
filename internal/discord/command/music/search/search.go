@@ -9,9 +9,8 @@ import (
 	"github.com/keshon/melodix/internal/discord/command/music/common"
 	"github.com/keshon/melodix/internal/discord/command/music/playback"
 	"github.com/keshon/melodix/internal/discord/reply"
+	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/pkg/music/sources"
-	"github.com/keshon/melodix/pkg/music/sources/soundcloud"
-	"github.com/keshon/melodix/pkg/music/sources/youtube"
 )
 
 // resultCount is how many hits the chooser offers. Five is one Discord action
@@ -57,9 +56,6 @@ var _ adapter.ComponentInteractionHandler = (*Search)(nil)
 // take-the-first-hit. Radio is absent on purpose: a stream has nothing to rank.
 type Search struct {
 	Bot discord.VoiceAPI
-
-	yt *youtube.Searcher
-	sc *soundcloud.Searcher
 }
 
 func (c *Search) Name() string             { return componentPrefix }
@@ -95,11 +91,11 @@ func (c *Search) SlashDefinition() *adapter.SlashCommand {
 func (c *Search) Run(slashCtx *adapter.SlashInteractionContext) error {
 	query := strings.TrimSpace(slashCtx.StringOption("query"))
 	wanted := slashCtx.StringOption("source")
-	searcher, tag, err := c.pick(wanted)
-	if err != nil {
+	tag, ok := tagOf(wanted)
+	if !ok {
 		return slashCtx.RespondEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
-			Description: fmt.Sprintf("%v", err),
+			Description: fmt.Sprintf("%s cannot be searched", wanted),
 		})
 	}
 	if query == "" {
@@ -115,7 +111,7 @@ func (c *Search) Run(slashCtx *adapter.SlashInteractionContext) error {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	hits, err := searcher.Search(query, resultCount)
+	hits, err := c.Bot.Music().Search(wanted, query, resultCount)
 	if err != nil {
 		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🔎 Search",
@@ -165,11 +161,12 @@ func (c *Search) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 // Component handles a click on one of the chooser's buttons.
 func (c *Search) Component(compCtx *adapter.ComponentInteractionContext) error {
-	source, payload, ok := parseButtonID(compCtx.CustomID())
+	tag, payload, ok := parseButtonID(compCtx.CustomID())
 	if !ok {
 		return nil
 	}
-	if !knownSource(source) {
+	source, ok := sourceOf(tag)
+	if !ok {
 		// A chooser from a future version, or a hand-crafted id.
 		return compCtx.RespondEphemeral(&adapter.Embed{
 			Title:       "🔎 Search",
@@ -193,7 +190,7 @@ func (c *Search) Component(compCtx *adapter.ComponentInteractionContext) error {
 		return nil
 	}
 
-	url, err := c.trackURL(source, payload)
+	url, err := c.Bot.Music().HitURL(source, payload)
 	if err != nil {
 		compCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
@@ -202,20 +199,14 @@ func (c *Search) Component(compCtx *adapter.ComponentInteractionContext) error {
 		return nil
 	}
 
-	tracks, err := c.Bot.ResolveTracks(target.GuildID, url, "", "")
-	if err != nil || len(tracks) == 0 {
-		compCtx.FollowupEphemeral(&adapter.Embed{
-			Title:       "🎵 Error",
-			Description: fmt.Sprintf("Failed to resolve track: %v", err),
-		})
-		return nil
-	}
-	if err := target.Player.EnqueueTrackInfos(tracks); err != nil {
-		playback.QueueError(compCtx, err)
+	in := music.Input{Kind: music.InputQuery, Query: url}
+	added, err := c.Bot.Music().Add(target.GuildID, in, "", "")
+	if err != nil {
+		playback.AddError(compCtx, err)
 		return nil
 	}
 
-	playback.StartAndRender(c.Bot, compCtx, compCtx.AppLog, target, len(tracks))
+	playback.StartAndRender(c.Bot, compCtx, compCtx.AppLog, target, added)
 	return nil
 }
 
@@ -232,47 +223,29 @@ func parseButtonID(customID string) (source, payload string, ok bool) {
 	return source, payload, true
 }
 
-func knownSource(source string) bool {
-	return source == sourceYouTube || source == sourceSoundCloud
-}
-
-// trackURL turns a button payload back into a resolvable page URL. YouTube ids
-// rebuild into a watch URL offline; a SoundCloud id has to be looked up, which
-// is the price of a payload that fits in a component id.
-func (c *Search) trackURL(source, payload string) (string, error) {
+// tagOf is the button tag for a search source option; the empty option is
+// YouTube. ok is false for a source that cannot be searched.
+func tagOf(source string) (tag string, ok bool) {
 	switch source {
-	case sourceYouTube:
-		return youtube.VideoURL(payload), nil
-	case sourceSoundCloud:
-		return c.soundcloud().PermalinkByID(payload)
-	default:
-		return "", fmt.Errorf("unknown search source %q", source)
-	}
-}
-
-// pick maps the slash option to a searcher and the tag its buttons carry.
-func (c *Search) pick(wanted string) (sources.Searcher, string, error) {
-	switch wanted {
 	case "", sources.YouTube:
-		return c.youtube(), sourceYouTube, nil
+		return sourceYouTube, true
 	case sources.SoundCloud:
-		return c.soundcloud(), sourceSoundCloud, nil
+		return sourceSoundCloud, true
 	default:
-		return nil, "", fmt.Errorf("%s cannot be searched", wanted)
+		return "", false
 	}
 }
 
-// The searchers are built lazily so a zero-value Search stays usable.
-func (c *Search) youtube() *youtube.Searcher {
-	if c.yt == nil {
-		c.yt = youtube.NewSearcher()
+// sourceOf is the source a button tag stands for. ok is false for a tag this
+// build does not know -- a chooser from a future version, or a hand-crafted
+// id -- which must fail closed rather than be resolved as some default.
+func sourceOf(tag string) (source string, ok bool) {
+	switch tag {
+	case sourceYouTube:
+		return sources.YouTube, true
+	case sourceSoundCloud:
+		return sources.SoundCloud, true
+	default:
+		return "", false
 	}
-	return c.yt
-}
-
-func (c *Search) soundcloud() *soundcloud.Searcher {
-	if c.sc == nil {
-		c.sc = soundcloud.NewSearcher()
-	}
-	return c.sc
 }

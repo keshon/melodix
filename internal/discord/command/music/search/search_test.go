@@ -12,7 +12,6 @@ import (
 
 func TestButtonIDRoundTrip(t *testing.T) {
 	t.Parallel()
-	c := &Search{}
 
 	id, ok := buttonID(sourceYouTube, "K0HSD_i2DvA")
 	if !ok {
@@ -27,10 +26,8 @@ func TestButtonIDRoundTrip(t *testing.T) {
 		t.Fatalf("parse = %q, %q, %v", source, payload, ok)
 	}
 
-	// YouTube rebuilds offline; reaching the network here would be a bug.
-	url, err := c.trackURL(source, payload)
-	if err != nil || url != "https://www.youtube.com/watch?v=K0HSD_i2DvA" {
-		t.Fatalf("url = %q, err = %v", url, err)
+	if got, ok := sourceOf(source); !ok || got != sources.YouTube {
+		t.Fatalf("sourceOf(%q) = %q, %v", source, got, ok)
 	}
 }
 
@@ -94,18 +91,13 @@ func TestUnknownSourceFailsClosed(t *testing.T) {
 	t.Parallel()
 	// Forward compatibility: an id minted by a newer build must be rejected, not
 	// quietly resolved as YouTube.
-	if knownSource("bandcamp") {
+	if _, ok := sourceOf("bandcamp"); ok {
 		t.Fatal("unknown source reported as known")
-	}
-	c := &Search{}
-	if _, err := c.trackURL("bandcamp", "123"); err == nil {
-		t.Fatal("an unknown source must not resolve")
 	}
 }
 
-func TestPickMapsSourceOption(t *testing.T) {
+func TestTagOfMapsSourceOption(t *testing.T) {
 	t.Parallel()
-	c := &Search{}
 	cases := []struct {
 		option  string
 		wantTag string
@@ -115,14 +107,17 @@ func TestPickMapsSourceOption(t *testing.T) {
 		{sources.SoundCloud, sourceSoundCloud},
 	}
 	for _, tc := range cases {
-		got, tag, err := c.pick(tc.option)
-		if err != nil || got == nil || tag != tc.wantTag {
-			t.Errorf("pick(%q) = %v, %q, %v", tc.option, got, tag, err)
+		tag, ok := tagOf(tc.option)
+		if !ok || tag != tc.wantTag {
+			t.Errorf("tagOf(%q) = %q, %v", tc.option, tag, ok)
+		}
+		if back, _ := sourceOf(tag); tc.option != "" && back != tc.option {
+			t.Errorf("sourceOf(%q) = %q, want %q", tag, back, tc.option)
 		}
 	}
 
 	// Radio has nothing to rank, so it is not offered and must be refused.
-	if _, _, err := c.pick(sources.Radio); err == nil {
+	if _, ok := tagOf(sources.Radio); ok {
 		t.Error("radio must not be searchable")
 	}
 }

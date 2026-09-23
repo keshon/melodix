@@ -1,6 +1,7 @@
 package history
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/command/music/common"
 	"github.com/keshon/melodix/internal/discord/reply"
-	"github.com/keshon/melodix/internal/storage"
+	"github.com/keshon/melodix/internal/music"
 )
 
 type History struct {
@@ -57,9 +58,6 @@ const historyLinesPerPage = 15
 const historyFooterReplay = "replay with `/play <id>`."
 
 func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
-
-	store := slashCtx.Storage
-
 	var view = "timeline"
 	if v := strings.TrimSpace(slashCtx.StringOption("view")); v != "" {
 		view = v
@@ -74,8 +72,8 @@ func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 		return fmt.Errorf("failed to send deferred response: %w", err)
 	}
 
-	guildID := slashCtx.GuildID()
-	if c.Bot.GetOrCreatePlayer(guildID) == nil {
+	svc := c.Bot.Music()
+	if svc == nil {
 		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music service is not available.",
@@ -83,19 +81,18 @@ func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 		return nil
 	}
 
-	if store == nil {
+	rows, err := svc.History(slashCtx.GuildID())
+	if errors.Is(err, music.ErrHistoryUnavailable) {
 		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 Error",
 			Description: "Music history storage is not available.",
 		})
 		return nil
 	}
-
-	rows, err := store.ListMusicPlaybackTimeline(guildID)
 	if err != nil {
 		slashCtx.FollowupEphemeral(&adapter.Embed{
 			Title:       "🎵 History",
-			Description: fmt.Sprintf("Could not load history: %v", err),
+			Description: "Could not load history: " + strings.TrimPrefix(err.Error(), music.ErrHistoryLoad.Error()+": "),
 		})
 		return nil
 	}
@@ -121,18 +118,20 @@ func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 
 	switch view {
 	case "counts":
-		counts := aggregatePlaybackCounts(rows)
+		counts := music.PlayCounts(rows)
 		totalRows = len(counts)
 		embedTitle = "🎵 Playback history (by URL)"
 		footerExtra = historyFooterReplay
 		for _, r := range counts {
-			lines = append(lines, common.FormatCountsLine(r.RepresentativeID, r.Title, r.URL, r.Count))
+			lines = append(lines, common.FormatCountsLine(r.ID, r.Title, r.URL, r.Count))
 		}
 	default:
 		totalRows = len(rows)
 		embedTitle = "🎵 Playback history (timeline)"
 		footerExtra = "Newest first; " + historyFooterReplay
-		lines = timelineLines(rows)
+		for _, r := range rows {
+			lines = append(lines, common.FormatTimelineLine(r.ID, r.Title, r.URL, r.PlayedAt))
+		}
 	}
 
 	totalPages := (totalRows + historyLinesPerPage - 1) / historyLinesPerPage
@@ -176,16 +175,4 @@ func (c *History) Run(slashCtx *adapter.SlashInteractionContext) error {
 		slashCtx.AppLog.Warn().Str("command", "history").Err(err).Msg("followup_embed_failed")
 	}
 	return nil
-}
-
-// timelineLines renders the timeline newest first, so page 1 is what was just
-// played. Storage keeps rows oldest first -- its trimming relies on that -- so
-// the order is turned here rather than there.
-func timelineLines(rows []storage.PlaybackEntry) []string {
-	lines := make([]string, 0, len(rows))
-	for i := len(rows) - 1; i >= 0; i-- {
-		m := rows[i]
-		lines = append(lines, common.FormatTimelineLine(m.ID, m.Title, m.URL, m.PlayedAt))
-	}
-	return lines
 }

@@ -1,52 +1,52 @@
-package common
+package music
 
 import (
 	"errors"
 	"testing"
 )
 
-func TestParsePlayInput(t *testing.T) {
+func TestParseInput(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name    string
 		in      string
-		want    ParsedPlayInput
+		want    Input
 		wantErr error
 	}{
 		{
 			name: "single history id",
 			in:   "42",
-			want: ParsedPlayInput{Kind: PlayInputKindHistoryIDs, HistoryIDs: []uint64{42}},
+			want: Input{Kind: InputHistoryIDs, HistoryIDs: []uint64{42}},
 		},
 		{
 			name: "multi history ids",
 			in:   "7 8 9",
-			want: ParsedPlayInput{Kind: PlayInputKindHistoryIDs, HistoryIDs: []uint64{7, 8, 9}},
+			want: Input{Kind: InputHistoryIDs, HistoryIDs: []uint64{7, 8, 9}},
 		},
 		{
 			name: "multi history ids semicolon",
 			in:   "7;8,9",
-			want: ParsedPlayInput{Kind: PlayInputKindHistoryIDs, HistoryIDs: []uint64{7, 8, 9}},
+			want: Input{Kind: InputHistoryIDs, HistoryIDs: []uint64{7, 8, 9}},
 		},
 		{
 			name: "title with words not all numeric",
 			in:   "3 doors down",
-			want: ParsedPlayInput{Kind: PlayInputKindQuery, Query: "3 doors down"},
+			want: Input{Kind: InputQuery, Query: "3 doors down"},
 		},
 		{
 			name: "two urls",
 			in:   "https://a.com/foo https://b.com/bar",
-			want: ParsedPlayInput{Kind: PlayInputKindURLs, URLs: []string{"https://a.com/foo", "https://b.com/bar"}},
+			want: Input{Kind: InputURLs, URLs: []string{"https://a.com/foo", "https://b.com/bar"}},
 		},
 		{
 			name: "one url and text is query",
 			in:   "check this https://a.com",
-			want: ParsedPlayInput{Kind: PlayInputKindQuery, Query: "check this https://a.com"},
+			want: Input{Kind: InputQuery, Query: "check this https://a.com"},
 		},
 		{
 			name: "single url only",
 			in:   "https://youtu.be/abc",
-			want: ParsedPlayInput{Kind: PlayInputKindQuery, Query: "https://youtu.be/abc"},
+			want: Input{Kind: InputQuery, Query: "https://youtu.be/abc"},
 		},
 		{
 			name:    "empty",
@@ -58,7 +58,7 @@ func TestParsePlayInput(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := ParsePlayInput(tc.in)
+			got, err := ParseInput(tc.in)
 			if tc.wantErr != nil {
 				if err == nil {
 					t.Fatalf("want error, got nil")
@@ -66,7 +66,7 @@ func TestParsePlayInput(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("ParsePlayInput: %v", err)
+				t.Fatalf("ParseInput: %v", err)
 			}
 			if got.Kind != tc.want.Kind {
 				t.Errorf("Kind: got %v want %v", got.Kind, tc.want.Kind)
@@ -94,17 +94,17 @@ func TestParsePlayInput(t *testing.T) {
 	}
 }
 
-func TestParsePlayInputTooManyIDs(t *testing.T) {
+func TestParseInputTooManyIDs(t *testing.T) {
 	t.Parallel()
 	var ids string
-	for i := 0; i < maxPlayBatchItems+1; i++ {
+	for i := 0; i < maxBatchItems+1; i++ {
 		if i > 0 {
 			ids += " "
 		}
 		ids += "1"
 	}
-	_, err := ParsePlayInput(ids)
-	if !errors.Is(err, ErrPlayInputTooManyItems) {
-		t.Fatalf("want ErrPlayInputTooManyItems, got %v", err)
+	_, err := ParseInput(ids)
+	if !errors.Is(err, ErrTooManyItems) {
+		t.Fatalf("want ErrTooManyItems, got %v", err)
 	}
 }
