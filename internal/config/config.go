@@ -14,6 +14,7 @@ type Config struct {
 	DiscordToken          string   `env:"DISCORD_TOKEN"` // required for Discord bot; optional for CLI
 	DiscordGuildBlacklist []string `env:"DISCORD_GUILD_BLACKLIST" envSeparator:","`
 	StoragePath           string   `env:"STORAGE_PATH" envDefault:"./data/store"` // directory the datastore owns (WAL + snapshots)
+	DeveloperID           string   `env:"DEVELOPER_ID"`
 	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"false"`
 	// VoiceReadyDelayMs waits after joining a voice channel before asking
 	// whether the channel uses end-to-end encryption. The protocol version is
@@ -94,6 +95,21 @@ type Config struct {
 	LogMaxBackups int    `env:"LOG_MAX_BACKUPS" envDefault:"3"`
 	LogMaxAgeDays int    `env:"LOG_MAX_AGE_DAYS" envDefault:"0"`
 	LogCompress   bool   `env:"LOG_COMPRESS" envDefault:"false"`
+}
+
+// IsDeveloper reports whether userID is the configured developer (avoids
+// discord import in middleware).
+//
+// Both ids must be non-empty. Comparing them alone is not enough: DEVELOPER_ID
+// is unset on most deployments, and an event carrying no user id would then
+// match it and be treated as the developer — which since the permission
+// middleware started honouring this is a bypass of every admin gate the bot
+// has. Fails closed when either side is missing.
+func IsDeveloper(cfg *Config, userID string) bool {
+	if cfg == nil || cfg.DeveloperID == "" || userID == "" {
+		return false
+	}
+	return cfg.DeveloperID == userID
 }
 
 // New returns a new Config.

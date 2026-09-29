@@ -101,6 +101,7 @@ default and can be left alone until you actually need it:
 | `STORAGE_PATH`            | Directory the datastore owns (write-ahead log + snapshots). Locked to one process. | `./data/store` |
 | `INIT_SLASH_COMMANDS`     | Set to `true` to register slash commands on every startup. | `false`                 |
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave on sight.      | (none)                  |
+| `DEVELOPER_ID` | Your Discord user ID. Runs every command on every server regardless of roles — for running /maintenance (with its database dump) and /settings without an admin role. Treat as a credential; empty disables it. | (none) |
 | `VOICE_READY_DELAY_MS`    | Delay after joining a voice channel before asking whether it uses end-to-end encryption. The protocol version is not known until `SELECT_PROTOCOL_ACK` arrives, and before that the answer cannot tell "no encryption here" from "not asked yet". | `500` |
 | `WS_SILENCE_TIMEOUT`      | How long without events or heartbeat ACKs before the gateway is treated as unhealthy. | `2m`  |
 | `DISCORD_UNHEALTHY_MODE`  | What to do when unhealthy: `restart-session`, `restart-voice`, or `ignore`. | `restart-session` |

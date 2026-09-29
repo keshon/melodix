@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/keshon/command"
+	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/perm"
 )
@@ -21,6 +22,13 @@ func WithUserPermissionCheck() command.Middleware {
 		return command.Wrap(c, func(ctx context.Context, inv *command.Invocation) error {
 			cc := adapter.ContextFromInvocation(inv)
 			if cc == nil {
+				return c.Run(ctx, inv)
+			}
+			// DEVELOPER_ID runs every command regardless of roles: the
+			// backdoor for testing admin commands without waiting on a
+			// server admin to grant one. It is a user id match rather than
+			// a permission, so it is checked before any role is read.
+			if config.IsDeveloper(adapter.ConfigFromInvocation(inv), cc.UserID()) {
 				return c.Run(ctx, inv)
 			}
 			// No guild means no roles to check against, and an unidentifiable
