@@ -13,6 +13,7 @@ package reply
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 
@@ -398,4 +399,56 @@ func ClampEmbedText(s string) string {
 		return string(r)
 	}
 	return string(r[:maxRunes]) + "…"
+}
+
+// EmbedDescriptionLimit is the safe per-embed description budget. Discord
+// allows 4096 characters per embed description; the margin leaves room for
+// the title and for the continuation markers callers add.
+const EmbedDescriptionLimit = 4000
+
+// ChunkEmbedDescription splits s into pieces of at most limit runes for
+// multi-embed replies. Splits fall on line boundaries so a command entry is
+// never torn in half; a single line longer than the limit is hard-split
+// rather than dropped. Empty input yields no chunks.
+//
+// ClampEmbedText is the right call when the tail is expendable. Chunking is
+// for listings where every entry matters — /help enumerates the bot's whole
+// surface, and cutting it at 4000 runes silently unlists commands.
+func ChunkEmbedDescription(s string, limit int) []string {
+	if limit <= 0 {
+		limit = EmbedDescriptionLimit
+	}
+	if s == "" {
+		return nil
+	}
+	var chunks []string
+	var cur []rune
+	flush := func() {
+		if len(cur) > 0 {
+			chunks = append(chunks, string(cur))
+			cur = nil
+		}
+	}
+	for _, line := range strings.Split(s, "\n") {
+		r := []rune(line)
+		// A lone line longer than the budget cannot fit even on its own:
+		// hard-split it first so the loop below only handles fitting lines.
+		for len(r) > limit {
+			flush()
+			chunks = append(chunks, string(r[:limit]))
+			r = r[limit:]
+		}
+		need := len(r) + 1 // the line plus its newline
+		if len(cur)+need > limit && len(cur) > 0 {
+			flush()
+		}
+		cur = append(cur, r...)
+		cur = append(cur, '\n')
+	}
+	// Drop the trailing newline the loop always adds.
+	if len(cur) > 0 && cur[len(cur)-1] == '\n' {
+		cur = cur[:len(cur)-1]
+	}
+	flush()
+	return chunks
 }

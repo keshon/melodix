@@ -65,11 +65,32 @@ func (c *Command) Run(context *adapter.SlashInteractionContext) error {
 	}
 
 	info := buildinfo.Get()
-	embed := &adapter.Embed{
-		Title:       info.Project + " Help",
-		Description: output,
-		Color:       reply.EmbedColor,
-	}
 
-	return context.FollowupEphemeral(embed)
+	// The full listing can run past Discord's 4096-character embed cap, so
+	// it goes out as one embed per chunk rather than one clamped embed that
+	// silently unlists commands.
+	chunks := reply.ChunkEmbedDescription(output, reply.EmbedDescriptionLimit)
+	if len(chunks) == 0 {
+		return context.FollowupEphemeral(&adapter.Embed{
+			Title:       info.Project + " Help",
+			Description: "No commands registered.",
+			Color:       reply.EmbedColor,
+		})
+	}
+	if err := context.FollowupEphemeral(&adapter.Embed{
+		Title:       info.Project + " Help",
+		Description: chunks[0],
+		Color:       reply.EmbedColor,
+	}); err != nil {
+		return err
+	}
+	for _, chunk := range chunks[1:] {
+		if err := context.FollowupEphemeral(&adapter.Embed{
+			Description: chunk,
+			Color:       reply.EmbedColor,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

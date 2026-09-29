@@ -51,6 +51,12 @@ RUN apk add --no-cache \
 WORKDIR /usr/project
 COPY --from=builder /usr/project/app ./app
 
+# Static images the bot attaches to embeds (/about banner). Baked in rather
+# than mounted: they are versioned with the code, and a container without
+# them silently drops every image — os.Open fails and the commands fall back
+# to imageless embeds.
+COPY src/assets ./assets
+
 RUN mkdir -p data/store
 RUN mkdir -p data/cache
 
