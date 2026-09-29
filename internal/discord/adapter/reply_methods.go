@@ -198,11 +198,11 @@ func (c *ComponentInteractionContext) Component() bool { return true }
 // ReplaceMessage answers a component interaction by rewriting the message it
 // came from, which is how a chooser is consumed: the buttons go away with the
 // same click that acts on them, so nothing can be pressed twice.
-func (c *ComponentInteractionContext) ReplaceMessage(embed *Embed) error {
+func (c *ComponentInteractionContext) ReplaceMessage(rep Reply) error {
 	if c.Responder == nil {
 		return nil
 	}
-	return c.Responder.ReplaceMessage(embed)
+	return c.Responder.ReplaceMessage(rep)
 }
 
 // Interaction is what a shared helper needs from an invocation, whichever kind

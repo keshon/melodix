@@ -149,30 +149,36 @@ func (m *Syncer) guildLock(guildID string) *sync.Mutex {
 func (m *Syncer) buildCommandDefinitions() []*adapter.SlashCommand {
 	var defs []*adapter.SlashCommand
 	for _, c := range m.registry.GetAll() {
-		if def := declarationOf(c); def != nil {
-			defs = append(defs, def)
-		}
+		defs = append(defs, declarationsOf(c)...)
 	}
 	return defs
 }
 
-// declarationOf resolves a registered command to what it declares.
+// declarationsOf resolves a registered command to what it declares: its slash
+// definition plus its context-menu entry when it declares one. Both share the
+// command's name; the sync keys by name and kind, so one registration carries
+// both without colliding.
 //
 // The assertions are what broke once already: middleware unwraps to the
 // Adapter, and an Adapter whose method returns a different type than the
 // interface declares simply is not one, with no compile error to say so. A
 // command that resolves to nothing here is a command this backend would
 // delete from the guild.
-func declarationOf(c command.Command) *adapter.SlashCommand {
+func declarationsOf(c command.Command) []*adapter.SlashCommand {
 	root := command.Root(c)
 
+	var out []*adapter.SlashCommand
 	if slash, ok := root.(adapter.SlashProvider); ok {
 		if def := slash.SlashDefinition(); def != nil {
-			return def
+			out = append(out, def)
 		}
 	}
-
-	return nil
+	if menu, ok := root.(adapter.MenuProvider); ok {
+		if def := menu.MenuDefinition(); def != nil {
+			out = append(out, def)
+		}
+	}
+	return out
 }
 
 func commandType(t adapter.SlashCommandType) discord.ApplicationCommandType {

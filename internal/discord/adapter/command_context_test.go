@@ -94,5 +94,5 @@ func (stubResponder) AnswerEmbedMessage(*Embed) (string, string, error) {
 	return "", "", nil
 }
 func (stubResponder) EditResponseText(string) error { return nil }
-func (stubResponder) ReplaceMessage(*Embed) error   { return nil }
+func (stubResponder) ReplaceMessage(Reply) error    { return nil }
 func (stubResponder) ResolveDeferred() error        { return nil }

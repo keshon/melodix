@@ -34,6 +34,10 @@ type Responder interface {
 	// reports where it landed, so a caller that means to edit it later can
 	// find it again.
 	//
+	// Call it after Defer: it edits the placeholder the deferral posted, and
+	// an interaction that was never acknowledged has no webhook to edit yet
+	// (Discord answers 10015 Unknown Webhook).
+	//
 	// The guild's music status message works this way: created from the
 	// interaction that started playback, then edited for as long as the track
 	// plays -- well past the token's expiry, so the later edits go through
@@ -49,9 +53,10 @@ type Responder interface {
 	EditResponseText(content string) error
 
 	// ReplaceMessage answers a component interaction by rewriting the message
-	// it came from, which is how a chooser is consumed: the buttons go away
-	// with the same click that acts on them, so nothing can be pressed twice.
-	ReplaceMessage(embed *Embed) error
+	// it came from. What it becomes is one reply: text, embed, buttons, or
+	// any combination. A nil button row consumes the chooser so nothing can
+	// be pressed twice; a new row keeps the message interactive.
+	ReplaceMessage(rep Reply) error
 
 	// ResolveDeferred removes the "thinking" placeholder when an interaction
 	// was deferred and then answered some other way.
@@ -166,6 +171,13 @@ type AuditLog interface {
 // SlashProvider is implemented by commands that expose a slash definition.
 type SlashProvider interface {
 	SlashDefinition() *SlashCommand
+}
+
+// MenuProvider is implemented by commands that additionally expose a
+// context-menu entry (message or user). The menu shares the command's name:
+// Discord keys entries by name and kind, so one registration carries both.
+type MenuProvider interface {
+	MenuDefinition() *SlashCommand
 }
 
 // ComponentInteractionHandler is implemented by commands that handle message

@@ -275,16 +275,29 @@ func (r *Responder) EditResponseText(content string) error {
 // chooser is consumed: the buttons go away with the same click that acts on
 // them, so nothing can be pressed twice. The empty component slice is the
 // removal and has to be sent rather than omitted.
-func (r *Responder) ReplaceMessage(embed *adapter.Embed) error {
+func (r *Responder) ReplaceMessage(rep adapter.Reply) error {
 	if r.component == nil {
 		// Not a component interaction; the nearest honest thing is a plain
 		// answer rather than silently doing nothing.
-		return r.Respond(adapter.Reply{Embed: embed})
+		return r.Respond(rep)
 	}
-	err := r.component.UpdateMessage(discord.MessageUpdate{
-		Embeds:     &[]discord.Embed{Embed(embed)},
-		Components: &[]discord.LayoutComponent{},
-	})
+	embeds := []discord.Embed{}
+	if rep.Embed != nil {
+		embeds = []discord.Embed{Embed(rep.Embed)}
+	}
+	update := discord.MessageUpdate{
+		Embeds: &embeds,
+	}
+	if rep.Text != "" {
+		update.Content = &rep.Text
+	}
+	if rep.Buttons == nil {
+		update.Components = &[]discord.LayoutComponent{}
+	} else {
+		comps := Components(rep.Buttons)
+		update.Components = &comps
+	}
+	err := r.component.UpdateMessage(update)
 	if err == nil {
 		r.markAnswered()
 	}

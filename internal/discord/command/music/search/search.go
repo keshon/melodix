@@ -177,11 +177,11 @@ func (c *Command) Component(compCtx *adapter.ComponentInteractionContext) error 
 
 	// Rewriting the chooser both acknowledges the click and takes the buttons
 	// away, so a result cannot be queued twice by pressing again.
-	if err := compCtx.ReplaceMessage(&adapter.Embed{
+	if err := compCtx.ReplaceMessage(adapter.Reply{Embed: &adapter.Embed{
 		Title:       "🔎 Search",
 		Description: "Adding to the queue…",
 		Color:       reply.EmbedColor,
-	}); err != nil {
+	}}); err != nil {
 		return fmt.Errorf("failed to acknowledge selection: %w", err)
 	}
 

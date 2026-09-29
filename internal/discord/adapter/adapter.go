@@ -60,10 +60,21 @@ func (a *Adapter) SlashDefinition() *SlashCommand {
 	return nil
 }
 
+// MenuDefinition forwards the context-menu declaration, or nil when the
+// command declares none. Filed next to SlashDefinition because slashsync
+// reads both off the same Adapter.
+func (a *Adapter) MenuDefinition() *SlashCommand {
+	if mp, ok := a.Cmd.(MenuProvider); ok {
+		return mp.MenuDefinition()
+	}
+	return nil
+}
+
 // Compile-time proof that the Adapter is what slashsync looks for. Without
 // these, the only thing standing between a changed signature and a guild
 // losing all of its commands is a runtime type assertion that fails quietly.
 var _ SlashProvider = (*Adapter)(nil)
+var _ MenuProvider = (*Adapter)(nil)
 
 // SkipAuditLog reports whether the wrapped command opted out of the audit log.
 //
