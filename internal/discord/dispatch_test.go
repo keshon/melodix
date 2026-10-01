@@ -231,12 +231,12 @@ func (r *recordingResponder) record(reply adapter.Reply) error {
 	return nil
 }
 
-func (r *recordingResponder) AckDeferred(bool) error              { return nil }
-func (r *recordingResponder) Respond(reply adapter.Reply) error   { return r.record(reply) }
-func (r *recordingResponder) Followup(reply adapter.Reply) error  { return r.record(reply) }
-func (r *recordingResponder) EditResponseText(string) error       { return nil }
+func (r *recordingResponder) AckDeferred(bool) error             { return nil }
+func (r *recordingResponder) Respond(reply adapter.Reply) error  { return r.record(reply) }
+func (r *recordingResponder) Followup(reply adapter.Reply) error { return r.record(reply) }
+func (r *recordingResponder) EditResponseText(string) error      { return nil }
 func (r *recordingResponder) ReplaceMessage(adapter.Reply) error { return nil }
-func (r *recordingResponder) ResolveDeferred() error              { return nil }
+func (r *recordingResponder) ResolveDeferred() error             { return nil }
 func (r *recordingResponder) AnswerEmbedMessage(*adapter.Embed) (string, string, error) {
 	return "", "", nil
 }
