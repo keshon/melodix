@@ -283,11 +283,38 @@ code is worse than no comment, because it is believed.
 
 ## Adding things
 
-The step-by-step checklists for a new source, a new parser, and a new
-`/search` integration live in
-[architecture.md](architecture.md#adding-a-new-source-or-parser), next to the
-package map they refer to. What this file adds are the obligations that come
-with them:
+To add a **source** (metadata only, reusing existing parsers):
+
+1. New package under `pkg/music/sources/<name>/`, implementing `Source`.
+2. Add the name constant to `pkg/music/sources/sources.go`.
+3. Register it in `resolve.New()`, and add it to the auto-detect precedence
+   list in `Resolver.Resolve` — this is deliberately explicit, not automatic.
+4. If it's searchable by bare query, extend the query branch in the
+   resolver.
+5. Add it to `/play`'s `source` choices.
+
+To make a source pickable in `/search`, implement the optional
+`sources.Searcher` and add a case to the command's `pick` and `trackURL`. The
+`SearchResult` id has to be the source's own compact identifier rather than a
+URL — it round-trips through a Discord component id, and those are a frozen
+wire format; see [Frozen identifiers](#frozen-identifiers).
+
+To add a **parser** (a new playback backend), implement `Streamer.Open`
+returning an `opus.Reader`:
+
+1. New package under `pkg/music/parsers/<name>/`. If the source is a native
+   Opus container, use `opus.Demux` on the HTTP body for passthrough;
+   otherwise build ffmpeg with `ffmpeg.NewPCMCommand` and wrap it in
+   `ffmpeg.OpusReader`, which encodes PCM to Opus packets. A parser that
+   supports both link and pipe modes carries a `Mode` field on its streamer.
+2. Add the instance to `stream.registryEntries`
+   (`pkg/music/stream/stream.go`), under its frozen key constant from
+   `pkg/music/sources/parsers.go`.
+3. List it in the owning source's `AvailableParsers()` and in `/play`'s
+   `parser` choices.
+
+The player, queue, recovery, sinks and persistence use the shared interfaces.
+Check the owning command's choices and documentation when adding an entry.
 
 **[enforced: frozen-identifiers]** A new parser key or source name is a frozen
 identifier from the moment it ships, and the check derives the set from the
@@ -353,8 +380,28 @@ written, reviewed, and green — against a mutation of the exact bug it existed
 to catch — because it exercised a neighbouring code path. Only the mutation
 found that.
 
-**[practice]** Before cutting a release, run the manual matrix in
-[architecture.md](architecture.md#testing--verification).
+**[practice]** Before cutting a release, run the manual checks below.
+
+### Manual verification
+
+- Manual smoke checklist, which needs a real guild: a `/play` multi-track
+  batch, checking the status message updates on every auto-advance; `/play`
+  while already playing, which should give "Track(s) Added"; `/next`;
+  `/stop` mid-track, which should return promptly; a natural queue end,
+  which should give a single voice disconnect and "Playback Finished"; and
+  one `/play` per parser override. Also check:
+  - a `/search` pick, which should post a public Now Playing that everyone in
+    the channel sees and that later tracks edit, not the ephemeral chooser;
+  - `/next` while a status message is live, which should mark the old one
+    "⏭ Skipped" and post a new one, leaving the old one off the new track;
+  - a second listener joining the voice channel mid-track, who should hear
+    it — the DAVE session has to take in the new member;
+  - an error after a public defer (`/play` from outside a voice channel, say),
+    which only the caller should see;
+  - a button on a `/search` chooser after `/settings` has disabled the music
+    group, which should be refused.
+- `cmd/cli` exercises everything but Discord: `go run ./cmd/cli`, then
+  `play <url>`, `search <query>`, `next`, `queue`, `history`, `stop`.
 
 ## Formatting & CI
 
@@ -427,3 +474,25 @@ catches a forgotten flag, because the tag is created successfully either way
 and nothing complains until the release page is already public. The tag's
 subject line is not part of the release body either, so nothing load-bearing
 goes there.
+
+## Documentation
+
+Each document owns a reader's task: the README introduces and starts the bot;
+[running.md](running.md) owns setup and configuration;
+[architecture.md](architecture.md) explains components and flows; this file
+owns contributor workflows. [ownership.md](ownership.md) is the specialist
+reference for lifecycle contracts. Docker and library setup stay beside their
+artifacts and are linked from the README. Historical evidence belongs in
+[internal/implementation-notes.md](internal/implementation-notes.md).
+
+**[practice]** Give each fact one canonical home and link to it elsewhere.
+Keep public guides reachable from the README. Check claims against source,
+including defaults, supported flags and the actual scope of a test. Preserve
+configuration-table and convention-tag contracts when editing documentation.
+Run the relevant existing checks; their existence does not verify every prose
+claim or demonstrate a successful live Discord session.
+
+The reusable [documentation pattern](../.agents/skills/docs-pattern/SKILL.md)
+is versioned in this repository. Apply it when restructuring docs or adding a
+new guide; adapt specialist documents to the project rather than copying a
+fixed file list.

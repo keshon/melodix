@@ -4,24 +4,23 @@
 
 # Melodix
 
-A self-hosted Discord music bot written in Go, built around one stubborn idea:
-playback should survive — flaky streams, dead voice connections, gateway
-reconnects, all of it. It streams YouTube, SoundCloud and internet radio, and
-for YouTube it hands Discord the original Opus audio without re-encoding it.
+A self-hosted Discord music bot written in Go, built to keep playing through
+flaky streams, dead voice connections and gateway reconnects. It streams
+YouTube, SoundCloud and internet radio, and forwards compatible YouTube Opus
+audio to Discord without re-encoding it.
 
-Public music bots tend to disappear eventually, usually with a
-cease-and-desist attached. Melodix skips that risk: it's a small binary you
-run yourself, with your own token, on your own machine. Nobody can turn it
-off for you.
+Public music bots can disappear or stop supporting a source. Melodix is a
+small binary you run yourself, with your own Discord token, on your own
+machine. You control when it runs and when it gets updated.
 
 ## What it does
 
 - Plays YouTube, SoundCloud and internet radio, across as many servers as you
   put it in — one binary, one machine.
-- Never re-encodes the YouTube path. YouTube serves Opus, Discord wants Opus,
-  so the packets go through as they are — less CPU, no second-generation
-  quality loss, and no ffmpeg to install. SoundCloud and radio aren't served
-  in a forwardable format, so those take the ffmpeg route.
+- Forwards compatible YouTube Opus audio without re-encoding. YouTube serves
+  Opus, Discord wants Opus, so those packets go through as they are — less CPU,
+  no second-generation quality loss, and no ffmpeg needed for that path.
+  SoundCloud, radio and transcoding fallbacks take the ffmpeg route.
 - Falls through when an extractor breaks, and they do break. Every track has
   several behind it — native, kkdai, yt-dlp — and a stream that dies mid-play
   reopens where it stopped rather than starting the song again.
@@ -47,9 +46,8 @@ Click any of them to play full size.
 
 ## What it doesn't do
 
-A niche bot, and the niche is worth naming: music on servers you run yourself,
-for people you know. Several things people reasonably expect are missing
-because of that, and it's better to find out here than after installing.
+Melodix is built for music on servers you run yourself, for people you know.
+These are its current limits:
 
 - **No volume control or audio filters.** Both mean decoding and re-encoding
   every packet, which is the one thing the audio path is built to avoid.
@@ -59,14 +57,14 @@ because of that, and it's better to find out here than after installing.
 - **No accounts, premium tier or telemetry.** Your token, your machine,
   nothing phoning home.
 - **No Spotify, Apple Music or Tidal.** Their audio is DRM-protected. Quietly
-  playing whichever YouTube video matches the title is a different product,
-  and a worse one.
+  substituting a YouTube search result is not supported either.
 - **No loop, shuffle or seek** — yet. Nothing in the way; they just aren't
   built.
 - **No horizontal scaling.** One process is one failure domain, sized for
-  servers you know rather than for hosting hundreds. A supervisor brings it
-  back in seconds, but a crash still costs the queue.
-- **Doesn't squat in the channel.** When the queue runs out it leaves.
+  servers you know rather than for hosting hundreds. A full process restart
+  loses the in-memory queue; use a service supervisor if you need automatic
+  process recovery.
+- **Leaves the voice channel when the queue runs out.**
 
 ## Get it running
 
@@ -76,27 +74,35 @@ and use slash commands in `#music-spam`.
 
 To run your own, take a binary from the
 [releases page](https://github.com/keshon/melodix/releases), put your token in
-`.env`, and start it. Nothing to compile, no runtime to install.
+`.env`, keep the supplied `assets/` directory beside the binary, and start it
+from that directory. Nothing to compile, no Go runtime to install. Enable
+`INIT_SLASH_COMMANDS=true` for the first start to register commands.
 
 From source instead, with Go 1.26 or newer:
 
 ```bash
 # Discord bot — token from the Discord Developer Portal
 go build -o melodix-discord ./cmd/discord
-DISCORD_TOKEN=your-token ./melodix-discord
+DISCORD_TOKEN=your-token INIT_SLASH_COMMANDS=true ./melodix-discord
 
 # ...or the terminal player, no Discord account required
 go build -o melodix-cli ./cmd/cli
 ./melodix-cli
 ```
 
-FFmpeg is only needed for SoundCloud and internet radio. yt-dlp is a
-last-resort fallback, optional except for YouTube live broadcasts, and it wants
+FFmpeg is needed for SoundCloud, internet radio and transcoding fallbacks.
+yt-dlp is a last-resort fallback, optional except for YouTube live broadcasts,
+and it wants
 a JavaScript runtime on `PATH` to be useful. The full setup guide — creating
 the bot, invite link, every config knob, Docker — is in
 [docs/running.md](docs/running.md).
 
 ## Commands
+
+Use `/help` in Discord or `help` in the terminal for the current command list.
+
+<details>
+<summary>Command reference and examples</summary>
 
 ### Discord
 
@@ -175,6 +181,8 @@ is running on the same data directory.
 
 <!-- /generated -->
 
+</details>
+
 ## Under the hood
 
 The playback engine ([pkg/music](pkg/music)) is a standalone Go library with
@@ -186,6 +194,18 @@ walks through the whole thing.
 House rules — naming, concurrency contracts, how to add a source or parser —
 are in [docs/conventions.md](docs/conventions.md), where every rule carries the
 check that enforces it or says plainly that nothing does.
+
+## Documentation
+
+| Guide | Contents |
+|---|---|
+| [Running](docs/running.md) | Setup, configuration, first-run checks and persistent data |
+| [Docker](docker/README.md) | Container build, environment forwarding and mounted data |
+| [Architecture](docs/architecture.md) | Components, playback pipeline, recovery and state |
+| [Conventions](docs/conventions.md) | Development, extension checklists and verification |
+| [Ownership](docs/ownership.md) | Lifecycle and concurrency contracts with enforcement limits |
+| [Music library](pkg/music/README.md) | Using the playback engine from another Go program |
+| [Brand](docs/brand.md) | Logo and asset sources |
 
 ## License
 

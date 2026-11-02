@@ -7,8 +7,16 @@ guide covers both.
 
 ## Requirements
 
-- FFmpeg in `PATH` (optional if YouTube only)
-- yt-dlp (recommended, not required)
+- A release binary for your OS/architecture, or Go 1.26+ to build from source.
+- A Discord token for the bot; the terminal player does not require one.
+- FFmpeg in `PATH` for SoundCloud, radio and transcoding fallback parsers.
+  Compatible YouTube Opus paths can run without it.
+- yt-dlp and a JavaScript runtime for YouTube live broadcasts and the yt-dlp
+  fallback. The Docker image includes these dependencies.
+
+Release archives include an `assets/` directory. Keep it beside the binary and
+start from that directory so `/about` can load its images. Source commands
+below run from the repository root.
 
 ### yt-dlp and JavaScript
 
@@ -86,14 +94,20 @@ https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot&per
 
 ### Step 3: Configure
 
+For the first start, set `INIT_SLASH_COMMANDS=true` so commands are registered
+for the bot's guilds. Enable it again when a release changes command definitions.
+The default is `false`.
+
 Create a `.env` file (or just export the variables directly):
 
 ```env
 DISCORD_TOKEN=your-token
+INIT_SLASH_COMMANDS=true
 ```
 
-That's the only one that's required. Everything else below has a sane
-default and can be left alone until you actually need it:
+`DISCORD_TOKEN` is required for the bot. Other settings have the defaults below.
+
+#### Configuration
 
 | Variable                  | Description                                                | Default                 |
 | ------------------------- | ---------------------------------------------------------- | ------------------------ |
@@ -147,11 +161,38 @@ Once it's running:
 * `next`
 * `stop`
 * `queue`
-* `status`
 * `quit`
 
 ---
 
 ## Docker
 
-Covered separately in `docker/README.md`.
+See the [Docker deployment guide](../docker/README.md). It owns container build
+commands, environment forwarding and volume paths.
+
+## Verify the first start
+
+Invite the bot to a test server, grant the permissions in the invitation, then
+start it with command registration enabled. Join a voice channel and run
+`/play` with a YouTube link. Confirm that audio plays, `/queue` responds and
+`/stop` ends playback. Use `/help` for the command list.
+
+For the terminal player, run `help`, `play <link>`, `queue` and `stop`.
+`quit` exits. Its commands are listed in the [README](../README.md#commands).
+
+## Persistent data and restart behavior
+
+`STORAGE_PATH` holds the datastore directory, including its lock, write-ahead
+log and snapshots. One process owns it at a time. Stop the owning process
+before copying the whole directory for backup or restoring it. A restore
+replaces history/settings with the saved state; start the matching release
+and verify playback before returning it to normal use.
+
+The optional track cache lives at `CACHE_DIR`. `CACHE_PERSISTENT=false` clears
+it on startup. The cache is separate from playback history. In Docker, keep
+both paths under the mounted data directory described in the Docker guide.
+
+Discord session restarts preserve the in-memory queue; a full process restart
+loses it. When the bot owns the storage lock, the terminal player runs without
+persistent history and uses an in-memory cache index. Stop with Ctrl+C and
+allow the process to finish before starting another instance.

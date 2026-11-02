@@ -264,10 +264,12 @@ packages also have opt-in live tests
 (`MELODIX_LIVE_TESTS=1 go test -run Live -v ./...`) that act as canaries for
 endpoint drift.
 
-### Track cache & anti-skip buffer (optional, opt-in)
+### Track cache & anti-skip buffer
 
 Two independent layers wrap the parser stream, and *where* each sits is the
-architectural point. Both are off by default; `docs/running.md` has the knobs.
+architectural point. The cache is off by default; read-ahead defaults to 30
+seconds. See the [configuration reference](running.md#configuration) for both
+settings.
 
 - **Track cache** (`CACHE_ENABLED`) sits **inside** `RecoveryStream`, above
   the recovery logic, so one blob spans parser switches and transport reopens
@@ -517,36 +519,8 @@ Only tracks that actually start playing get recorded, through the
 
 ## Adding a new source or parser
 
-To add a **source** (metadata only, reusing existing parsers):
-1. New package under `pkg/music/sources/<name>/`, implementing `Source`.
-2. Add the name constant to `pkg/music/sources/sources.go`.
-3. Register it in `resolve.New()`, and add it to the auto-detect precedence
-   list in `Resolver.Resolve` — this is deliberately explicit, not automatic.
-4. If it's searchable by bare query, extend the query branch in the
-   resolver.
-5. Add it to `/play`'s `source` choices.
-
-To make a source pickable in `/search`, implement the optional
-`sources.Searcher` and add a case to the command's `pick` and `trackURL`. The
-`SearchResult` id has to be the source's own compact identifier rather than a
-URL — it round-trips through a Discord component id, and those are a frozen
-wire format; `docs/conventions.md` has the rule and the reason.
-
-To add a **parser** (a new playback backend), implement `Streamer.Open`
-returning an `opus.Reader`:
-1. New package under `pkg/music/parsers/<name>/`. If the source is a native
-   Opus container, use `opus.Demux` on the HTTP body for passthrough;
-   otherwise build ffmpeg with `ffmpeg.NewPCMCommand` and wrap it in
-   `ffmpeg.OpusReader`, which encodes PCM to Opus packets. A parser that
-   supports both link and pipe modes carries a `Mode` field on its streamer.
-2. Add the instance to `stream.registryEntries`
-   (`pkg/music/stream/stream.go`), under its frozen key constant from
-   `pkg/music/sources/parsers.go`.
-3. List it in the owning source's `AvailableParsers()` and in `/play`'s
-   `parser` choices.
-
-That's it — the player, queue, recovery, sinks, and persistence are all
-source- and parser-agnostic, so nothing else needs touching.
+See the [extension checklists](conventions.md#adding-things). Interface shapes
+are described under [The three extension layers](#the-three-extension-layers).
 
 ---
 
@@ -569,89 +543,27 @@ Real tradeoffs, written down so they are not rediscovered as bugs.
 - **One process per storage directory.** The CLI runs without history and
   with an in-memory cache index when the bot already holds the lock, rather
   than refusing to start.
-- **The convention checks ratchet per file, not per line** — see
+- **Convention checks reject violations across the source tree** — see
   [conventions.md](conventions.md#formatting--ci).
 
 ---
 
 ## Tried and rejected
 
-A codebase shows what is, never what was tried and undone. Each of these cost
-a debugging session at least once, and two of them were still described as
-current behaviour in this document long after they had been reverted — which
-is the failure this section exists to prevent.
-
-- **Gating live broadcasts on `hlsManifestUrl`.** Exactly backwards:
-  Apple-platform clients are served an HLS manifest for ordinary VOD as well,
-  so the gate rejected every playable video for a whole release and caught no
-  live one. Live is refused upstream instead, by playability status.
-- **The `ANDROID_VR` InnerTube client** — kkdai's default. Its URLs answer
-  403 to any open-ended request, so every YouTube parser died on its first
-  read and the chain walked down to yt-dlp. Neither the User-Agent nor an `n`
-  parameter was involved; both were measured against the live CDN and ruled
-  out.
-- **Putting the anti-skip buffer below recovery.** A reopen tore the buffer
-  down along with the stream it wrapped, so the consumer blocked for the
-  whole reconnect and the gap was fully audible — the opposite of what the
-  buffer exists for.
-- **Answering YouTube stutter with a deeper buffer.** googlevideo paces an
-  open-ended response at roughly 1.9x the format's own bitrate, so a lead
-  accrues only as fast as bytes arrive and no depth outlasts a link running
-  below real time. Fixed by changing the fetch shape instead.
-- **Treating a mid-track connection reset as a clean end.** With ffmpeg in
-  front, a dropped connection arrives as a closed pipe and reads as EOF;
-  passthrough removed that layer and the reset arrives raw, so the track died
-  instead of resuming.
+Historical measurements and retired approaches are preserved in
+[implementation notes](internal/implementation-notes.md).
 
 ---
 
 ## Ownership
 
-Every finding in the September 2026 audit of the voice and playback layers was
-the same bug wearing different clothes: something wrote state it did not own,
-and nothing noticed. Go does not catch that class, so
-[ownership.md](ownership.md) states the rules and — the part that matters
-— names what enforces each one, from "the compiler refuses it" down to "a
-comment says so". It also lists what is still unenforced, which is the half of
-such a document that is usually missing.
+[ownership.md](ownership.md) defines lifecycle and concurrency contracts, names
+their enforcement and records coverage limits. Contributor practices are in
+[conventions.md](conventions.md).
 
 ---
 
 ## Testing & verification
 
-- `go test -race ./...` — the race detector isn't optional here. The player
-  tests (`pkg/music/player/player_test.go`) include a concurrent hammer
-  specifically to catch locking regressions. Fakes swap the registry via
-  `stream.SetRegistry` (same pattern as `pkg/music/stream/recovery_test.go`)
-  and stub the sink provider.
-- `internal/discord/voice/voicesink/` carries the parts of the send contract a
-  library swap can silently delete, because nothing about them is visible to
-  a compiler. `dave_hold_test.go`: while the guild's DAVE session reports it
-  has no live epoch, the frame provider withholds frames rather than emitting
-  ones nothing can protect, and without consuming the packets it is holding —
-  and a hold that never resolves ends the track rather than leaving a silent
-  "Now Playing" forever. `transport_test.go` runs disgo's real audio sender
-  against a stub socket and asserts that a closed socket, or a connection the
-  manager no longer knows about, ends the track as `ErrVoiceTransport` — the
-  wedge, where the track never ended and the queue never advanced.
-  `provider_test.go` swaps the session underneath a live provider and asserts
-  the next join uses the new one.
-- Manual smoke checklist, which needs a real guild: a `/play` multi-track
-  batch, checking the status message updates on every auto-advance; `/play`
-  while already playing, which should give "Track(s) Added"; `/next`;
-  `/stop` mid-track, which should return promptly; a natural queue end,
-  which should give a single voice disconnect and "Playback Finished"; and
-  one `/play` per parser override. Then the cases a behavioural spec of the
-  Discord layer turned up, each of which once failed:
-  - a `/search` pick, which should post a public Now Playing that everyone in
-    the channel sees and that later tracks edit, not the ephemeral chooser;
-  - `/next` while a status message is live, which should mark the old one
-    "⏭ Skipped" and post a new one, leaving the old one off the new track;
-  - a second listener joining the voice channel mid-track, who should hear
-    it — the DAVE session has to take in the new member;
-  - an error after a public defer (`/play` from outside a voice channel, say),
-    which only the caller should see;
-  - a button on a `/search` chooser after `/settings` has disabled the music
-    group, which should be refused.
-- `cmd/cli` exercises everything but Discord: `go run ./cmd/cli`, then
-  `play <url>`, `search <query>`, `next`, `queue`, `history`, `stop`.
+Development commands and manual checks are in
+[conventions.md](conventions.md#testing--verification).
