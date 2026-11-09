@@ -82,7 +82,7 @@
     "url": "https://melodix.keshon.ru/",
     "downloadUrl": "https://github.com/keshon/melodix/releases/latest",
     "installUrl": "https://github.com/keshon/melodix/releases/latest",
-    "softwareHelp": "https://github.com/keshon/melodix/blob/main/docs/running.md",
+    "softwareHelp": "https://melodix.keshon.ru/docs/running.html",
     "codeRepository": "https://github.com/keshon/melodix",
     "programmingLanguage": "Go",
     "isAccessibleForFree": true,
@@ -145,7 +145,7 @@
         "name": "Where does Melodix store data, and how do I back it up?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and is safe to delete at any time."
+          "text": "In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and can be cleared while playback is stopped."
         }
       }
     ]
@@ -1789,7 +1789,9 @@
         </ol>
         <p class="dl-note">Discord is covered the same way: a voice reconnect
           or a gateway drop rejoins and resumes without losing the queue, and
-          the buffer keeps playing while it happens. Queues survive restarts.</p>
+          the buffered lead can cover brief interruptions. Queues survive Discord session
+          reconnects; restarting the Melodix process clears the queue. History and server
+          settings remain on disk.</p>
       </div>
     </section>
 
@@ -1803,12 +1805,12 @@
           have added listener caps, queue limits and premium tiers since.
           Melodix runs under <strong>your</strong> Discord application, on a
           machine you already have, with no account to sign up for and nothing
-          phoning home. Nobody can revoke it, meter it, or decide that skipping
-          tracks is now a paid feature.</p>
+          phoning home. You control its hosting and updates. Discord and the media
+          services can still change access or behavior.</p>
         <p class="prose">The trade is real: you are the one keeping it online.
           That means a machine that stays on, a token you keep secret, and an
           occasional update when YouTube changes something. In exchange the bot
-          is yours, and it does not disappear.</p>
+          is yours, you control when it runs and which release it uses.</p>
       </div>
     </section>
 
@@ -1828,14 +1830,14 @@
             <h3>From source</h3>
             <pre><span class="c"># Go 1.26 or newer</span>
   <span class="a">$</span> go build -o melodix-discord ./cmd/discord
-  <span class="a">$</span> DISCORD_TOKEN=your-token ./melodix-discord</pre>
+  <span class="a">$</span> DISCORD_TOKEN=your-token INIT_SLASH_COMMANDS=true ./melodix-discord</pre>
           </div>
         </div>
         <p class="dl-note">The same bundle carries <span class="mono">melodix-cli</span>, a
           terminal player for your own speakers that needs no Discord account.
           Full setup — bot creation, invite link, every config knob, Docker —
           lives in
-          <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">docs/running.md</a>.
+          <a href="docs/running.html">Running Melodix</a>.
         </p>
 
         <h3 class="sub" id="requirements">What you need</h3>
@@ -1862,9 +1864,9 @@
             <dt>on a thin connection</dt>
             <dd><span class="mono">BUFFER_AHEAD_MS</span> sets how long an
               interruption can last before anyone hears it.
-              <span class="mono">MAX_AUDIO_BITRATE</span> roughly halves
-              bandwidth, since Discord carries 64 kbps anyway unless the server
-              is boosted.</dd>
+              <span class="mono">MAX_AUDIO_BITRATE</span> can cap the native YouTube
+              audio format. Encrypted Discord voice relays that format without
+              transcoding, so the cap also affects listeners' bandwidth and quality.</dd>
           </div>
         </dl>
       </div>
@@ -1896,7 +1898,7 @@
               from</span></div>
         </div>
         <p class="dl-note">Every command with its options is in the
-          <a href="https://github.com/keshon/melodix#commands">reference on GitHub</a>.
+          <a href="https://github.com/keshon/melodix#commands">generated reference on GitHub</a>.
         </p>
       </div>
     </section>
@@ -1954,7 +1956,7 @@
           </details>
           <details>
             <summary>Where does Melodix store data, and how do I back it up?</summary>
-            <p class="prose">In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and is safe to delete at any time.</p>
+            <p class="prose">In one directory, set by STORAGE_PATH and defaulting to ./data/store. It holds guild settings, the command log and playback history in an embedded write-ahead-logged datastore. Stop the bot and copy the folder; that is the whole backup. The track cache is separate, set by CACHE_DIR, and can be cleared while playback is stopped.</p>
           </details>
         </div>
         <p class="dl-note">Something not covered here? Ask in the
@@ -1969,11 +1971,11 @@
       <div class="cols">
         <span>MIT · one maintainer</span>
         <span>
-          <a href="https://github.com/keshon/melodix/blob/main/docs/architecture.md">Architecture</a>
+          <a href="docs/architecture.html">Architecture</a>
           ·
-          <a href="https://github.com/keshon/melodix/blob/main/docs/conventions.md">Conventions</a>
+          <a href="docs/conventions.html">Conventions</a>
           ·
-          <a href="https://github.com/keshon/melodix/blob/main/docs/running.md">How-To</a>
+          <a href="docs/">Documentation</a>
           ·
           <a href="https://github.com/keshon/melodix"><svg class="ic" aria-hidden="true" focusable="false">
               <use href="#i-github" />

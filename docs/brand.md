@@ -1,7 +1,7 @@
 # Brand
 
-There is one mark and two colours. That is the whole system, and it should
-stay that small — this is a music bot, not a company.
+The mark uses a foreground colour and an accent for the rim. Keep its small-size
+constraints when changing or exporting assets.
 
 ## The mark
 
@@ -11,10 +11,10 @@ always used. The avatar is a rendered image and cannot survive being shrunk
 to a tab icon; the mark is what is left when you keep only the structure that
 still reads at 20 pixels.
 
-`assets/brand/logo.svg` is the source of truth. It carries no colours of its
-own: inlined in a page it inherits `currentColor` and `--accent`, so it
-follows light and dark mode with no second file. Standalone it falls back to
-the Melodix palette.
+`assets/brand/logo.svg` is the source of truth. It uses `currentColor` for the
+driver and `--accent` for the rim, with a built-in fallback palette. A page can
+override those values when inlining the mark. The source includes light and
+dark foreground treatments.
 
 `assets/brand/logo-specimen.svg` shows it at real sizes against both
 backgrounds. Look at that before changing any number in it — the strokes are
@@ -29,7 +29,8 @@ pixels and up that reads as a mistake.
 
 ## Colours
 
-Two tones, both already defined as CSS custom properties in `index.html`:
+The standalone mark uses these fallback colours. They are distinct from the
+landing page palette; an inline mark can inherit the page's `color` and `--accent`.
 
 | role   | light     | dark      | token      |
 | ------ | --------- | --------- | ---------- |
@@ -37,7 +38,11 @@ Two tones, both already defined as CSS custom properties in `index.html`:
 | rim    | `#b01e66` | `#e13a86` | `--accent` |
 | ground | `#fbf6f9` | `#171118` | `--ink`    |
 
-The accent carries the rim and nothing else. If a third colour ever seems
+The mark uses its accent for the rim. The landing page defines its own palette
+in `index.html`: dark `--ink: #0b0a0c`, `--text: #f4eff2`, `--accent: #ff2d7e`;
+light `--ink: #f4f1ea`, `--text: #16120f`, `--accent: #c00040`.
+
+The mark's accent carries the rim and nothing else. If a third colour ever seems
 necessary, the answer is almost always that the thing being coloured should
 not be in the mark.
 

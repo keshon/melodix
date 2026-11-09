@@ -1,0 +1,12 @@
+[
+  {"source":"docs/README.md","route":"/docs/","title":"Documentation","section":"Use Melodix","description":"Choose setup, playback, troubleshooting or contributor instructions for Melodix."},
+  {"source":"docs/running.md","route":"/docs/running.html","title":"Running Melodix","section":"Use Melodix","description":"Install Melodix on Windows, Linux or macOS, configure a Discord bot or terminal player, and verify your first track. Includes configuration and backup procedures."},
+  {"source":"docs/playback.md","route":"/docs/playback.html","title":"Playback","section":"Use Melodix","description":"Search for tracks, play YouTube playlists, manage a queue and replay history in Discord or the Melodix terminal player."},
+  {"source":"docs/troubleshooting.md","route":"/docs/troubleshooting.html","title":"Troubleshooting","section":"Use Melodix","description":"Diagnose missing commands, silent audio, interrupted streams, locked storage and container settings in Melodix."},
+  {"source":"docker/README.md","route":"/docker/","title":"Docker deployment","section":"Use Melodix","description":"Build and operate the Melodix Docker container with persistent data. Understand environment overrides, update downtime and recovery requirements."},
+  {"source":"docs/conventions.md","route":"/docs/conventions.html","title":"Conventions","section":"Develop Melodix","description":"Run Melodix development checks, add sources or parsers, preserve checked conventions and prepare release notes."},
+  {"source":"docs/architecture.md","route":"/docs/architecture.html","title":"Architecture","section":"Develop Melodix","description":"Follow Melodix components, parser fallback, playback, Discord voice recovery, command dispatch and persistence."},
+  {"source":"docs/ownership.md","route":"/docs/ownership.html","title":"Ownership","section":"Develop Melodix","description":"Look up Melodix lifecycle and concurrency contracts, their enforcement tests and known coverage limits."},
+  {"source":"pkg/music/README.md","route":"/pkg/music/","title":"Go music library","section":"Develop Melodix","description":"Embed the Discord-independent Melodix playback engine in Go. Start with a runnable example and the sink, status and lifecycle contracts."},
+  {"source":"docs/brand.md","route":"/docs/brand.html","title":"Brand assets","section":"Develop Melodix","description":"Find Melodix mark and favicon sources, palette boundaries and constraints for small icon sizes."}
+]

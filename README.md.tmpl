@@ -68,6 +68,9 @@ These are its current limits:
 
 ## Get it running
 
+[Start with the setup guide](docs/running.md) for complete Windows, Linux and
+macOS release steps, bot creation and first-playback checks.
+
 Hear it before you install anything: the bot lives in the
 [Ctrl+Z](https://discord.gg/uDnTenPxAY) Discord server — join a voice channel
 and use slash commands in `#music-spam`.
@@ -92,8 +95,7 @@ go build -o melodix-cli ./cmd/cli
 
 FFmpeg is needed for SoundCloud, internet radio and transcoding fallbacks.
 yt-dlp is a last-resort fallback, optional except for YouTube live broadcasts,
-and it wants
-a JavaScript runtime on `PATH` to be useful. The full setup guide — creating
+and it needs a JavaScript runtime on `PATH` for those YouTube calls. The full setup guide — creating
 the bot, invite link, every config knob, Docker — is in
 [docs/running.md](docs/running.md).
 
@@ -112,23 +114,8 @@ Use `/help` in Discord or `help` in the terminal for the current command list.
 
 <!-- /generated -->
 
-`/play` takes more than links:
-
-```text
-/play never gonna give you up                       search query (YouTube)
-/play https://www.youtube.com/watch?v=dQw4w9WgXcQ   direct link (YouTube / SoundCloud)
-/play https://www.youtube.com/playlist?list=PL...   whole YouTube playlist
-/play https://www.youtube.com/watch?v=...&list=RD   YouTube mix / radio
-/play http://stream-uk1.radioparadise.com/aac-320   internet radio stream
-/play 42                                            replay entry 42 from /history
-/play 45 16 15                                      replay several, in that order
-```
-
-Any link carrying a `list=` queues the whole list, up to 100 tracks, and
-`/queue` shows what is waiting. A link that names a video *and* a list
-(`watch?v=...&list=...`) starts at that video and continues through the rest,
-the same as opening it on YouTube. To play a single track, link it without the
-`list=` part.
+`/play` accepts links, search queries and playback-history IDs. For playlists,
+search results and queue examples, use the [playback guide](docs/playback.md).
 
 ### Terminal
 
@@ -160,6 +147,9 @@ check that enforces it or says plainly that nothing does.
 
 | Guide | Contents |
 |---|---|
+| [Documentation index](docs/README.md) | Choose a task or contributor reference |
+| [Playback](docs/playback.md) | Search, playlists, queue and history |
+| [Troubleshooting](docs/troubleshooting.md) | Diagnose connection, audio and storage failures |
 | [Running](docs/running.md) | Setup, configuration, first-run checks and persistent data |
 | [Docker](docker/README.md) | Container build, environment forwarding and mounted data |
 | [Architecture](docs/architecture.md) | Components, playback pipeline, recovery and state |

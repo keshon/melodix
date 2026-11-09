@@ -32,3 +32,9 @@ is the failure this section exists to prevent.
   front, a dropped connection arrives as a closed pipe and reads as EOF;
   passthrough removed that layer and the reset arrives raw, so the track died
   instead of resuming.
+- **Gateway liveness checks behind the session lock.** The previous vendored
+  discordgo fork held its write lock across gateway reads without a deadline.
+  A stuck read also blocked both watchdogs. The architecture account at
+  `adabca96fa98f4d4240f222c47631fd568155d70` records a 22-hour silent gateway
+  outage in server-domme under those conditions. This is retained incident
+  evidence, not a fresh measurement of Melodix or its current disgo backend.

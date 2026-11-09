@@ -17,3 +17,10 @@ melodix-discord
 
 # Served by GitHub Pages from the repo root; *.txt above would hide it.
 !robots.txt
+!llms.txt
+!_data/docs.json
+/_site/
+/.jekyll-cache/
+/.jekyll-metadata
+/.bundle/
+/vendor/

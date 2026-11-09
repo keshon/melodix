@@ -1,0 +1,15 @@
+---
+layout: null
+---
+# Melodix
+
+> {{ site.description }}
+
+These pages describe the development source. Release archives include their own
+documentation. Follow individual links as needed.
+{% assign sections = site.data.docs | map: "section" | uniq %}
+{% for section in sections %}
+## {{ section }}
+
+{% for entry in site.data.docs %}{% if entry.section == section %}- [{{ entry.title }}]({{ site.url }}/{{ entry.source }}): {{ entry.description }}
+{% endif %}{% endfor %}{% endfor %}

@@ -1,8 +1,13 @@
 # Architecture
 
-> House rules — naming, concurrency contracts, how to add a source or parser —
-> live in [conventions.md](conventions.md). This document covers how the
-> system works.
+Use this guide to follow components and failure paths. For a code change, start
+with [Conventions](conventions.md); lifecycle contracts live in [Ownership](ownership.md).
+
+- [Package map](#package-map) and [extension interfaces](#the-three-extension-layers)
+- [Resolution and parser fallback](#resolution)
+- [Playback pipeline](#playback-pipeline) and [status delivery](#status-delivery-single-consumer-contract)
+- [Failure handling](#failure-handling)
+- [Persistence](#state--persistence) and [known limitations](#known-limitations)
 
 Melodix is a Discord music bot built on top of a playback engine that doesn't
 know Discord exists. Two frontends share one application layer,
@@ -47,11 +52,8 @@ flowchart TB
   SinkIface -->|decode → oto| Speaker["Local speaker"]
 ```
 
----
 
 ## What this optimizes for
-
-Stated once, because most of what follows is downstream of it:
 
 - **Playback that survives a bad link.** The bot is expected to run from a
   throttled or lossy connection, so recovery, read-ahead and the cost of
@@ -68,11 +70,10 @@ Stated once, because most of what follows is downstream of it:
 Non-goals: audio effects, mixing across guilds, a web UI, and anything that
 would require signature deciphering.
 
----
 
 ## Glossary
 
-These words carry narrow meanings here, and guessing at them goes wrong.
+These terms name separate stages of the playback system.
 
 | Term | Means |
 |---|---|
@@ -86,7 +87,6 @@ These words carry narrow meanings here, and guessing at them goes wrong.
 | **transport recovery** | `runPlayback` reacting to a dead Discord voice connection. A separate budget. |
 | **instant fail** | A parser that opened but errored on its first read; the chain moves on rather than retrying. |
 
----
 
 ## Package map
 
@@ -138,9 +138,9 @@ embedded web client on every invocation. Where none is found it passes no
 flags at all, because asking for that client without a runtime fails outright
 rather than degrading. Discord is `disgoorg/disgo`, and end-to-end voice
 encryption is `thomas-vilte/dave-go` — a pure-Go MLS implementation, which is
-what lets the release workflow cross-compile six targets with `CGO_ENABLED=0`.
+used by the six release targets. The workflows enable CGO for Linux builds
+and disable it for Windows and macOS; the Linux speaker dependency needs ALSA.
 
----
 
 ## The three extension layers
 
@@ -178,7 +178,6 @@ and an ordered parser preference list — nothing more. Actual stream URLs are
 resolved lazily, by the parser, at open time, so a queued track never holds
 an expiring CDN link.
 
----
 
 ## Resolution
 
@@ -291,7 +290,6 @@ Whether the buffer helps at all depends on the source outrunning playback,
 which is not a given — see `parsers/ytnative/chunked.go` for what that took
 on YouTube.
 
----
 
 ## Playback pipeline
 
@@ -343,13 +341,11 @@ Key mechanics:
   channels, track and flags, and its goroutines are handed it. A stale run's
   goroutine can only end its own run, never a newer one; `p.run == r` answers
   whether it is still in charge (see [ownership.md](ownership.md) rule 5).
-- **Discord sink** — reads 20ms Opus packets and forwards them to `OpusSend`
-  with no encoding step: a 10-packet warm-up primes the pipeline, then any
-  leading near-silent packets (tiny under VBR) get skipped as dead air.
-  Every `OpusSend` call is a `select` against the stop channel plus a send
-  timeout, so `Stop()` always unblocks the streaming goroutine, and a
-  stalled voice connection surfaces as `ErrVoiceTransport` rather than
-  hanging silently.
+- **Discord sink** installs an Opus frame provider on the disgo connection.
+  Its sender pulls packets through `ProvideOpusFrame`. The provider holds frames
+  while DAVE has no live epoch; transport liveness and stalled pulls have bounded
+  checks, so a dead sender can surface as `ErrVoiceTransport`. Stop signals end
+  the provider and release the waiting playback run. See ownership rules 8 and 9.
 - **Pause/Resume** — not supported, on purpose, since the sink owns the read
   loop. Commands that try get `ErrPauseNotSupported` back.
 
@@ -370,7 +366,6 @@ The guild status UI is a single message per guild
 first time, edited from then on — which incidentally is also why updates
 keep working past the 15-minute interaction-token expiry.
 
----
 
 ## Failure handling
 
@@ -421,13 +416,10 @@ There are three distinct failure classes here, each with its own mechanism:
    connections rather than a connection. Providers resolve both per
    acquisition, so the one memoized per guild is now safe to keep.
 
-   One watchdog, where the vendored discordgo fork needed two. That fork held
-   the session write lock across gateway reads carrying no deadline, so a
-   wedged session parked every reader — which in server-domme once meant 22
-   hours of a dead gateway with nothing in the log, because both watchdogs
-   that existed to report it were queued behind the same mutex. disgo
-   delivers the heartbeat ACK as an event, so it is recorded on arrival and
-   read without contending with anything.
+   disgo delivers heartbeat ACKs as events. The watchdog records them on arrival
+   and reads their timestamps without taking the session's write lock. The
+   [historical notes](internal/implementation-notes.md) retain the previous
+   library's lock-related failure and why independent liveness checks matter.
 
    Teardown is still bounded and abandonable (`closeWithin`), for the reason
    that outlived the fork: it is the last thing `RunSession` does, so a step
@@ -451,7 +443,6 @@ adds the extracting client's User-Agent) and wrap its PCM output in
 `ffmpeg.OpusReader`, which encodes to Opus packets via `opus.Encode`. ffmpeg
 stderr is captured and classified (403/forbidden/conversion failures at Warn).
 
----
 
 ## Discord command layer
 
@@ -489,7 +480,6 @@ against existing per-guild commands by name, type, and fingerprint whenever
 command listings in `README.md` from the bot's and the CLI's catalogs — that's
 a dev step, run from the repo root; neither binary writes files at runtime.
 
----
 
 ## State & persistence
 
@@ -515,18 +505,14 @@ in-memory cache index, rather than refusing to start.
 Only tracks that actually start playing get recorded, through the
 `PlaybackRecorder` hook.
 
----
 
 ## Adding a new source or parser
 
 See the [extension checklists](conventions.md#adding-things). Interface shapes
 are described under [The three extension layers](#the-three-extension-layers).
 
----
 
 ## Known limitations
-
-Real tradeoffs, written down so they are not rediscovered as bugs.
 
 - **YouTube live broadcasts need yt-dlp**, plus a JavaScript runtime — see
   the dependency note under [Package map](#package-map). They are HLS, and no
@@ -546,14 +532,12 @@ Real tradeoffs, written down so they are not rediscovered as bugs.
 - **Convention checks reject violations across the source tree** — see
   [conventions.md](conventions.md#formatting--ci).
 
----
 
 ## Tried and rejected
 
 Historical measurements and retired approaches are preserved in
 [implementation notes](internal/implementation-notes.md).
 
----
 
 ## Ownership
 
@@ -561,7 +545,6 @@ Historical measurements and retired approaches are preserved in
 their enforcement and records coverage limits. Contributor practices are in
 [conventions.md](conventions.md).
 
----
 
 ## Testing & verification
 

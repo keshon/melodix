@@ -1,12 +1,25 @@
 # Conventions
 
-These are the house rules.
+Run checks from the repository root. On Windows, `check.bat` runs formatting,
+vet, lint when installed, and race tests. The equivalent individual commands are
+under [Formatting & CI](#formatting--ci). Live playback needs the separate
+[manual checks](#manual-verification).
+
+For a first change:
+
+1. Read the [architecture](architecture.md) section for the component you will change.
+2. Check its [ownership contract](ownership.md) and the relevant rules below.
+3. Edit canonical files. For the README, edit `README.md.tmpl` and regenerate
+   with `go run ./cmd/readme`; do not edit the generated output.
+4. Run focused tests, then the project checks. Verify an affected playback path
+   in a test server before claiming live behavior works.
+
+[Extension steps](#adding-things), [testing](#testing--verification),
+[release notes](#release-notes) and [documentation](#documentation) are lookup sections.
 
 ## How to read this
 
-Every rule below carries a tier, because a rule you cannot verify is worse
-than no rule: it creates the belief of compliance without the fact, and it
-teaches readers that the rules around it are optional too.
+Rules distinguish automated enforcement from runtime invariants and project practices.
 
 - **[enforced: <name>]** — a check fails, and `<name>` says which one.
 `internal/conventions` is an ordinary Go test, so `go test ./...` and CI run
@@ -23,11 +36,6 @@ at you.
   in someone's memory.
 - **[practice]** — how things are done here. Nothing breaks if you deviate;
   the codebase just gets less coherent. Deliberately few.
-
-A rule earns a place here only if it can claim one of those three. A
-requirement without a tolerance and a test method is a preference, and
-preferences get deleted rather than documented — that filter is what keeps
-this file short enough to be read.
 
 If a rule gets in the way of something that genuinely needs doing, pragmatism
 wins — take the exception and leave a note in the code explaining it.
@@ -477,8 +485,10 @@ goes there.
 
 ## Documentation
 
-Each document owns a reader's task: the README introduces and starts the bot;
+Each document owns a reader's task: the README introduces the bot;
 [running.md](running.md) owns setup and configuration;
+[playback.md](playback.md) owns routine use, and
+[troubleshooting.md](troubleshooting.md) owns symptom-led diagnosis;
 [architecture.md](architecture.md) explains components and flows; this file
 owns contributor workflows. [ownership.md](ownership.md) is the specialist
 reference for lifecycle contracts. Docker and library setup stay beside their
@@ -486,11 +496,15 @@ artifacts and are linked from the README. Historical evidence belongs in
 [internal/implementation-notes.md](internal/implementation-notes.md).
 
 **[practice]** Give each fact one canonical home and link to it elsewhere.
-Keep public guides reachable from the README. Check claims against source,
+Keep public guides reachable from the README and [task index](README.md). Check claims against source,
 including defaults, supported flags and the actual scope of a test. Preserve
 configuration-table and convention-tag contracts when editing documentation.
 Run the relevant existing checks; their existence does not verify every prose
 claim or demonstrate a successful live Discord session.
+
+The [documentation tooling guide](../scripts/README.md) explains site builds,
+publication boundaries and offline bundle selection. Public articles are listed
+in `_data/docs.json`; internal plans and operational skills stay outside the site.
 
 The reusable [documentation pattern](../.agents/skills/docs-pattern/SKILL.md)
 is versioned in this repository. Apply it when restructuring docs or adding a

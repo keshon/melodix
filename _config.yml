@@ -1,0 +1,51 @@
+title: Melodix
+description: A self-hosted Discord music bot and terminal player in Go, for YouTube, SoundCloud and internet radio.
+url: https://melodix.keshon.ru
+baseurl: ""
+markdown: kramdown
+plugins:
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-relative-links
+optional_front_matter:
+  remove_originals: false
+readme_index:
+  remove_originals: false
+exclude:
+  - docs/internal
+  - .agents
+  - README.md.tmpl
+  - tools
+  - scripts
+  - vendor
+  - Gemfile
+  - Gemfile.lock
+  - go.mod
+  - go.sum
+  - cmd
+  - internal
+  - data
+  - logs
+  - docker/src
+  - docker/data
+  - docker/Dockerfile
+  - docker/build-n-deploy.sh
+  - docker/docker-compose.yml
+  - build-n-run.bat
+  - build-n-run.sh
+  - build-readme.bat
+  - check.bat
+  - conventions.bat
+defaults:
+  - scope:
+      path: docs
+    values:
+      layout: docs
+  - scope:
+      path: docker/README.md
+    values:
+      layout: docs
+  - scope:
+      path: pkg/music/README.md
+    values:
+      layout: docs

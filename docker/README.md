@@ -1,56 +1,87 @@
-# Docker Deployment
+# Docker deployment
 
-The deployment uses Docker Compose. The build expects the project source either to be cloned into `./src` by the script or to be present in `./src` when building locally.
+Run commands from this `docker/` directory. The image builds from a source
+checkout in `./src`, includes FFmpeg, Node and yt-dlp, and runs the Discord bot.
+Create and invite the bot as described in [Running Melodix](../docs/running.md#discord-bot).
 
 ## Prerequisites
 
-- Docker and Docker Compose installed
-- Git (if using the script to clone the repo)
-- A Discord bot token from the [Discord Developer Portal](https://discord.com/developers/applications)
-- **External network:** The Compose file uses a `proxy` network. Create it if it does not exist:
+Install Docker with Compose. The build script also needs Git when cloning source.
+This Compose file attaches to an external network named `proxy`; create it once
+if your deployment does not already have it:
 
-  ```bash
-  docker network create proxy
-  ```
+```sh
+docker network create proxy
+```
+
+The network name does not configure an HTTP proxy. See the
+[proxy instructions](../docs/running.md#proxies) if one is needed.
 
 ## Configuration
 
-Copy `.env.example` to `.env` in this directory and set at least:
+Copy `.env.example` to `.env` in this directory. Set `DISCORD_TOKEN` and retain
+`INIT_SLASH_COMMANDS=true` for initial registration. Set `ALIAS` to the container
+and image name. With `GIT=true`, the script clones `GIT_URL` into `./src`;
+with `GIT=false`, supply that directory yourself.
 
-- `DISCORD_TOKEN` — your bot token (required)
-- `ALIAS` — container name and image tag (e.g. `melodix`)
-- `GIT` / `GIT_URL` — set `GIT=true` to clone the repo into `./src`; set `GIT=false` to use an existing `./src` directory
+The shared [configuration reference](../docs/running.md#configuration) owns
+application variables and code defaults. Container-specific values are:
 
-Other variables (e.g. `STORAGE_PATH`, `INIT_SLASH_COMMANDS`, `DISCORD_GUILD_BLACKLIST`, `VOICE_READY_DELAY_MS`, `WS_SILENCE_TIMEOUT`, `DISCORD_UNHEALTHY_MODE`, `DISCORD_UNHEALTHY_GRACE`, `DISCORD_UNHEALTHY_WINDOW`, `PLAYER_TRANSPORT_RECOVERY_MODE`, `PLAYER_TRANSPORT_SOFT_ATTEMPTS`, `CACHE_ENABLED`, `CACHE_DIR`, `CACHE_MAX_BYTES`, `CACHE_PERSISTENT`, `BUFFER_AHEAD_MS`, `MAX_AUDIO_BITRATE`, `COMMAND_PARALLELISM`) are optional and match the main app config.
+- `STORAGE_PATH=/usr/project/data/store` and `CACHE_DIR=/usr/project/data/cache`.
+  Both are under the `./data:/usr/project/data` bind mount. Writes outside that
+  mount do not survive replacing the container.
+- `BUFFER_AHEAD_MS=10000` in the supplied Docker example and Compose fallback.
+  This overrides the application's 30000 ms default.
 
-**Every variable the app reads must be listed in `docker-compose.yml`** — the service passes them through one by one, so a setting present in `.env` but missing from the compose file silently falls back to its built-in default. Keep the two in step when adding config.
-
-Paths like `STORAGE_PATH` and `CACHE_DIR` must live under `/usr/project/data`, which is the mounted volume; anything written elsewhere is lost when the container is recreated.
-
-At startup the bot logs either `track_cache_enabled` (with the directory and caps) or `track_cache_disabled`, which is the quickest way to confirm the setting actually reached the process.
-
-Notes on recovery modes:
-
-- `DISCORD_UNHEALTHY_MODE=restart-session` restarts the Discord gateway session (players/queues stay in-memory); voice sinks are invalidated so playback can re-join quickly.
-- `DISCORD_UNHEALTHY_MODE=restart-voice` only drops voice connections (no gateway restart), so players re-join VC on the next sink acquisition.
-- `PLAYER_TRANSPORT_RECOVERY_MODE=soft` tries stream reopen first (no voice reconnect), then falls back to a voice reconnect if transport keeps failing.
+Compose forwards variables explicitly. A setting in `.env` has no effect if
+`docker-compose.yml` does not forward it. The current `COMMAND_TIMEOUT` entry is
+unused by the application. Recovery settings have the same meaning as in the
+shared reference; a container/process restart clears the pending queue.
 
 ## Deployment
 
-**Option 1 — Build and deploy (recommended)**  
-From this directory (`docker/`), run:
+For a fresh deployment with the directory above prepared:
 
-```bash
+```sh
 ./build-n-deploy.sh
 ```
 
-This loads `.env`, clones the repo into `./src` (or uses existing `./src`), builds the image, and starts the container.
+The script sources `.env`, replaces `./src` with a fresh clone when `GIT=true`,
+stops the Compose stack, removes its old image, builds, starts the new container
+and prunes dangling images. Do not keep unique work in `./src` in Git mode.
+It stops the service before building; a failed build can therefore leave it down.
 
-**Option 2 — Compose only**  
-If the image is already built:
+To start an already built image, or recreate it after environment changes:
 
-```bash
+```sh
 docker compose -f docker-compose.yml up -d
 ```
 
-Data is persisted in `./data` (mounted at `/usr/project/data` in the container).
+## Verify the container
+
+```sh
+docker compose -f docker-compose.yml ps
+docker compose -f docker-compose.yml logs --tail=100 app
+```
+
+Check `track_cache_enabled` or `track_cache_disabled` for the effective cache,
+read-ahead and bitrate settings. Then join a voice channel, play a track and
+check `/queue` and `/stop`. A running container alone does not establish audio
+or command registration. Redact tokens/private URLs before sharing logs.
+
+## Update and recover
+
+Before rebuilding an existing deployment, stop it cleanly and back up the whole
+mounted `./data` directory and edited `.env`. Keep the previous source revision
+or release and a separately tagged copy of its image: the build script removes
+the ordinary image tag before building. Do not rely on that tag as rollback.
+
+For a pinned source build, populate `./src` with the chosen revision and set
+`GIT=false`; Git mode clones the repository's default branch. After rebuilding,
+verify settings and playback before discarding backups. If it fails, stop the
+new container and restore the previous image/source with its pre-update data
+backup. The exact recovery commands depend on the retained image/source; test
+them on a separate stack before using this script for an unattended update.
+
+These instructions describe the supplied scripts. They have not been exercised
+against a live Docker host as part of the documentation migration.

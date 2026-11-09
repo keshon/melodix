@@ -171,25 +171,14 @@ jobs:
 
             - name: Prepare build bundle
               run: |
-                  PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
+                  PKG_NAME="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
+                  PKG_ROOT="dist/${PKG_NAME}"
                   mkdir -p "${PKG_ROOT}"
-
                   cp "dist/melodix-discord${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
                   cp "dist/melodix-cli${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
-
-                  cp README.md LICENSE "${PKG_ROOT}/"
-
-                  if [ -f .env.example ]; then
-                    cp .env.example "${PKG_ROOT}/.env"
-                  fi
-
-                  mkdir -p "${PKG_ROOT}/data"
-
-                  if [ -d assets ]; then
-                    cp -R assets "${PKG_ROOT}/"
-                  fi
-
-                  zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
+                  python3 scripts/docs.py archive --destination "${PKG_ROOT}"
+                  cd dist
+                  zip -r "${PKG_NAME}.zip" "${PKG_NAME}"
 
             - name: Upload artifact
               uses: actions/upload-artifact@v4

@@ -94,14 +94,14 @@ jobs:
 
             - name: Prepare release bundle
               run: |
-                  PKG_ROOT="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
+                  PKG_NAME="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
+                  PKG_ROOT="dist/${PKG_NAME}"
                   mkdir -p "${PKG_ROOT}"
-                  cp dist/* "${PKG_ROOT}/"
-                  cp README.md LICENSE "${PKG_ROOT}/"
-                  [ -f .env.example ] && cp .env.example "${PKG_ROOT}/.env"
-                  mkdir -p "${PKG_ROOT}/data"
-                  [ -d assets ] && cp -R assets "${PKG_ROOT}/"
-                  zip -r "dist/${PKG_ROOT}.zip" "${PKG_ROOT}"
+                  cp "dist/melodix-discord${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
+                  cp "dist/melodix-cli${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
+                  python3 scripts/docs.py archive --destination "${PKG_ROOT}"
+                  cd dist
+                  zip -r "${PKG_NAME}.zip" "${PKG_NAME}"
 
             - name: Extract release notes from tag annotation
               id: tag

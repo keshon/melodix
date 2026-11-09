@@ -1,18 +1,14 @@
 # Ownership
 
-Who may write what, and what stops the rest.
+These contracts define who can change playback and voice state, how long that
+state lives, and which checks protect it. Use the numbered rules when changing
+a player, stream, session or status message. Each rule names its enforcement and
+any known gap.
 
-Go will not answer that for you. Rust refuses to compile a second writer and
-Erlang puts it in another process; Go hands you a pointer and trusts you. So
-the rules live here, and each one names what enforces it — because a rule
-enforced only by review is a rule that gets broken by whoever is next in a
-hurry.
-
-Every rule below exists because its absence produced a real defect, found by
-an audit of the voice and playback layers in September 2026. That
-investigation lives in the history rather than in `docs/` — `git show 8b190be`
-is where it landed, and the commits between it and here are the fixes. This
-document is the rules.
+- Rules 1–5: track values, stream mutation, locks and playback runs.
+- Rules 6–9: session lifetime, connection liveness and protected audio frames.
+- Rules 10–13: dispatch, status messages, reply visibility and button middleware.
+- [Known gaps](#not-enforced) and [adding a rule](#adding-a-rule).
 
 ## Enforcement grades
 
@@ -28,7 +24,6 @@ A rule's grade is the strongest thing that would stop a change violating it.
 
 `go test -race ./...` runs all of it.
 
----
 
 ## 1. A Track leaves the engine by value
 
@@ -274,11 +269,10 @@ components that nothing could reach.
 drives the dispatcher; `middleware.TestAClickIsAudited` and
 `TestAClickInADisabledGroupIsRefused` drive the production chain.
 
----
 
 ## Not enforced
 
-Known gaps. An honest list is worth more than a clean one.
+These limits need review or runtime verification beyond the named checks.
 
 - **Rule 4 does not follow calls** into helpers invoked under the lock.
 - **Reply errors** are ignored at every call site in
