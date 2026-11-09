@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/gateway"
 	"github.com/keshon/command"
 
 	"github.com/keshon/melodix/internal/discord/audit"
@@ -21,6 +23,14 @@ import (
 // this function).
 func (b *Bot) RunSession(ctx context.Context) error {
 	disconnected := make(chan struct{})
+	closed := make(chan error, 1)
+	presenceRefresh := make(chan struct{}, 1)
+	refreshPresence := func() {
+		select {
+		case presenceRefresh <- struct{}{}:
+		default:
+		}
+	}
 	notifyUnhealthy := b.makeSessionUnhealthyNotifier(disconnected)
 
 	// Built before the session opens so nothing is missed between connecting
@@ -35,14 +45,29 @@ func (b *Bot) RunSession(ctx context.Context) error {
 	tracker := watchdog.NewTracker()
 
 	session, err := session.New(session.Options{
-		Token:            b.cfg.DiscordToken,
-		Log:              b.log,
+		Token:    b.cfg.DiscordToken,
+		Log:      b.log,
+		Recovery: b.recovery,
+		OnClose: func(_ gateway.Gateway, err error, _ bool) {
+			if err != nil {
+				select {
+				case closed <- err:
+				default:
+				}
+			}
+		},
 		VoiceManagerOpts: dave.ManagerOptions(session.SlogLogger(b.log)),
 		Listeners: []bot.EventListener{
 			bot.NewListenerFunc(func(_ *events.Raw) { tracker.MarkWSNow() }),
 			bot.NewListenerFunc(func(e *events.Ready) {
 				tracker.MarkReadyNow()
+				refreshPresence()
 				b.onReady(e, syncer)
+			}),
+			bot.NewListenerFunc(func(_ *events.Resumed) {
+				tracker.MarkReadyNow()
+				refreshPresence()
+				b.log.Info().Msg("discord_resumed")
 			}),
 			bot.NewListenerFunc(func(e *events.GuildJoin) {
 				b.onGuildJoin(e, syncer)
@@ -75,9 +100,6 @@ func (b *Bot) RunSession(ctx context.Context) error {
 
 	openCtx, cancelOpen := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelOpen()
-	if err := session.Open(openCtx); err != nil {
-		return fmt.Errorf("failed to open Discord session: %w", err)
-	}
 	defer func() {
 		b.log.Info().Msg("discord_session_close")
 		// Bounded and abandonable, for the same reason the discordgo close is:
@@ -91,6 +113,13 @@ func (b *Bot) RunSession(ctx context.Context) error {
 			session.Close(closeCtx)
 		})
 	}()
+	if err := session.Open(openCtx); err != nil {
+		return fmt.Errorf("failed to open Discord session: %w", err)
+	}
+	if b.recovery != nil {
+		b.recovery.Online()
+		go b.watchRecoveryPresence(sessionCtx, client.Gateway, presenceRefresh)
+	}
 
 	b.startHealthWatcher(sessionCtx, session, tracker, notifyUnhealthy)
 
@@ -105,6 +134,48 @@ func (b *Bot) RunSession(ctx context.Context) error {
 		return nil
 	case <-disconnected:
 		return fmt.Errorf("%w: websocket disconnected", ErrSessionUnhealthy)
+	case err := <-closed:
+		return err
+	}
+}
+
+// Update presence only on a change, and refresh after READY/RESUMED. Offline
+// recovery is recorded in logs because Discord cannot receive presence then.
+func (b *Bot) watchRecoveryPresence(ctx context.Context, gw gateway.Gateway, refresh <-chan struct{}) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	last := "\x00"
+	for {
+		select {
+		case <-refresh:
+			last = "\x00"
+		default:
+		}
+		if gw.Status() == gateway.StatusReady {
+			text := b.recovery.Presence()
+			if text != last {
+				presence := gateway.MessageDataPresenceUpdate{Activities: []discord.Activity{}}
+				presence.Status = "online"
+				if text != "" {
+					gateway.WithCustomActivity(text)(&presence)
+				}
+				sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				err := gw.Send(sendCtx, gateway.OpcodePresenceUpdate, presence)
+				cancel()
+				if err == nil {
+					last = text
+				} else {
+					b.log.Warn().Err(err).Msg("discord_recovery_presence_failed")
+				}
+			}
+		} else {
+			last = "\x00"
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 

@@ -439,8 +439,8 @@ lint on every push and PR, then cross-compiles all release targets.
 **[invariant]** `README.md` is generated, not hand-edited: change
 `README.md.tmpl` and run `go run ./cmd/readme` from the repo root.
 Editing the output means losing the edit on the next regeneration. The docs
-under `docs/` and `pkg/music/README.md` are hand-written. The bot itself never
-writes files at runtime.
+under `docs/` and `pkg/music/README.md` are hand-written. The bot never rewrites
+its documentation at runtime.
 
 ## Release notes
 

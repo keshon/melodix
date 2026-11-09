@@ -8,6 +8,7 @@ import (
 
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/queue"
+	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/music"
 	"github.com/keshon/melodix/internal/storage"
@@ -17,11 +18,12 @@ import (
 // Bot is the Discord bot. Lifecycle is managed by Run/run; handlers are wired
 // in run.
 type Bot struct {
-	storage *storage.Storage
-	cfg     *config.Config
-	voice   *voice.Service
-	music   *music.Service
-	log     zerolog.Logger
+	storage  *storage.Storage
+	cfg      *config.Config
+	voice    *voice.Service
+	music    *music.Service
+	log      zerolog.Logger
+	recovery *session.Recovery
 
 	// commands runs command bodies off the gateway read goroutine. Process
 	// lifetime, like the voice service: a command outliving the session it

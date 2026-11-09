@@ -11,6 +11,7 @@ import (
 	"github.com/keshon/melodix/internal/config"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/queue"
+	"github.com/keshon/melodix/internal/discord/session"
 	"github.com/keshon/melodix/internal/discord/voice"
 	"github.com/keshon/melodix/internal/discord/voice/voicesink"
 	"github.com/keshon/melodix/internal/music"
@@ -18,6 +19,9 @@ import (
 	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/rs/zerolog"
 )
+
+// SetRecovery installs the process-wide budget before RunSession starts.
+func (b *Bot) SetRecovery(r *session.Recovery) { b.recovery = r }
 
 // NewBot creates a Bot. Register any bot-dependent commands before calling Run.
 func NewBot(cfg *config.Config, storage *storage.Storage, log zerolog.Logger) *Bot {

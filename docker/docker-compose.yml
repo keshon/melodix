@@ -7,6 +7,7 @@ services:
       - ./data:/usr/project/data
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_SESSION_BUDGET=${DISCORD_SESSION_BUDGET:-1000}
       - DISCORD_GUILD_BLACKLIST=${DISCORD_GUILD_BLACKLIST}
       - DEVELOPER_ID=${DEVELOPER_ID:-}
       - STORAGE_PATH=${STORAGE_PATH:-/usr/project/data/store}

@@ -32,13 +32,14 @@ type CheckResult struct {
 // else: a gateway refusing the connection outright, or a bot that connects
 // and then cannot answer a command because something it needed was never sent
 // to it.
-func Check(ctx context.Context, token string, log zerolog.Logger) (CheckResult, error) {
+func Check(ctx context.Context, token string, log zerolog.Logger, recovery *Recovery) (CheckResult, error) {
 	var result CheckResult
 
 	ready := make(chan *events.Ready, 1)
 	s, err := New(Options{
-		Token: token,
-		Log:   log,
+		Token:    token,
+		Log:      log,
+		Recovery: recovery,
 		Listeners: []bot.EventListener{
 			bot.NewListenerFunc(func(e *events.Ready) {
 				select {
@@ -54,14 +55,14 @@ func Check(ctx context.Context, token string, log zerolog.Logger) (CheckResult, 
 
 	openCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if err := s.Open(openCtx); err != nil {
-		return result, err
-	}
 	defer func() {
 		closeCtx, cancelClose := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelClose()
 		s.Close(closeCtx)
 	}()
+	if err := s.Open(openCtx); err != nil {
+		return result, err
+	}
 
 	select {
 	case <-openCtx.Done():

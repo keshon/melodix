@@ -45,14 +45,20 @@ func main() {
 		log.Fatal().Msg("config_missing_token")
 	}
 
-	if *checkConn {
-		runConnectionCheck(rootCtx, cfg, log)
-		return
-	}
-
 	store, err := storage.NewStorage(cfg.StoragePath, log)
 	if err != nil {
 		log.Fatal().Err(err).Str("dir", cfg.StoragePath).Msg("storage_init_failed")
+	}
+	recovery, err := session.NewRecovery(rootCtx, cfg.StoragePath, cfg.DiscordToken, cfg.DiscordSessionBudget, log)
+	if err != nil {
+		log.Error().Err(err).Msg("discord_recovery_init_failed")
+		_ = store.Close()
+		return
+	}
+	if *checkConn {
+		runConnectionCheck(rootCtx, cfg, log, recovery)
+		_ = store.Close()
+		return
 	}
 
 	// Optional playback layers (cache + anti-skip buffer), set once before
@@ -62,6 +68,7 @@ func main() {
 	}
 
 	bot := discord.NewBot(cfg, store, log)
+	bot.SetRecovery(recovery)
 
 	catalog.Register(bot, log)
 
@@ -73,11 +80,23 @@ func main() {
 		for {
 			var lastErr error
 			started := time.Now()
-			if err := bot.RunSession(rootCtx); err != nil {
+			err := recovery.WaitUntilEligible(rootCtx)
+			if err == nil {
+				started = time.Now()
+				err = bot.RunSession(rootCtx)
+			}
+			if err != nil {
 				lastErr = err
 				log.Error().Err(err).Msg("discord_session_end")
 			}
 			ranFor := time.Since(started)
+			if session.IsTerminal(lastErr) || recovery.Fatal() != nil {
+				log.Error().Err(lastErr).AnErr("budget_error", recovery.Fatal()).Msg("discord_recovery_stopped_action_required")
+				// Stay stopped under restart:always; only a deliberate restart
+				// after the configuration/token is corrected should try again.
+				<-rootCtx.Done()
+				return
+			}
 
 			select {
 			case <-rootCtx.Done():
@@ -121,8 +140,8 @@ func main() {
 // authenticates -- and narrowing the gateway intents is exactly the kind of
 // change whose failure mode is a gateway that refuses the connection, or a
 // bot that connects and then cannot answer a command.
-func runConnectionCheck(ctx context.Context, cfg *config.Config, log zerolog.Logger) {
-	res, err := session.Check(ctx, cfg.DiscordToken, log)
+func runConnectionCheck(ctx context.Context, cfg *config.Config, log zerolog.Logger, recovery *session.Recovery) {
+	res, err := session.Check(ctx, cfg.DiscordToken, log, recovery)
 	if err != nil {
 		log.Error().Err(err).Msg("connection_check_failed")
 		os.Exit(1)

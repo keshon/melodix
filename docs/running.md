@@ -231,6 +231,7 @@ overrides storage paths and read-ahead.
 
 | Variable | Description | Default |
 |---|---|---|
+| `DISCORD_SESSION_BUDGET` | Maximum fresh-session allowance over a rolling 24 hours (20-1000). Retries slow at 75% consumed and pause at 95%. | `1000` |
 | `WS_SILENCE_TIMEOUT`      | How long without events or heartbeat ACKs before the gateway is treated as unhealthy. | `2m`  |
 | `DISCORD_UNHEALTHY_MODE`  | What to do when unhealthy: `restart-session`, `restart-voice`, or `ignore`. | `restart-session` |
 | `DISCORD_UNHEALTHY_GRACE` | Under `restart-session`, ignore the first N unhealthy signals in the window below (sinks still get invalidated). | `0` |
@@ -265,3 +266,35 @@ bytes re-fetched after a dropped source. It is not a volume setting.
 If `DISCORD_UNHEALTHY_GRACE` is nonzero, its counting window must span that many
 silence timeouts plus some margin. A window too short prevents escalation; the
 bot reports `unhealthy_grace_never_escalates` when the settings cannot work.
+
+### Discord connection budget
+
+Fresh-session attempts share a persistent budget in
+`STORAGE_PATH/discord-recovery.json`, including the `--check` connection test.
+Keep this file across deployments. The storage lock prevents two processes
+using the same directory. Run only one deployment per bot token; separate
+storage directories or hosts do not share reservations.
+
+Melodix uses the more exhausted of Discord's reported session allowance and
+`DISCORD_SESSION_BUDGET`. Reservations are saved before connecting, so failed
+handshakes count conservatively. Successful session resumes do not consume a
+reservation. Fresh attempts are spaced by at least five seconds; the Discord
+library also applies its reconnect backoff.
+
+At 75% consumption, the minimum delay grows from five seconds to five minutes
+at 90%, then to fifteen minutes near 95%. At 95%, fresh sessions wait until
+reservations expire or Discord's allowance resets. Five fresh attempts within
+ten minutes trigger a fifteen-minute cooldown after the last attempt even
+below 75%. An unavailable budget lookup prevents fresh connections until it
+can be checked again. Unreadable state or failed persistence stops recovery.
+
+While connected, the bot shows a short presence line such as
+"Connection budget low | retries slowed". It clears the line when protection
+is no longer needed. Presence cannot be updated while disconnected; logs record
+recovery transitions, reservation counts and the next eligible attempt instead.
+No channel or message setup is required.
+
+Invalid tokens and non-retryable Gateway errors stop automatic recovery while
+the process remains running, including under Docker's restart policy. Correct
+the configuration/token and restart deliberately. After a Discord token reset,
+replace `DISCORD_TOKEN` and recreate the container with the new environment.

@@ -7,6 +7,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/cache"
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/voice"
@@ -25,6 +27,7 @@ import (
 type Session struct {
 	client *bot.Client
 	log    zerolog.Logger
+	cancel context.CancelFunc
 
 	mu sync.RWMutex
 	// lastHeartbeatAck is when the gateway last acknowledged a heartbeat.
@@ -48,6 +51,8 @@ type Options struct {
 	// where the DAVE session registry gets in: the session cannot be reached
 	// from a Conn in v0.19.6, so it has to be caught as each Conn is created.
 	VoiceManagerOpts []voice.ManagerConfigOpt
+	Recovery         *Recovery
+	OnClose          gateway.CloseHandlerFunc
 }
 
 // New builds a disgo client without connecting.
@@ -57,7 +62,12 @@ type Options struct {
 // gateway delivering only events this bot ignores is still alive, and treating
 // that as silence is how a healthy session gets restarted.
 func New(opts Options) (*Session, error) {
+	if opts.Recovery == nil {
+		return nil, errors.New("a persistent recovery budget is required")
+	}
 	s := &Session{log: opts.Log.With().Str("component", "disgo").Logger()}
+	lifetime, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
 
 	logger := slog.New(&bridge{log: s.log, frames: &frameCounter{}})
 
@@ -65,14 +75,15 @@ func New(opts Options) (*Session, error) {
 		bot.NewListenerFunc(s.onHeartbeatAck),
 	}
 	listeners = append(listeners, opts.Listeners...)
+	gwOpts := []gateway.ConfigOpt{
+		gateway.WithIntents(botIntents), gateway.WithEnableRawEvents(true), gateway.WithLogger(logger),
+		gateway.WithCloseHandler(opts.OnClose),
+	}
+	gwOpts = append(gwOpts, gateway.WithIdentifyRateLimiter(&sessionLimiter{Recovery: opts.Recovery, lifetime: lifetime}))
 
 	client, err := disgo.New(opts.Token,
 		bot.WithLogger(logger),
-		bot.WithGatewayConfigOpts(
-			gateway.WithIntents(botIntents),
-			gateway.WithEnableRawEvents(true),
-			gateway.WithLogger(logger),
-		),
+		bot.WithGatewayConfigOpts(gwOpts...),
 		bot.WithCacheConfigOpts(
 			cache.WithCaches(botCaches),
 		),
@@ -80,6 +91,7 @@ func New(opts Options) (*Session, error) {
 		bot.WithEventListeners(listeners...),
 	)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("building disgo client: %w", err)
 	}
 
@@ -103,7 +115,37 @@ func (s *Session) Open(ctx context.Context) error {
 // being torn down early is usually that something in it has stopped
 // returning.
 func (s *Session) Close(ctx context.Context) {
+	s.cancel()
 	s.client.Close(ctx)
+}
+
+// disgo reconnects on a background context. End its admission waits when this
+// client closes so an abandoned reconnect cannot open a second live session.
+type sessionLimiter struct {
+	*Recovery
+	lifetime context.Context
+}
+
+func (l *sessionLimiter) Wait(ctx context.Context, shard int) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(l.lifetime, cancel)
+	defer stop()
+	if l.lifetime.Err() != nil {
+		return stopReconnect(context.Canceled)
+	}
+	err := l.Recovery.Wait(ctx, shard)
+	if err != nil && (l.lifetime.Err() != nil || l.ctx.Err() != nil || l.Fatal() != nil) {
+		return stopReconnect(err)
+	}
+	return err
+}
+
+// disgo retries generic errors on a background context. Its local
+// ErrGatewayAlreadyConnected sentinel stops that loop without inventing a
+// Discord close code. Preserve the actual cancellation or budget error too.
+func stopReconnect(err error) error {
+	return errors.Join(err, discord.ErrGatewayAlreadyConnected)
 }
 
 // LastHeartbeatAck reports when the gateway last acknowledged a heartbeat, or
