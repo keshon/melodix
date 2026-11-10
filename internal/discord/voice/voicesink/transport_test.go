@@ -13,6 +13,7 @@ import (
 
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/voice"
+	"github.com/disgoorg/godave"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rs/zerolog"
 
@@ -57,13 +58,14 @@ func (u *stubUDP) Open(context.Context, string, int, uint32) (string, int, error
 // stubConn is a voice connection carrying disgo's real audio sender, so the
 // pull model under test is the one that ships rather than an imitation of it.
 type stubConn struct {
+	dave   godave.Session
 	udp    *stubUDP
 	sender voice.AudioSender
 	closed atomic.Bool
 }
 
 func newStubConn() *stubConn {
-	c := &stubConn{udp: &stubUDP{}}
+	c := &stubConn{udp: &stubUDP{}, dave: godave.NewNoopSession(slog.New(slog.DiscardHandler), "test", nil)}
 	return c
 }
 
@@ -343,3 +345,5 @@ func TestASlowReadIsNotAStalledOne(t *testing.T) {
 		t.Fatalf("want ErrPlaybackStopped, got %v", err)
 	}
 }
+
+func (c *stubConn) DAVE() godave.Session { return c.dave }

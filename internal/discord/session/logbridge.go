@@ -49,10 +49,10 @@ func (b *bridge) Handle(_ context.Context, r slog.Record) error {
 
 	event := b.event(r).Str("msg", r.Message)
 	for _, a := range b.attrs {
-		event = event.Interface(a.Key, a.Value.Any())
+		event = bridgeAttr(event, a)
 	}
 	r.Attrs(func(a slog.Attr) bool {
-		event = event.Interface(a.Key, a.Value.Any())
+		event = bridgeAttr(event, a)
 		return true
 	})
 	if r.Message == audioSendFailure {
@@ -70,6 +70,15 @@ func (b *bridge) Handle(_ context.Context, r slog.Record) error {
 	// it stays greppable.
 	event.Msg("library_log")
 	return nil
+}
+
+// bridgeAttr preserves error text that JSON object encoding would discard.
+func bridgeAttr(event *zerolog.Event, attr slog.Attr) *zerolog.Event {
+	value := attr.Value.Resolve().Any()
+	if err, ok := value.(error); ok {
+		return event.AnErr(attr.Key, err)
+	}
+	return event.Interface(attr.Key, value)
 }
 
 // event picks the zerolog level, which is the whole reason this is a Handler.

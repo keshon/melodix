@@ -169,7 +169,7 @@ func (a *API) GuildInfo(guildID string) (adapter.GuildInfo, error) {
 		if err != nil {
 			return adapter.GuildInfo{}, err
 		}
-		guild = fetched.Guild
+		guild.Guild = fetched.Guild
 	}
 
 	channels := 0
