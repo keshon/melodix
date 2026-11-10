@@ -1,7 +1,6 @@
 ![Melodix banner](https://raw.githubusercontent.com/keshon/melodix/main/assets/readme-banner.webp)
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/keshon/melodix.svg)](https://pkg.go.dev/github.com/keshon/melodix) [![Release](https://img.shields.io/github/v/release/keshon/melodix)](https://github.com/keshon/melodix/releases) [![Go Version](https://img.shields.io/github/go-mod/go-version/keshon/melodix)](https://go.dev/) [![License](https://img.shields.io/github/license/keshon/melodix)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/keshon/melodix?style=social)](https://github.com/keshon/melodix)
-
+![Discord](https://img.shields.io/badge/Discord-Bot-5865F2?logo=discord&logoColor=white) [![Go Reference](https://pkg.go.dev/badge/github.com/keshon/melodix.svg)](https://pkg.go.dev/github.com/keshon/melodix) [![Release](https://img.shields.io/github/v/release/keshon/melodix)](https://github.com/keshon/melodix/releases) [![Go Version](https://img.shields.io/github/go-mod/go-version/keshon/melodix)](https://go.dev/) [![License](https://img.shields.io/github/license/keshon/melodix)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/keshon/melodix?style=social)](https://github.com/keshon/melodix)
 
 # Melodix
 
