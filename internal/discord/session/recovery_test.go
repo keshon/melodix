@@ -265,3 +265,49 @@ func TestTerminalConnectionErrors(t *testing.T) {
 		t.Fatal("retrying invalid token")
 	}
 }
+
+// An unused Discord allowance has no active reset timer. It must admit one
+// reservation without repeatedly refreshing or discarding the budget guard.
+func TestRecoveryUnusedAllowanceWithoutResetTimer(t *testing.T) {
+	r, now := testRecovery(t)
+	calls := 0
+	r.fetch = func(context.Context) (discord.SessionStartLimit, error) {
+		calls++
+		if calls > 1 {
+			return discord.SessionStartLimit{}, errors.New("unexpected repeated refresh")
+		}
+		return discord.SessionStartLimit{Total: 1000, Remaining: 1000, ResetAfter: 0, MaxConcurrency: 1}, nil
+	}
+	if err := r.Wait(context.Background(), 0); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Unlock(0)
+	if calls != 1 || len(r.state.Attempts) != 1 || r.state.RemoteUsed != 1 || !r.state.RemoteReset.Equal(now.Add(24*time.Hour)) {
+		t.Fatalf("unexpected admission: calls=%d state=%+v", calls, r.state)
+	}
+	if r.Fatal() != nil {
+		t.Fatal(r.Fatal())
+	}
+}
+
+func TestRecoveryRejectsInvalidAllowance(t *testing.T) {
+	for _, budget := range []discord.SessionStartLimit{
+		{Total: 0, Remaining: 0, ResetAfter: 0, MaxConcurrency: 1},
+		{Total: 1000, Remaining: 999, ResetAfter: 0, MaxConcurrency: 1},
+		{Total: 1000, Remaining: 1000, ResetAfter: -1, MaxConcurrency: 1},
+		{Total: 1000, Remaining: 1001, ResetAfter: 1000, MaxConcurrency: 1},
+		{Total: 1000, Remaining: -1, ResetAfter: 1000, MaxConcurrency: 1},
+		{Total: 1000, Remaining: 1000, ResetAfter: 1000, MaxConcurrency: 0},
+	} {
+		t.Run(fmt.Sprint(budget), func(t *testing.T) {
+			r, _ := testRecovery(t)
+			r.fetch = func(context.Context) (discord.SessionStartLimit, error) { return budget, nil }
+			if err := r.Wait(context.Background(), 0); err == nil {
+				t.Fatal("invalid allowance admitted")
+			}
+			if r.Fatal() == nil || len(r.state.Attempts) != 0 {
+				t.Fatalf("invalid allowance not stopped: %+v", r.state)
+			}
+		})
+	}
+}

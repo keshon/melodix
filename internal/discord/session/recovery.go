@@ -234,8 +234,8 @@ func (r *Recovery) wait(ctx context.Context, reserve bool) error {
 				r.mu.Unlock()
 				return fmt.Errorf("refresh session budget: %w", err)
 			}
-			if v.Total <= 0 || v.Remaining < 0 || v.Remaining > v.Total || v.ResetAfter <= 0 || v.MaxConcurrency <= 0 {
-				r.fatal = errors.New("discord returned an invalid session budget")
+			if v.Total <= 0 || v.Remaining < 0 || v.Remaining > v.Total || v.ResetAfter < 0 || (v.ResetAfter == 0 && v.Remaining != v.Total) || v.MaxConcurrency <= 0 {
+				r.fatal = fmt.Errorf("discord returned an invalid session budget: total=%d remaining=%d reset_after=%d max_concurrency=%d", v.Total, v.Remaining, v.ResetAfter, v.MaxConcurrency)
 				r.mu.Unlock()
 				return r.Fatal()
 			}
@@ -245,7 +245,13 @@ func (r *Recovery) wait(ctx context.Context, reserve bool) error {
 			}
 			r.state.RemoteTotal = v.Total
 			r.state.RemoteUsed = used
-			r.state.RemoteReset = now.Add(time.Duration(v.ResetAfter) * time.Millisecond)
+			// Discord reports a zero reset timer for an unused allowance.
+			// Keep a conservative window until the next refresh supplies a timer.
+			resetAfter := time.Duration(v.ResetAfter) * time.Millisecond
+			if resetAfter == 0 {
+				resetAfter = 24 * time.Hour
+			}
+			r.state.RemoteReset = now.Add(resetAfter)
 			r.state.Checked = now
 			if err = r.save(); err != nil {
 				r.fatal = err
