@@ -2,7 +2,8 @@
 package about
 
 import (
-	"github.com/keshon/buildinfo"
+	"runtime"
+	"runtime/debug"
 
 	"github.com/keshon/melodix/internal/cli"
 )
@@ -16,10 +17,18 @@ func (Command) Category() string    { return "ℹ️ Information" }
 func (Command) Usage() string       { return "" }
 
 func (Command) Run(c *cli.Context, _ []string) error {
-	info := buildinfo.Get()
-	c.Println(info.Project, "—", info.Description)
+	c.Println("Melodix — music player for Discord and the terminal.")
 	c.Println("Repository: https://github.com/keshon/melodix")
-	c.Println("Commit:    ", info.Commit)
-	c.Println("Release:   ", info.BuildTime, "("+info.GoVersion+")")
+	c.Println("Runtime:   ", runtime.Version())
+
+	build, ok := debug.ReadBuildInfo()
+	if ok {
+		for _, setting := range build.Settings {
+			if setting.Key == "vcs.revision" && setting.Value != "" {
+				c.Println("Commit:    ", setting.Value)
+				break
+			}
+		}
+	}
 	return nil
 }

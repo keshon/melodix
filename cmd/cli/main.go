@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/keshon/buildinfo"
 	"github.com/keshon/datastore"
 
 	"github.com/keshon/melodix/internal/applog"
@@ -26,8 +25,6 @@ import (
 const scope = "cli"
 
 func main() {
-	info := buildinfo.Get()
-
 	cfg, err := config.NewConfig()
 	if err != nil {
 		_, _ = os.Stderr.WriteString("failed to load config: " + err.Error() + "\n")
@@ -35,7 +32,7 @@ func main() {
 	}
 
 	log := applog.Setup("cli", cfg)
-	log.Info().Str("project", info.Project).Msg("cli_starting")
+	log.Info().Str("project", "Melodix").Msg("cli_starting")
 
 	// Storage keeps playback history and the cache index. The data directory
 	// takes an exclusive lock, so when the bot already holds it the CLI plays

@@ -3,8 +3,9 @@ package about
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 
-	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
@@ -28,8 +29,6 @@ func (c *Command) SlashDefinition() *adapter.SlashCommand {
 
 func (c *Command) Run(context *adapter.SlashInteractionContext) error {
 
-	info := buildinfo.Get()
-
 	fields := []adapter.EmbedField{
 		{
 			Name:  "Developed by Señor Mega",
@@ -37,17 +36,27 @@ func (c *Command) Run(context *adapter.SlashInteractionContext) error {
 		},
 		{
 			Name:  "Repository",
-			Value: "https://github.com/keshon/melodix\nCommit: " + info.Commit,
+			Value: "https://github.com/keshon/melodix",
 		},
 		{
-			Name:  "Release",
-			Value: info.BuildTime + " (" + info.GoVersion + ")",
+			Name:  "Runtime",
+			Value: runtime.Version(),
 		},
 	}
 
+	build, ok := debug.ReadBuildInfo()
+	if ok {
+		for _, setting := range build.Settings {
+			if setting.Key == "vcs.revision" && setting.Value != "" {
+				fields = append(fields, adapter.EmbedField{Name: "Commit", Value: setting.Value})
+				break
+			}
+		}
+	}
+
 	embed := &adapter.Embed{
-		Title:       "ℹ️ About " + info.Project,
-		Description: info.Description,
+		Title:       "ℹ️ About Melodix",
+		Description: "Music player for Discord and the terminal.",
 		Color:       reply.EmbedColor,
 		Fields:      fields,
 	}

@@ -10,7 +10,6 @@ require (
 	github.com/godeps/opus v1.0.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
-	github.com/keshon/buildinfo v0.1.0
 	github.com/keshon/command v0.1.0
 	github.com/keshon/datastore v1.3.0
 	github.com/kkdai/youtube/v2 v2.10.6

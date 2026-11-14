@@ -128,6 +128,63 @@ On Windows, use output names `melodix-discord.exe` and `melodix-cli.exe` instead
 Copy `.env.example` to `.env`, replace the token for bot use, and follow the
 launch and verification steps above. The CLI can run without a token.
 
+### Local helpers
+
+Use `build.cmd` on Windows or `bash build.sh` on Linux and in Git Bash.
+Both entry points run the same Go helper, require the Go version in `go.mod`,
+and work from the repository root regardless of the caller's directory.
+
+| Command | Result |
+|---|---|
+| `build` | Build all packages and write application executables at the root. |
+| `run [target] [-- args]` | Build one application, then start it with the supplied arguments. |
+| `dist` | Build the native release folder, ZIP archive and `.zip.sha256` checksum under `dist/`. |
+| `test [flags]` | Run tests with optional Go test flags. |
+| `vet [flags]` | Run `go vet`. |
+| `check` | Vet, build, optional lint, race tests and project checks. |
+| `fmt [fix]` | List formatting changes, or apply them with `fix`. |
+| `vuln` | Run an installed `govulncheck`; print installation instructions if absent. |
+| `clean` | Remove generated root application executables, leaving `dist/` and user data. |
+| `help` | Show commands, application targets and output paths. |
+
+Melodix also supports `build.cmd run cli` / `bash build.sh run cli` for the
+terminal player. The default target is `discord`.
+
+Examples:
+
+```text
+build.cmd
+build.cmd run -- -help
+build.cmd dist
+build.cmd test -run TestConventions
+build.cmd check
+```
+
+For Bash, replace `build.cmd` with `bash build.sh`. `build.cmd readme`
+regenerates the README from its template. Race tests require a C compiler.
+Lint is skipped with a message when `golangci-lint` is unavailable.
+
+`dist` packages the current checkout for the host OS and architecture, including
+launchers, documentation, assets and example configuration. It creates
+`dist/melodix-<os>-<arch>/`, its `.zip`, and a `.zip.sha256` file.
+The archive is verified against the folder before completion. Rebuilding replaces
+only output marked as owned by this helper; move an older unmarked folder aside.
+The folder contains a fresh example `.env`, never the checkout's live `.env` or
+stored runtime data. Distribution folders are build outputs, not deployment data.
+
+Node.js is needed to assemble the bundled documentation. Linux builds also
+need the ALSA development files listed above. Dist builds are native; CI handles
+the supported OS/architecture matrix. No separate `release` command is needed:
+`dist` already produces the release files. Publishing remains in the existing
+GitHub release workflow.
+
+`start-discord.cmd` / `bash start-discord.sh` are convenient bot launchers.
+`start-cli.cmd` / `bash start-cli.sh` starts the terminal player.
+Launchers rebuild in a source checkout and use the included binary in an
+extracted distribution. They forward arguments and run from the application
+root so `.env`, data and assets resolve consistently. For example,
+`start-discord.cmd -check` runs the connection diagnostic using the real token.
+
 ## Docker
 
 The [Docker guide](../docker/README.md) owns container build commands, environment

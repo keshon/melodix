@@ -36,8 +36,6 @@ github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aN
 github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
 github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
-github.com/keshon/buildinfo v0.1.0 h1:FEPSUZc5BBmTL9aB57t//ryDKxl/C3TBSH54P0/X1IE=
-github.com/keshon/buildinfo v0.1.0/go.mod h1:fbuVYu2qOZqExSntGPus3+OUvbUqrZfFbF7iiEADOfs=
 github.com/keshon/command v0.1.0 h1:9LPLfj5dh+ae8VsO1IJ9wwDmwRi54+MOrPzkzN8Kr+s=
 github.com/keshon/command v0.1.0/go.mod h1:9Y+bnWwU6m0FaZwlE9bb8ilQ5SJ94rmRhiujy2O/E8E=
 github.com/keshon/datastore v1.3.0 h1:ss90nXhqJE6sbLUxuaL76KqJZiVIbQvExGaBwTq7y0k=

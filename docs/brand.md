@@ -11,12 +11,12 @@ always used. The avatar is a rendered image and cannot survive being shrunk
 to a tab icon; the mark is what is left when you keep only the structure that
 still reads at 20 pixels.
 
-`assets/brand/logo.svg` is the source of truth. It uses `currentColor` for the
+`website/public/assets/brand/logo.svg` is the source of truth. It uses `currentColor` for the
 driver and `--accent` for the rim, with a built-in fallback palette. A page can
 override those values when inlining the mark. The source includes light and
 dark foreground treatments.
 
-`assets/brand/logo-specimen.svg` shows it at real sizes against both
+`website/public/assets/brand/logo-specimen.svg` shows it at real sizes against both
 backgrounds. Look at that before changing any number in it — the strokes are
 tuned so the bands stay separate at small sizes, and thickening one closes
 the gap either side of it.
@@ -39,7 +39,7 @@ landing page palette; an inline mark can inherit the page's `color` and `--accen
 | ground | `#fbf6f9` | `#171118` | `--ink`    |
 
 The mark uses its accent for the rim. The landing page defines its own palette
-in `index.html`: dark `--ink: #0b0a0c`, `--text: #f4eff2`, `--accent: #ff2d7e`;
+in `website/index.html`: dark `--ink: #0b0a0c`, `--text: #f4eff2`, `--accent: #ff2d7e`;
 light `--ink: #f4f1ea`, `--text: #16120f`, `--accent: #c00040`.
 
 The mark's accent carries the rim and nothing else. If a third colour ever seems
@@ -48,7 +48,7 @@ not be in the mark.
 
 ## Favicons
 
-`assets/favicon/` is generated from `assets/brand/favicon-source.svg`, which
+`website/public/assets/favicon/` is generated from `website/public/assets/brand/favicon-source.svg`, which
 is a separate file on purpose: browser chrome cannot resolve `currentColor`,
 and a tab strip may be any shade, so the favicon carries its own colours and
 sits on the dark disc the avatar always had.

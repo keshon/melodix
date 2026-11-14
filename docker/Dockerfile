@@ -16,17 +16,10 @@ RUN go mod download
 # Copy rest of the source
 COPY src .
 
-# Build with embedded metadata, CGO enabled
-RUN BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ") && \
-    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none") && \
-    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+# Build the application, CGO enabled
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
         -o app \
-        -ldflags="-s -w \
-            -X github.com/keshon/buildinfo.Version=dev \
-            -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
-            -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
-            -X github.com/keshon/buildinfo.Project=Melodix \
-            -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
+        -ldflags="-s -w" \
         ./cmd/discord/
 
 # ---- Stage 2: Runtime ----

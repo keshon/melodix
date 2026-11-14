@@ -11,3 +11,5 @@
 *.ico binary
 *.jpg binary
 *.exe binary
+
+*.cmd text eol=crlf

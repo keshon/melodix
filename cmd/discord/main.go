@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/applog"
 
 	"github.com/keshon/melodix/internal/config"
@@ -23,8 +22,6 @@ import (
 )
 
 func main() {
-	info := buildinfo.Get()
-
 	checkConn := flag.Bool("check", false, "connect, report what the gateway sees, and exit without registering or sending anything")
 	flag.Parse()
 
@@ -39,7 +36,7 @@ func main() {
 	}
 
 	log := applog.Setup("discord", cfg)
-	log.Info().Str("project", info.Project).Msg("bot_starting")
+	log.Info().Str("project", "Melodix").Msg("bot_starting")
 
 	if cfg.DiscordToken == "" {
 		log.Fatal().Msg("config_missing_token")

@@ -1,7 +1,6 @@
 package help
 
 import (
-	"github.com/keshon/buildinfo"
 	"github.com/keshon/melodix/internal/discord/adapter"
 	"github.com/keshon/melodix/internal/discord/reply"
 )
@@ -64,21 +63,19 @@ func (c *Command) Run(context *adapter.SlashInteractionContext) error {
 		output = runHelpByCategory()
 	}
 
-	info := buildinfo.Get()
-
 	// The full listing can run past Discord's 4096-character embed cap, so
 	// it goes out as one embed per chunk rather than one clamped embed that
 	// silently unlists commands.
 	chunks := reply.ChunkEmbedDescription(output, reply.EmbedDescriptionLimit)
 	if len(chunks) == 0 {
 		return context.FollowupEphemeral(&adapter.Embed{
-			Title:       info.Project + " Help",
+			Title:       "Melodix Help",
 			Description: "No commands registered.",
 			Color:       reply.EmbedColor,
 		})
 	}
 	if err := context.FollowupEphemeral(&adapter.Embed{
-		Title:       info.Project + " Help",
+		Title:       "Melodix Help",
 		Description: chunks[0],
 		Color:       reply.EmbedColor,
 	}); err != nil {

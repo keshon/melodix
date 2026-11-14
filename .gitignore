@@ -15,12 +15,21 @@ dump.bat
 melodix-discord
 /data/cache/
 
-# Served by GitHub Pages from the repo root; *.txt above would hide it.
-!robots.txt
-!llms.txt
-!_data/docs.json
-/_site/
-/.jekyll-cache/
-/.jekyll-metadata
-/.bundle/
-/vendor/
+
+/melodix-discord
+
+/melodix-cli
+
+/website/node_modules/
+/website/dist/
+!website/package.json
+!website/package-lock.json
+!website/docs-nav.json
+!website/public/robots.txt
+/website/public/assets/.gitkeep
+/website/public/assets/about-banner.webp
+/website/public/assets/avatar.webp
+/website/public/assets/demo-history-multiple-play.gif
+/website/public/assets/demo-play-youtube-playlist.gif
+/website/public/assets/demo-search.gif
+/website/public/assets/readme-banner.webp

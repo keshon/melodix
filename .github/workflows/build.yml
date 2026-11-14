@@ -13,6 +13,11 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
+            - name: Set up Node.js for release documentation
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version: 24
+
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
@@ -28,6 +33,9 @@ jobs:
             - name: Vet
               run: go vet ./...
 
+            - name: Test release documentation packaging
+              run: node --test scripts/archive-docs.test.mjs
+
             - name: Test (race detector)
               env:
                   CGO_ENABLED: 1
@@ -39,6 +47,11 @@ jobs:
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
+
+            - name: Set up Node.js for release documentation
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version: 24
 
             - name: Set up Go
               uses: actions/setup-go@v5
@@ -94,6 +107,11 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
+            - name: Set up Node.js for release documentation
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version: 24
+
             - name: Set up Go
               uses: actions/setup-go@v5
               with:
@@ -133,18 +151,10 @@ jobs:
               run: |
                   set -e
 
-                  BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-                  GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
-
                   mkdir -p dist
 
                   go build -trimpath \
-                    -ldflags="-s -w \
-                      -X github.com/keshon/buildinfo.Version=dev \
-                      -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
-                      -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
-                      -X github.com/keshon/buildinfo.Project=Melodix \
-                      -X 'github.com/keshon/buildinfo.Description=Discord music bot that allows you to play music from YouTube, SoundCloud and internet radio streams.'" \
+                    -ldflags="-s -w" \
                     -o dist/melodix-discord${{ steps.bin.outputs.ext }} \
                     ./cmd/discord/
 
@@ -156,16 +166,8 @@ jobs:
               run: |
                   set -e
 
-                  BUILD_DATE=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-                  GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
-
                   go build -trimpath \
-                    -ldflags="-s -w \
-                      -X github.com/keshon/buildinfo.Version=dev \
-                      -X github.com/keshon/buildinfo.Commit=${GIT_COMMIT} \
-                      -X github.com/keshon/buildinfo.BuildTime=${BUILD_DATE} \
-                      -X github.com/keshon/buildinfo.Project=Melodix \
-                      -X 'github.com/keshon/buildinfo.Description=CLI music player - same playback engine as the Discord bot.'" \
+                    -ldflags="-s -w" \
                     -o dist/melodix-cli${{ steps.bin.outputs.ext }} \
                     ./cmd/cli/
 
@@ -174,9 +176,13 @@ jobs:
                   PKG_NAME="melodix-${{ matrix.goos }}-${{ matrix.goarch }}"
                   PKG_ROOT="dist/${PKG_NAME}"
                   mkdir -p "${PKG_ROOT}"
+                  cp start-discord.cmd start-discord.sh start-cli.cmd start-cli.sh "${PKG_ROOT}/"
+                  mkdir -p "${PKG_ROOT}/scripts"
+                  cp scripts/ensure-build.cmd scripts/ensure-build.sh "${PKG_ROOT}/scripts/"
+                  chmod +x "${PKG_ROOT}/"*.sh "${PKG_ROOT}/scripts/"*.sh
                   cp "dist/melodix-discord${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
                   cp "dist/melodix-cli${{ steps.bin.outputs.ext }}" "${PKG_ROOT}/"
-                  python3 scripts/docs.py archive --destination "${PKG_ROOT}"
+                  node scripts/archive-docs.mjs --destination "${PKG_ROOT}"
                   cd dist
                   zip -r "${PKG_NAME}.zip" "${PKG_NAME}"
 

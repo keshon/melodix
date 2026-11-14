@@ -1,7 +1,7 @@
 # Conventions
 
-Run checks from the repository root. On Windows, `check.bat` runs formatting,
-vet, lint when installed, and race tests. The equivalent individual commands are
+Run checks from the repository root. On Windows, `build.cmd check` runs vet, builds all packages, runs lint when
+installed, and runs race tests. Use `build.cmd fmt` to inspect formatting. The equivalent individual commands are
 under [Formatting & CI](#formatting--ci). Live playback needs the separate
 [manual checks](#manual-verification).
 
@@ -430,8 +430,8 @@ been removed. `git log` has them if a rule ever has to be adopted against real
 debt again; `golangci-lint run --new-from-merge-base=origin/main` does the same
 job line-exactly and off the shelf.
 
-On Windows, `conventions.bat` runs the checks. `check.bat` runs the whole gate
-— gofmt, vet, lint, race tests — which is what CI does.
+On Windows, `conventions.bat` runs the checks. `build.cmd check` runs vet, build, optional lint and race tests.
+Use `build.cmd fmt` to inspect formatting; `check.bat` forwards to `build.cmd check`.
 
 **[practice]** CI (`.github/workflows/build.yml`) runs vet, race tests, and
 lint on every push and PR, then cross-compiles all release targets.
@@ -502,11 +502,19 @@ configuration-table and convention-tag contracts when editing documentation.
 Run the relevant existing checks; their existence does not verify every prose
 claim or demonstrate a successful live Discord session.
 
-The [documentation tooling guide](../scripts/README.md) explains site builds,
+The [documentation tooling guide](../website/README.md) explains site builds,
 publication boundaries and offline bundle selection. Public articles are listed
-in `_data/docs.json`; internal plans and operational skills stay outside the site.
+in `website/docs-nav.json`; internal plans and operational skills stay outside the site.
 
 The reusable [documentation pattern](../.agents/skills/docs-pattern/SKILL.md)
 is versioned in this repository. Apply it when restructuring docs or adding a
 new guide; adapt specialist documents to the project rather than copying a
 fixed file list.
+
+### Build helper implementation
+
+`build.cmd` and `build.sh` forward to `cmd/build`. Keep command behavior there,
+so Windows and Bash share argument handling, progress output and packaging.
+`cmd/build/main_test.go` covers argument forwarding and archive validation.
+Run `go test ./cmd/build` after changing the helper; test `dist` from a checkout
+to verify the full payload. The running guide owns the command reference.
