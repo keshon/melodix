@@ -3,7 +3,9 @@
 The public Docker Hub overview is maintained in [DOCKERHUB.md](DOCKERHUB.md).
 The `Docker Hub overview` workflow syncs it on changes to that file or the
 workflow on `main`, using `DOCKERHUB_TOKEN`. It can also run manually from
-`main`. The short description is configured in that workflow. These syncs
+`main`. The short description is configured in that workflow. Description
+updates require a token with Read, Write & Delete repository permission;
+Docker Hub groups repository management under that permission. These syncs
 do not build images.
 
 Melodix supports two image sources: a published Docker Hub release and a local
@@ -147,8 +149,9 @@ its packaged assets, non-root execution and persistent storage and Melodix media
 both architectures pass does CI publish the public multi-platform tags.
 
 The Docker Hub account is `keshon`. Add a Docker Hub personal access token with
-Read & Write permission as the GitHub repository Actions secret
-`DOCKERHUB_TOKEN`. Delete permission is unnecessary. Do not put the token in
+Read, Write & Delete permission as the GitHub repository Actions secret
+`DOCKERHUB_TOKEN` to support both image publishing and overview sync. Image
+publishing alone needs only Read & Write. Do not put the token in
 `.env`, source files or workflow YAML. Fork pull requests build and check images
 without publishing or using that secret.
 
