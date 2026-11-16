@@ -525,7 +525,7 @@ The `Container` workflow runs Go vet and race tests before building native
 Linux amd64 and arm64 images. It renders pull, source-build and optional routing
 configurations using `bash docker/check-compose.sh`. Each architecture runs
 `bash docker/check-image.sh <image>` to check offline startup, packaged assets,
-non-root writes and persistence across container replacement. These checks use
+root execution, writes and persistence across container replacement. These checks use
 synthetic configuration and never connect to Discord. Publication runs only
 after both architecture checks pass; registry credentials belong in the
 `DOCKERHUB_TOKEN` repository Actions secret.

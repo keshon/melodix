@@ -13,10 +13,10 @@ RUN apk add --no-cache ca-certificates ffmpeg nodejs python3 py3-pip libstdc++ a
     && python3 -m venv /opt/yt-dlp \
     && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]==${YTDLP_VERSION}"
 ENV PATH="/opt/yt-dlp/bin:${PATH}"
-RUN addgroup -g 10001 bot && adduser -D -u 10001 -G bot bot
 WORKDIR /usr/project
 COPY --from=builder /out/app ./app
 COPY assets ./assets
-RUN mkdir -p data/store data/cache && chown -R bot:bot data
-USER 10001:10001
+RUN mkdir -p data/store data/cache
+# Existing bind-mounted data needs no UID/GID migration.
+USER 0:0
 ENTRYPOINT ["/usr/project/app"]

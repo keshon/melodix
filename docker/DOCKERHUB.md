@@ -32,21 +32,25 @@ The deployment needs no host ports, external Docker network or reverse proxy.
 
 ## Tags and platforms
 
-- `edge`: builds from GitHub `main`. Use this until the first container release.
+- `edge`: builds from GitHub `main`.
 - `latest`: the most recent stable release published by the container workflow.
 - `v*`: exact Git release tags built by that workflow.
 - `sha-<commit>`: a full commit SHA identifying a published build.
 
 Images support Linux `amd64` and `arm64`. Both architectures are built and
-smoke-tested before combined public tags are published. The image runs as
-UID/GID `10001:10001`.
+smoke-tested before combined public tags are published.
+
+The image runs as root (UID/GID `0:0`) inside the container. Existing local
+bind-mounted data needs no UID/GID ownership setup. The bot can modify files
+in writable mounts as root; new files are normally root-owned on standard
+Linux Docker. Mount only directories intended for the bot. Rootless Docker
+and host security policies can still restrict access.
 
 ## Storage and updates
 
 Compose stores application state in a named volume at `/usr/project/data`.
 Keep the Compose project name unchanged to reuse that storage across updates.
-See the deployment guide for host directories, backups, migration from the old
-deployment, source builds and rollback instructions.
+See the deployment guide for host directories, backups, source builds and rollback instructions.
 
 To update, select the intended `IMAGE_TAG` in `.env`, then run:
 

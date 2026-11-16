@@ -10,7 +10,8 @@ trap cleanup EXIT
 docker run --rm --network none "$image" --help
 args=(--rm --network none -v "$volume:/usr/project/data")
 docker run "${args[@]}" --entrypoint sh "$image" -ec '
-    test "$(id -u)" = 10001
+    test "$(id -u)" = 0
+    test "$(id -g)" = 0
     test -r assets/about-banner.webp
     printf persisted > data/container-smoke
     ffmpeg -version >/dev/null

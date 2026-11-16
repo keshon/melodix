@@ -35,8 +35,7 @@ The example enables initial slash-command registration.
 `IMAGE_TAG=latest` selects the most recently published stable release.
 `IMAGE_TAG=edge` selects a build from `main`. Use an exact Git release tag, such
 as `v2026.11.10.1`, after that tag has a container build, to select a particular
-release. Before the first container release, use `edge` after its workflow
-finishes. Older binary releases do not automatically have container images.
+release.
 
 ## Build this checkout
 
@@ -50,25 +49,28 @@ docker compose -f compose.yaml -f compose.build.yaml build
 docker compose -f compose.yaml -f compose.build.yaml up -d --no-build
 ```
 
-The Dockerfile builds from the repository root. There is no nested `src/`
-checkout and no deployment script that deletes source. Local builds use
+The Dockerfile builds from the repository root. Local builds use
 `melodix-local:dev`; published images keep their separate Docker Hub tags.
 Build failure leaves the running container in place. Use the same `-f` arguments
 for subsequent source-build operations; plain `docker compose up` selects the
 published-image configuration again.
 
-The images run as UID/GID `10001:10001`. Both Linux amd64 and arm64 images are
-built and smoke-tested on native runners. Local builds target the builder's
-native architecture.
+The images run as root (UID/GID `0:0`) inside the container. Existing local
+bind-mounted data needs no UID/GID ownership setup. The bot can modify files
+in writable mounts as root, and new files are normally root-owned on standard
+Linux Docker. Mount only directories intended for the bot. Rootless Docker,
+user namespace remapping and host security policies can still restrict access.
+
+Both Linux amd64 and arm64 images are built and smoke-tested on native runners.
+Local builds target the builder's native architecture.
 
 ## Configuration and storage
 
 Compose reads `.env` and passes its settings through `env_file`. The
-[configuration reference](../docs/running.md#configuration) remains the full
-application reference; copy individual settings from it when needed. Do not
-source `.env` as shell code. Values containing `$` can be single-quoted to keep
-them literal. The application supplies defaults for settings omitted from the
-small Docker example.
+[configuration reference](../docs/running.md#configuration) lists all application
+settings; copy the ones you need. Do not source `.env` as shell code.
+Single-quote values containing `$` to keep them literal. The application uses
+its defaults for settings omitted from the Docker example.
 
 The default project name is `melodix`. Set `COMPOSE_PROJECT_NAME` when running
 another independent installation. Keep it unchanged when switching between
@@ -79,17 +81,14 @@ source and published images so the same named volumes are reused.
 | `/usr/project/data` | Database, session recovery state and track cache | Project's `data` named volume |
 
 The image includes FFmpeg, Node and a pinned yt-dlp installed in a Python virtual
-environment. Cache and read-ahead settings use application defaults; there is
-no separate container-only buffer override. Change `YTDLP_VERSION` as a Docker
+environment. Cache and read-ahead settings use application defaults. Change `YTDLP_VERSION` as a Docker
 build argument when deliberately testing another downloader version.
 
 For host-visible storage, set `DATA_DIR=./data` in `.env`. Relative paths are
-resolved from `compose.yaml`; absolute paths are also supported. The existing
-folders must be writable by UID/GID 10001. For a new Linux bind directory:
-
-```sh
-sudo install -d -o 10001 -g 10001 -m 0750 ./data
-```
+resolved from `compose.yaml`; absolute paths are also supported. The default
+root user can use existing local data without changing its ownership. The
+mount must be writable. Run only one bot process against each datastore
+directory.
 
 Named volumes need no host-directory ownership setup on a fresh installation.
 Back up the whole data volume with the bot stopped, along with `.env`.
@@ -108,8 +107,8 @@ docker compose logs --tail=100 app
 
 Pulling happens before replacement. For source deployment, select the intended
 Git revision and repeat the explicit build and `up --no-build` commands above.
-There is a restart during replacement; neither flow promises zero downtime.
-No old image is forcibly removed and no unrelated Docker images are pruned.
+Replacing the container briefly stops the bot. Both flows retain old images
+and leave unrelated Docker images alone.
 
 Check Discord command registration and persisted settings, then join a voice channel and test playback, `/queue` and `/stop`. A running
 container alone does not establish Discord readiness. The image smoke checks
@@ -121,32 +120,12 @@ working Git revision for local builds; the `-local:dev` tag is replaced by the
 next build. Check data compatibility before downgrading and restore a compatible
 data backup when required.
 
-## Migrate the old deployment
-
-Before replacing old deployment files, stop its original Compose stack using
-those files and back up the host `data/` folder. The new project name does not
-adopt the old containers automatically. Keep the old image or source revision
-for recovery.
-
-Set `DATA_DIR=./data` to reuse the old host directory, and grant UID/GID 10001
-write access to the existing tree. Review its contents and ownership first;
-do not apply ownership changes to a shared or unrelated directory. Start only
-one bot process against a datastore directory.
-
-The old Compose file set `BUFFER_AHEAD_MS=10000`. Set that value explicitly if
-you want to retain it; otherwise the application default is 30000 ms.
-
-The old `ALIAS`, `GIT` and `GIT_URL` deployment settings are no longer used.
-The `build-n-deploy.sh` script and `docker-compose.yml` were replaced by the
-explicit Compose files described above. Keep the old stack stopped until the
-new configuration and stored data have been verified.
-
 ## Image publishing and checks
 
 The `Container` workflow tests Go code and renders the Compose configurations,
 then builds native amd64 and arm64 images. Each image is checked offline for
-its packaged assets, non-root execution and persistent storage and Melodix media tools. Only after
-both architectures pass does CI publish the public multi-platform tags.
+its packaged assets, root execution, persistent storage and media tools.
+CI publishes the public multi-platform tags after both architectures pass.
 
 The Docker Hub account is `keshon`. Add a Docker Hub personal access token with
 Read, Write & Delete permission as the GitHub repository Actions secret
