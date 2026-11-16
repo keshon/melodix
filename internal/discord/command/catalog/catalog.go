@@ -14,8 +14,10 @@ import (
 	"github.com/keshon/melodix/internal/discord/command/core/maintenance"
 	"github.com/keshon/melodix/internal/discord/command/music/history"
 	"github.com/keshon/melodix/internal/discord/command/music/next"
+	"github.com/keshon/melodix/internal/discord/command/music/pause"
 	"github.com/keshon/melodix/internal/discord/command/music/play"
 	"github.com/keshon/melodix/internal/discord/command/music/queue"
+	"github.com/keshon/melodix/internal/discord/command/music/resume"
 	"github.com/keshon/melodix/internal/discord/command/music/search"
 	"github.com/keshon/melodix/internal/discord/command/music/stop"
 	"github.com/keshon/melodix/internal/discord/command/settings"
@@ -34,6 +36,8 @@ func Register(bot *discord.Bot, log zerolog.Logger) {
 	adapter.Register(&search.Command{Bot: bot}, mw...)
 	adapter.Register(&next.Command{Bot: bot}, mw...)
 	adapter.Register(&queue.Command{Bot: bot}, mw...)
+	adapter.Register(&pause.Command{Bot: bot}, mw...)
+	adapter.Register(&resume.Command{Bot: bot}, mw...)
 	adapter.Register(&stop.Command{Bot: bot}, mw...)
 	adapter.Register(&history.Command{Bot: bot}, mw...)
 }

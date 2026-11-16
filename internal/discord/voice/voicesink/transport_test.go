@@ -17,6 +17,7 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rs/zerolog"
 
+	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/stream"
 )
 
@@ -138,7 +139,7 @@ func TestClosedSocketEndsTheTrackAsTransportFailure(t *testing.T) {
 
 	audio := &endlessAudio{}
 	done := make(chan error, 1)
-	go func() { done <- newTestSink(conn, manager).Stream(audio, make(chan struct{})) }()
+	go func() { done <- newTestSink(conn, manager).Stream(audio, &sink.Control{Stop: make(chan struct{})}) }()
 
 	waitUntil(t, 2*time.Second, func() bool { return conn.udp.writes.Load() > 2 })
 	conn.udp.fail(net.ErrClosed)
@@ -166,7 +167,7 @@ func TestAGenericWriteErrorStillLetsTheTrackFinish(t *testing.T) {
 	audio := &endlessAudio{}
 	stop := make(chan struct{})
 	done := make(chan error, 1)
-	go func() { done <- newTestSink(conn, manager).Stream(audio, stop) }()
+	go func() { done <- newTestSink(conn, manager).Stream(audio, &sink.Control{Stop: stop}) }()
 
 	waitUntil(t, 2*time.Second, func() bool { return conn.udp.writes.Load() > 2 })
 	conn.udp.fail(errors.New("something the sender will only log"))
@@ -196,7 +197,7 @@ func TestAConnRemovedBehindOurBackEndsTheTrack(t *testing.T) {
 
 	audio := &endlessAudio{}
 	done := make(chan error, 1)
-	go func() { done <- newTestSink(conn, manager).Stream(audio, make(chan struct{})) }()
+	go func() { done <- newTestSink(conn, manager).Stream(audio, &sink.Control{Stop: make(chan struct{})}) }()
 
 	waitUntil(t, 2*time.Second, func() bool { return conn.udp.writes.Load() > 2 })
 	manager.set(newStubConn()) // a rejoin, or a removal: either way not ours
@@ -221,7 +222,7 @@ func TestAHealthyTrackIsNotMistakenForADeadTransport(t *testing.T) {
 	audio := &endlessAudio{}
 	stop := make(chan struct{})
 	done := make(chan error, 1)
-	go func() { done <- newTestSink(conn, manager).Stream(audio, stop) }()
+	go func() { done <- newTestSink(conn, manager).Stream(audio, &sink.Control{Stop: stop}) }()
 
 	time.Sleep(6 * transportSilence)
 	select {

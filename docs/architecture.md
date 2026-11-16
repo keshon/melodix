@@ -164,7 +164,7 @@ type Streamer interface {
 
 // pkg/music/sink — Opus packets → audio output
 type AudioSink interface {
-    Stream(r opus.Reader, stop <-chan struct{}) error
+    Stream(r opus.Reader, control *Control) error
 }
 type Provider interface {
     Sink(target string) (AudioSink, error)
@@ -346,8 +346,10 @@ Key mechanics:
   while DAVE has no live epoch; transport liveness and stalled pulls have bounded
   checks, so a dead sender can surface as `ErrVoiceTransport`. Stop signals end
   the provider and release the waiting playback run. See ownership rules 8 and 9.
-- **Pause/Resume** — not supported, on purpose, since the sink owns the read
-  loop. Commands that try get `ErrPauseNotSupported` back.
+- **Pause/resume** uses a per-run `sink.Control`, shared by the player and
+  sink across transport recovery. Paused sinks keep their clock alive without
+  consuming track packets. The speaker also pauses its audio device player.
+  Stop takes precedence over pause; a new track gets a fresh control.
 
 ### Status delivery (single-consumer contract)
 
@@ -524,8 +526,6 @@ are described under [The three extension layers](#the-three-extension-layers).
 - **`/play`'s `source` and `parser` choice lists are maintained by hand**
   (`internal/discord/command/music/play/play.go`) and can drift from the
   resolver and `stream.registryEntries`. Nothing checks this.
-- **Pause and resume are not supported** — the sink owns the read loop; see
-  Playback pipeline. Commands that try get `ErrPauseNotSupported`.
 - **One process per storage directory.** The CLI runs without history and
   with an in-memory cache index when the bot already holds the lock, rather
   than refusing to start.

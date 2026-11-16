@@ -21,7 +21,8 @@ type countingSink struct {
 	peak atomic.Int64
 }
 
-func (s *countingSink) Stream(r opus.Reader, stop <-chan struct{}) error {
+func (s *countingSink) Stream(r opus.Reader, control *sink.Control) error {
+	stop := control.Stop
 	live := s.live.Add(1)
 	for {
 		if peak := s.peak.Load(); live > peak {

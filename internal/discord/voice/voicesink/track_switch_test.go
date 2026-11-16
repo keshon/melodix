@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/disgoorg/disgo/voice"
+	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/stream"
 )
 
@@ -32,7 +33,7 @@ func TestConsecutiveTracksKeepAValidSenderProvider(t *testing.T) {
 	for range 2 {
 		stop := make(chan struct{})
 		close(stop)
-		err := newTestSink(conn, nil).Stream(&endlessAudio{}, stop)
+		err := newTestSink(conn, nil).Stream(&endlessAudio{}, &sink.Control{Stop: stop})
 		if !errors.Is(err, stream.ErrPlaybackStopped) {
 			t.Fatalf("stopping track: %v", err)
 		}

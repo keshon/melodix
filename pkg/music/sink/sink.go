@@ -2,10 +2,26 @@
 // Opus packet stream (e.g. forward to Discord voice, or decode to a speaker).
 package sink
 
-import "github.com/keshon/melodix/pkg/music/opus"
+import (
+	"sync/atomic"
+
+	"github.com/keshon/melodix/pkg/music/opus"
+)
+
+// Control belongs to one playback run and survives transport recovery.
+// Sinks keep their control loop running while paused, without consuming audio.
+type Control struct {
+	Stop   <-chan struct{}
+	paused atomic.Bool
+}
+
+func (c *Control) Pause()       { c.paused.Store(true) }
+func (c *Control) Resume()      { c.paused.Store(false) }
+func (c *Control) Paused() bool { return c.paused.Load() }
 
 // AudioSink consumes a stream of 20ms Opus packets. The sink owns the read
-// loop; Stream returns when the stream ends (io.EOF) or stop is closed.
+// loop; Stream returns when the stream ends (io.EOF) or control.Stop is closed.
+// Pause holds the track at the sink boundary; bounded read-ahead may continue.
 //
 // Two obligations beyond the happy path, because both were properties of an
 // implementation rather than of this contract and a backend swap silently
@@ -22,7 +38,7 @@ import "github.com/keshon/melodix/pkg/music/opus"
 //     permitted outcome: the player cannot advance a queue, end a track or
 //     recover a connection it is never told about.
 type AudioSink interface {
-	Stream(r opus.Reader, stop <-chan struct{}) error
+	Stream(r opus.Reader, control *Control) error
 }
 
 // Provider returns an AudioSink for a given target.

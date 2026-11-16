@@ -59,6 +59,9 @@ func (c *Command) Run(slashCtx *adapter.SlashInteractionContext) error {
 		Description: tracklist.QueueBody(nowPlaying, upcoming),
 		Color:       reply.EmbedColor,
 	}
+	if p.IsPaused() {
+		embed.Title = "⏸️ Queue · Paused"
+	}
 	if n := len(upcoming); n > 0 {
 		noun := "tracks"
 		if n == 1 {

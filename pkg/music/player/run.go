@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/keshon/melodix/pkg/music/parsers"
+	"github.com/keshon/melodix/pkg/music/sink"
 )
 
 // runPhase is where a playback run is in its life.
@@ -29,8 +30,8 @@ const (
 // every run shared. Now it holds its run, and nothing of a newer run's is
 // within reach. Whether it is still the run in charge is p.run == r.
 //
-// stop, done and stopOnce are set at construction and never reassigned. The
-// other fields are guarded by the owning Player's mu.
+// stop, done, stopOnce and control are set at construction. Track state is
+// guarded by the owning Player's mu; control synchronizes pause with the sink.
 type run struct {
 	// stop tells the run's stream loop to stop: a skip, a stop, or the next
 	// track starting.
@@ -38,7 +39,8 @@ type run struct {
 	stopOnce sync.Once
 	// done is closed once the run is over: when its playback goroutine exits,
 	// or when its open fails and no goroutine was started.
-	done chan struct{}
+	done    chan struct{}
+	control *sink.Control
 
 	track parsers.Track
 	phase runPhase
@@ -51,10 +53,12 @@ type run struct {
 }
 
 func newRun(track parsers.Track) *run {
+	stop := make(chan struct{})
 	return &run{
-		stop:  make(chan struct{}),
-		done:  make(chan struct{}),
-		track: track,
+		stop:    stop,
+		control: &sink.Control{Stop: stop},
+		done:    make(chan struct{}),
+		track:   track,
 	}
 }
 

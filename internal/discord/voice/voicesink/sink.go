@@ -21,6 +21,7 @@ import (
 	"github.com/disgoorg/disgo/voice"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/keshon/melodix/pkg/music/opus"
+	"github.com/keshon/melodix/pkg/music/sink"
 	"github.com/keshon/melodix/pkg/music/stream"
 	"github.com/rs/zerolog"
 	davesession "github.com/thomas-vilte/dave-go/session"
@@ -71,10 +72,11 @@ type Sink struct {
 // The two questions below are what melodix can ask instead, and between them
 // they cover every way the connection dies: the sender has stopped pulling, or
 // the connection this sink was built on is no longer the guild's.
-func (d *Sink) Stream(r opus.Reader, stop <-chan struct{}) error {
+func (d *Sink) Stream(r opus.Reader, control *sink.Control) error {
 	provider := &frameProvider{
 		r:          r,
-		stop:       stop,
+		stop:       control.Stop,
+		control:    control,
 		dave:       d.dave,
 		holdBudget: daveReadyTimeout,
 		pullBudget: maxPullStall,
@@ -205,8 +207,9 @@ func (d *Sink) transportDead(provider *frameProvider) string {
 // goroutine, which is the only caller of ProvideOpusFrame and calls it one
 // frame at a time. Those four are how Stream watches it from outside.
 type frameProvider struct {
-	r    opus.Reader
-	stop <-chan struct{}
+	r       opus.Reader
+	stop    <-chan struct{}
+	control *sink.Control
 
 	// dave gates the send path; see holdExpired. nil means no encryption is
 	// expected on this channel, so nothing is ever held.
@@ -258,6 +261,10 @@ func (p *frameProvider) ProvideOpusFrame() ([]byte, error) {
 	if stopped(p.stop) {
 		p.finish(stream.ErrPlaybackStopped)
 		return nil, io.EOF
+	}
+	if p.control != nil && p.control.Paused() {
+		p.holdSince = time.Time{}
+		return nil, nil
 	}
 
 	// Before the reader is touched: a held frame must not consume a packet,

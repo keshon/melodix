@@ -95,48 +95,65 @@ func (s *SpeakerSink) ensureContext() error {
 
 // Stream decodes the Opus packets to PCM and plays them. Returns when the
 // stream ends or stop is closed.
-func (s *SpeakerSink) Stream(r opus.Reader, stop <-chan struct{}) error {
-	if err := s.ensureContext(); err != nil {
+func (s *SpeakerSink) Stream(r opus.Reader, control *Control) error {
+	err := s.ensureContext()
+	if err != nil {
 		return err
 	}
 	<-s.readyChan
 
 	pcm := opus.DecodeReader(r)
 	defer pcm.Close()
-	sr := &speakerStopReader{r: pcm, stop: stop}
+	sr := &speakerStopReader{r: pcm, control: control}
 	player := s.ctx.NewPlayer(sr)
+	defer player.Pause()
 	player.Play()
 
-	for player.IsPlaying() {
+	paused := false
+	watch := time.NewTicker(10 * time.Millisecond)
+	defer watch.Stop()
+	for {
+		if control.Paused() {
+			player.Pause()
+			paused = true
+		} else if paused {
+			player.Play()
+			paused = false
+		} else if !player.IsPlaying() {
+			return nil
+		}
+
 		select {
-		case <-stop:
+		case <-control.Stop:
 			return stream.ErrPlaybackStopped
-		default:
-			time.Sleep(10 * time.Millisecond)
+		case <-watch.C:
 		}
 	}
-	return nil
 }
 
 // speakerStopReader wraps a reader and makes Read return (0, io.EOF) when stop
 // is closed.
 type speakerStopReader struct {
-	r    io.Reader
-	stop <-chan struct{}
+	r       io.Reader
+	control *Control
 }
 
 func (s *speakerStopReader) Read(p []byte) (n int, err error) {
 	select {
-	case <-s.stop:
+	case <-s.control.Stop:
 		return 0, io.EOF
 	default:
+	}
+	if s.control.Paused() {
+		clear(p)
+		return len(p), nil
 	}
 	n, err = s.r.Read(p)
 	if err != nil {
 		return n, err
 	}
 	select {
-	case <-s.stop:
+	case <-s.control.Stop:
 		return n, io.EOF
 	default:
 		return n, nil

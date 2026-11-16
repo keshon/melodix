@@ -41,12 +41,19 @@ can differ on later requests.
 - `/queue` shows the current track and waiting tracks.
 - Another `/play` while music is playing adds tracks behind it.
 - `/next` skips the current track and starts the next available entry.
+- `/pause` pauses the current track; `/resume` continues it.
 - `/stop` stops playback and clears the queue.
 
 When the queue finishes, the bot leaves the voice channel. Queues survive a
 Discord session reconnect but are cleared by restarting the Melodix process.
-Loop, shuffle, seek, pause and resume are not available. Melodix has no audio
+Loop, shuffle and seek are not available. Melodix has no audio
 filters or bot volume command; Discord's per-user volume still works.
+
+Pause keeps the bot in voice and preserves the current track and queue.
+Join the bot's voice channel to pause or resume. Another `/play` while paused
+adds tracks to the queue; `/next` starts the next track unpaused. `/stop` also
+works while paused. Audio already buffered by your device may take a moment
+to stop. Live sources cannot promise a time-shifted replay after a long pause.
 
 ## Replay history
 
@@ -71,6 +78,8 @@ Use commands without a slash:
 play never gonna give you up
 search take on me
 queue
+pause
+resume
 next
 history
 stop

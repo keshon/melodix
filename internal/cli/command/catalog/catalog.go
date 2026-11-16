@@ -8,8 +8,10 @@ import (
 	"github.com/keshon/melodix/internal/cli/command/core/help"
 	"github.com/keshon/melodix/internal/cli/command/music/history"
 	"github.com/keshon/melodix/internal/cli/command/music/next"
+	"github.com/keshon/melodix/internal/cli/command/music/pause"
 	"github.com/keshon/melodix/internal/cli/command/music/play"
 	"github.com/keshon/melodix/internal/cli/command/music/queue"
+	"github.com/keshon/melodix/internal/cli/command/music/resume"
 	"github.com/keshon/melodix/internal/cli/command/music/search"
 	"github.com/keshon/melodix/internal/cli/command/music/stop"
 )
@@ -22,6 +24,8 @@ func Register(reg *cli.Registry) {
 	reg.Register(search.Command{})
 	reg.Register(next.Command{})
 	reg.Register(queue.Command{})
+	reg.Register(pause.Command{})
+	reg.Register(resume.Command{})
 	reg.Register(stop.Command{})
 	reg.Register(history.Command{})
 }

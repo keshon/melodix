@@ -78,8 +78,8 @@ and use slash commands in `#music-spam`.
 To run your own, take a binary from the
 [releases page](https://github.com/keshon/melodix/releases), put your token in
 `.env`, keep the supplied `assets/` directory beside the binary, and start it
-from that directory. Nothing to compile, no Go runtime to install. Enable
-`INIT_SLASH_COMMANDS=true` for the first start to register commands.
+from that directory. Nothing to compile, no Go runtime to install. Slash
+commands sync automatically on startup.
 
 For Docker Hub images or a local container build, follow the
 [Docker guide](docker/README.md). Both modes share configuration and storage.
@@ -125,8 +125,10 @@ Use `/help` in Discord or `help` in the terminal for the current command list.
 
 - **/history** — Show recently played tracks (replay by id with /play)
 - **/next** — Skip to the next track
+- **/pause** — Pause the current track
 - **/play** — Play a music track
 - **/queue** — Show what is playing and what is queued next
+- **/resume** — Resume the current track
 - **/search** — Search and pick a track to play
 - **/stop** — Stop playback and clear queue
 
@@ -164,8 +166,10 @@ is running on the same data directory.
 
 - **`history [timeline|counts] [page]`** — Show recently played tracks (replay by id with play)
 - **`next`** — Skip to the next track (also `n`, `skip`)
+- **`pause`** — Pause the current track
 - **`play <link|query|history ids> [source=youtube|soundcloud|radio] [parser=…]`** — Play a music track (also `p`)
 - **`queue`** — Show what is playing and what is queued next
+- **`resume`** — Resume the current track
 - **`search <query> [source=youtube|soundcloud]`** — Search and pick a track to play
 - **`stop`** — Stop playback and clear queue (also `s`)
 

@@ -32,9 +32,9 @@ check is skipped. Do not treat `-check` as an offline test.
 
 ## Slash commands are missing
 
-Check that the bot was invited to the intended server and start it with
-`INIT_SLASH_COMMANDS=true`. The code default is false; the release example enables
-registration. Confirm registration after updating a release that changes commands.
+Check that the bot was invited to the intended server. Slash commands sync on
+startup by default; remove any `INIT_SLASH_COMMANDS=false` override or set it
+to `true`, then restart. Confirm registration after updating commands.
 Use `/help flat` once the commands are available.
 
 ## A command is refused

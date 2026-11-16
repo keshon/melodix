@@ -92,6 +92,13 @@ integrating a UI, use the player options/hooks and the
 to distinguish synchronous command results from later playback transitions.
 The Discord-specific message lifecycle is owned by its voice service, not this library.
 
+`Pause` and `Resume` keep the current run and queue. `IsPlaying` stays true
+while paused; `IsPaused` distinguishes the two states. A custom sink's
+`Stream` receives a per-run `*sink.Control`: check `Paused` before consuming
+track packets and keep checking `Stop` while paused. Bounded read-ahead can
+continue filling its buffer, but the sink must hold the playback position.
+The same control survives transport recovery; a new track starts unpaused.
+
 ## Playback and recovery
 
 <a id="how-it-works-high-level"></a>

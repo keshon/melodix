@@ -157,7 +157,7 @@ func (s *Service) WatchPlayerStatus(guildID string, p *player.Player) {
 			continue
 		}
 		switch status {
-		case player.StatusPlaying:
+		case player.StatusPlaying, player.StatusPaused, player.StatusResumed:
 			track, ok := p.CurrentTrack()
 			if !ok {
 				s.log.Warn().Str("guild_id", guildID).Msg("now_playing_render_skipped_no_track")
@@ -167,7 +167,11 @@ func (s *Service) WatchPlayerStatus(guildID string, p *player.Player) {
 			// is registered, so check first — otherwise this traces a render
 			// that never happened.
 			registered := s.hasStatusMessage(guildID)
-			if err := s.UpdatePlaybackStatus(guildID, reply.NowPlayingEmbed(&track)); err != nil {
+			embed := reply.NowPlayingEmbed(&track)
+			if p.IsPaused() {
+				embed.Title = "⏸️ Paused"
+			}
+			if err := s.UpdatePlaybackStatus(guildID, embed); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 				continue
 			}
@@ -195,11 +199,8 @@ func (s *Service) WatchPlayerStatus(guildID string, p *player.Player) {
 			if err := s.UpdatePlaybackStatus(guildID, reply.PlaybackFinishedEmbed()); err != nil {
 				s.log.Warn().Str("guild_id", guildID).Err(err).Msg("guild_status_update_failed")
 			}
-		case player.StatusAdded, player.StatusError, player.StatusPaused, player.StatusResumed:
-			// Rendered elsewhere or never emitted: the command that queued
-			// tracks answers with them, a playback failure is posted by
-			// onPlaybackFailed, and the player supports neither pause nor
-			// resume. Listed so a new status has to be placed here too.
+		case player.StatusAdded, player.StatusError:
+			// Commands report additions; onPlaybackFailed reports failures.
 		}
 	}
 }

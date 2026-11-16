@@ -35,9 +35,8 @@ func StatusPrinter(out io.Writer) func(scope string, p *player.Player) {
 				played = false
 				_, _ = fmt.Fprintln(out, "⏹ Playback finished.")
 			case player.StatusAdded, player.StatusError, player.StatusPaused, player.StatusResumed:
-				// The command that queued tracks says so, a failure comes
-				// through FailurePrinter, and the player supports neither
-				// pause nor resume.
+				// Commands report additions, pause and resume; failures come
+				// through FailurePrinter.
 			}
 		}
 	}

@@ -69,10 +69,10 @@ var (
 	ErrNoTracksInQueue = errors.New("no tracks in queue")
 	// ErrTrackStartFailed means a dequeued track could not start (e.g. every
 	// parser failed) and the queue held nothing further to fall forward to.
-	ErrTrackStartFailed   = errors.New("track failed to start")
-	ErrNoParsersForTrack  = errors.New("track has no available parsers")
-	ErrPauseNotSupported  = errors.New("pause is not supported")
-	ErrResumeNotSupported = errors.New("resume is not supported")
+	ErrTrackStartFailed  = errors.New("track failed to start")
+	ErrNoParsersForTrack = errors.New("track has no available parsers")
+	ErrAlreadyPaused     = errors.New("playback is already paused")
+	ErrNotPaused         = errors.New("playback is not paused")
 	// ErrSinkUnavailable means no sink could be obtained — a join timeout, or
 	// missing Connect/Speak permission. runPlayback returning this suppresses the
 	// usual advance to PlayNext: nothing is wrong with the track, so walking the
@@ -427,19 +427,49 @@ func (p *Player) stop(disconnect bool, want *run) error {
 	return nil
 }
 
-// Pause is unimplemented by design: the sink owns the read loop, so there is no
-// point above it at which packets can be held without the voice connection
-// starving. Supporting it means giving the pause to the sink, not the player.
+// Pause holds the current track without ending its run or disconnecting.
 func (p *Player) Pause() error {
-	return ErrPauseNotSupported
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.run.live() {
+		return ErrNoTrackPlaying
+	}
+	if p.run.control.Paused() {
+		return ErrAlreadyPaused
+	}
+	p.run.control.Pause()
+	p.emitStatus(StatusPaused)
+	return nil
 }
 
-// Resume is unimplemented for the same reason as Pause: nothing was paused.
 func (p *Player) Resume() error {
-	return ErrResumeNotSupported
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.run.live() {
+		return ErrNoTrackPlaying
+	}
+	if !p.run.control.Paused() {
+		return ErrNotPaused
+	}
+	p.run.control.Resume()
+	p.emitStatus(StatusResumed)
+	return nil
 }
 
-// IsPlaying reports whether a track is opening or actively playing.
+func (p *Player) IsPaused() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.run.live() && p.run.control.Paused()
+}
+
+// Target returns the output channel of the current run, or empty for the CLI.
+func (p *Player) Target() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.target
+}
+
+// IsPlaying reports whether a track is opening, playing or paused.
 func (p *Player) IsPlaying() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -653,7 +683,7 @@ func (p *Player) runPlayback(r *run, rs *stream.RecoveryStream) error {
 			continue
 		}
 
-		err = audioSink.Stream(packets, r.stop)
+		err = audioSink.Stream(packets, r.control)
 		if err == nil {
 			break
 		}

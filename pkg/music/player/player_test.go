@@ -102,7 +102,8 @@ type fakeSink struct {
 	block bool
 }
 
-func (s *fakeSink) Stream(r opus.Reader, stop <-chan struct{}) error {
+func (s *fakeSink) Stream(r opus.Reader, control *sink.Control) error {
+	stop := control.Stop
 	if s.block {
 		<-stop
 		return stream.ErrPlaybackStopped

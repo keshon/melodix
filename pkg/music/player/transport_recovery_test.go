@@ -46,7 +46,8 @@ func newTransportSink(failures int) *transportSink {
 	return s
 }
 
-func (s *transportSink) Stream(r opus.Reader, stop <-chan struct{}) error {
+func (s *transportSink) Stream(r opus.Reader, control *sink.Control) error {
+	stop := control.Stop
 	s.streams.Add(1)
 
 	for i := 0; i < s.playBefore; i++ {

@@ -258,8 +258,8 @@ clears it. Neither history nor the track cache restores a pending queue.
 Values below are the code defaults, not necessarily the values in an edited
 `.env` or container environment. Restart the process after changing settings.
 Environment variables already set for the process take precedence over `.env`.
-The examples deliberately enable initial command registration; Docker also
-overrides storage paths and read-ahead.
+Slash commands sync on startup by default. Set `INIT_SLASH_COMMANDS=false` to
+disable automatic sync.
 
 ### Bot and storage
 
@@ -267,7 +267,7 @@ overrides storage paths and read-ahead.
 |---|---|---|
 | `DISCORD_TOKEN`           | The bot token from Step 1. Required; the bot exits without it. | (none) |
 | `STORAGE_PATH`            | Directory the datastore owns (write-ahead log + snapshots). Locked to one process. | `./data/store` |
-| `INIT_SLASH_COMMANDS`     | Set to `true` to register slash commands on every startup. | `false`                 |
+| `INIT_SLASH_COMMANDS`     | Sync slash commands on startup; set to `false` to disable. | `true`                  |
 | `DISCORD_GUILD_BLACKLIST` | Comma-separated guild IDs the bot will leave on sight.      | (none)                  |
 | `DEVELOPER_ID` | Your Discord user ID. Runs every command on every server regardless of roles — for running /maintenance (with its database dump) and /settings without an admin role. Treat as a credential; empty disables it. | (none) |
 

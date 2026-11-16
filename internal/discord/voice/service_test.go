@@ -132,7 +132,8 @@ func (silentStreamer) Open(track parsers.Track, _ float64) (parsers.Opened, erro
 
 type heldSink struct{}
 
-func (heldSink) Stream(_ opus.Reader, stop <-chan struct{}) error {
+func (heldSink) Stream(_ opus.Reader, control *sink.Control) error {
+	stop := control.Stop
 	<-stop
 	return stream.ErrPlaybackStopped
 }

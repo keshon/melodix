@@ -16,7 +16,7 @@ type Config struct {
 	DiscordGuildBlacklist []string `env:"DISCORD_GUILD_BLACKLIST" envSeparator:","`
 	StoragePath           string   `env:"STORAGE_PATH" envDefault:"./data/store"` // directory the datastore owns (WAL + snapshots)
 	DeveloperID           string   `env:"DEVELOPER_ID"`
-	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"false"`
+	InitSlashCommands     bool     `env:"INIT_SLASH_COMMANDS" envDefault:"true"`
 	// VoiceReadyDelayMs waits after joining a voice channel before asking
 	// whether the channel uses end-to-end encryption. The protocol version is
 	// not known until SELECT_PROTOCOL_ACK arrives, and before that the answer

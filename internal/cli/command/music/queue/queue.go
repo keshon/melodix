@@ -21,6 +21,9 @@ func (Command) Run(c *cli.Context, _ []string) error {
 	if t, ok := p.CurrentTrack(); ok {
 		current = &t
 	}
+	if p.IsPaused() {
+		c.Println("⏸ Playback paused.")
+	}
 	c.Println(tracklist.Queue(current, p.Queue()))
 	return nil
 }
