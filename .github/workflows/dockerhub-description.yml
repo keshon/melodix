@@ -1,0 +1,31 @@
+name: Docker Hub overview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker/DOCKERHUB.md
+      - .github/workflows/dockerhub-description.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-description
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5
+        with:
+          username: keshon
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: keshon/melodix
+          short-description: Self-hosted Discord music bot for YouTube, SoundCloud and internet radio.
+          readme-filepath: docker/DOCKERHUB.md

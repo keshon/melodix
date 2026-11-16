@@ -1,5 +1,11 @@
 # Docker deployment
 
+The public Docker Hub overview is maintained in [DOCKERHUB.md](DOCKERHUB.md).
+The `Docker Hub overview` workflow syncs it on changes to that file or the
+workflow on `main`, using `DOCKERHUB_TOKEN`. It can also run manually from
+`main`. The short description is configured in that workflow. These syncs
+do not build images.
+
 Melodix supports two image sources: a published Docker Hub release and a local
 build of this checkout. Both use the same configuration, Compose project and
 persistent storage. Docker Engine with Compose 2.24+ is required; source builds
