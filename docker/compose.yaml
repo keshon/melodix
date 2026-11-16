@@ -1,0 +1,23 @@
+name: ${COMPOSE_PROJECT_NAME:-melodix}
+
+services:
+  app:
+    image: keshon/melodix:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    env_file:
+      - .env
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?Set DISCORD_TOKEN in docker/.env}
+      INIT_SLASH_COMMANDS: ${INIT_SLASH_COMMANDS:-true}
+    volumes:
+      - ${DATA_DIR:-data}:/usr/project/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  data:

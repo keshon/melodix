@@ -81,6 +81,9 @@ To run your own, take a binary from the
 from that directory. Nothing to compile, no Go runtime to install. Enable
 `INIT_SLASH_COMMANDS=true` for the first start to register commands.
 
+For Docker Hub images or a local container build, follow the
+[Docker guide](docker/README.md). Both modes share configuration and storage.
+
 From source instead, with Go 1.26 or newer:
 
 ```bash

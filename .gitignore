@@ -33,3 +33,8 @@ melodix-discord
 /website/public/assets/demo-play-youtube-playlist.gif
 /website/public/assets/demo-search.gif
 /website/public/assets/readme-banner.webp
+
+/docker/.env*
+!/docker/.env.example
+/docker/data/
+/docker/media/

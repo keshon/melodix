@@ -35,17 +35,6 @@ func TestEveryConfigKnobIsDocumented(t *testing.T) {
 		t.Fatal("no env tags found in config.go; this check is guarding nothing")
 	}
 
-	// docker/.env.example is two files in one: the app's configuration, and
-	// the handful of variables docker-compose itself reads to decide what to
-	// build. The second set is legitimately not in internal/config, and is
-	// listed here so that a fourth one has to be added deliberately rather
-	// than by a regexp quietly widening.
-	notAppConfig := map[string]bool{
-		"ALIAS":   true, // container name and image tag
-		"GIT":     true, // clone into ./src, or use what is already there
-		"GIT_URL": true, // where to clone from
-	}
-
 	// Where each knob has to appear, and what shape to look for there.
 	surfaces := []struct {
 		path   []string
@@ -55,7 +44,6 @@ func TestEveryConfigKnobIsDocumented(t *testing.T) {
 	}{
 		{[]string{"docs", "running.md"}, rowsIn(envTableRow), "row in the variables table", nil},
 		{[]string{".env.example"}, rowsIn(envExample), "a KEY= line", nil},
-		{[]string{"docker", ".env.example"}, rowsIn(envExample), "a KEY= line", notAppConfig},
 	}
 
 	for _, s := range surfaces {
@@ -89,6 +77,31 @@ func TestEveryConfigKnobIsDocumented(t *testing.T) {
 			t.Errorf("%s documents %d variable(s) that internal/config no longer declares:\n\t%s\n"+
 				"Setting one of these does nothing, which is a worse outcome than never having read about it.",
 				where, len(stale), strings.Join(stale, "\n\t"))
+		}
+	}
+}
+
+// The Docker quick start is intentionally smaller than the full reference.
+func TestDockerQuickStartSettings(t *testing.T) {
+	root := repoRoot(t)
+	cfg := readRepoFile(t, root, "internal", "config", "config.go")
+	known := map[string]bool{
+		"IMAGE_TAG":            true,
+		"COMPOSE_PROJECT_NAME": true,
+		"DATA_DIR":             true,
+	}
+	for _, match := range envTag.FindAllStringSubmatch(cfg, -1) {
+		known[match[1]] = true
+	}
+	example := readRepoFile(t, root, "docker", ".env.example")
+	findRows := rowsIn(envExample)
+	found := findRows(example)
+	if !found["DISCORD_TOKEN"] {
+		t.Fatal("Docker quick start omits its required token")
+	}
+	for name := range found {
+		if !known[name] {
+			t.Errorf("unknown Docker setting %s", name)
 		}
 	}
 }

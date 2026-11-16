@@ -1,56 +1,22 @@
-# ---- Stage 1: Builder ----
-FROM golang:1.26-alpine AS builder
-
-ENV GOPROXY=https://proxy.golang.org,direct
-
-# Install CGO deps
-RUN apk add --no-cache git build-base alsa-lib-dev
-
-WORKDIR /usr/project
-
-# Cache dependencies layer
-COPY src/go.mod src/go.sum ./
-COPY src/pkg ./pkg
+FROM golang:1.26-alpine3.23 AS builder
+WORKDIR /src
+RUN apk add --no-cache build-base alsa-lib-dev
+COPY go.mod go.sum ./
 RUN go mod download
+COPY . .
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/app ./cmd/discord
 
-# Copy rest of the source
-COPY src .
-
-# Build the application, CGO enabled
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
-        -o app \
-        -ldflags="-s -w" \
-        ./cmd/discord/
-
-# ---- Stage 2: Runtime ----
-FROM alpine:latest
-
-# Runtime dependencies
-# nodejs is here for yt-dlp: without a JavaScript runtime it cannot solve
-# YouTube's challenges and falls back to a client googlevideo restricts, which
-# breaks live streams. The bot passes the matching yt-dlp flags itself once it
-# finds a runtime on PATH (see pkg/music/parsers/ytdlp/runtime.go), so there is
-# no config file to keep in step with the code.
-RUN apk add --no-cache \
-        ffmpeg \
-        nodejs \
-        python3 \
-        py3-pip \
-        libstdc++ \
-        alsa-lib \
-    && pip3 install --no-cache-dir --break-system-packages 'yt-dlp[default]' \
-    && rm -rf /var/cache/apk/*
-
+FROM alpine:3.23
+# yt-dlp needs a JavaScript runtime for YouTube challenges.
+ARG YTDLP_VERSION=2026.10.26
+RUN apk add --no-cache ca-certificates ffmpeg nodejs python3 py3-pip libstdc++ alsa-lib \
+    && python3 -m venv /opt/yt-dlp \
+    && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]==${YTDLP_VERSION}"
+ENV PATH="/opt/yt-dlp/bin:${PATH}"
+RUN addgroup -g 10001 bot && adduser -D -u 10001 -G bot bot
 WORKDIR /usr/project
-COPY --from=builder /usr/project/app ./app
-
-# Static images the bot attaches to embeds (/about banner). Baked in rather
-# than mounted: they are versioned with the code, and a container without
-# them silently drops every image — os.Open fails and the commands fall back
-# to imageless embeds.
-COPY src/assets ./assets
-
-RUN mkdir -p data/store
-RUN mkdir -p data/cache
-
+COPY --from=builder /out/app ./app
+COPY assets ./assets
+RUN mkdir -p data/store data/cache && chown -R bot:bot data
+USER 10001:10001
 ENTRYPOINT ["/usr/project/app"]

@@ -187,10 +187,9 @@ root so `.env`, data and assets resolve consistently. For example,
 
 ## Docker
 
-The [Docker guide](../docker/README.md) owns container build commands, environment
-forwarding, updates and mounted paths. It includes the optional media programs.
-Its supplied read-ahead setting is 10 seconds rather than the application's
-30-second default.
+The [Docker guide](../docker/README.md) covers Docker Hub images, source builds,
+shared persistent storage, environment settings and updates. The image includes
+the optional media programs and uses the application's read-ahead default.
 
 ## yt-dlp and JavaScript
 

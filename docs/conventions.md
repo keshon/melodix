@@ -518,3 +518,20 @@ so Windows and Bash share argument handling, progress output and packaging.
 `cmd/build/main_test.go` covers argument forwarding and archive validation.
 Run `go test ./cmd/build` after changing the helper; test `dist` from a checkout
 to verify the full payload. The running guide owns the command reference.
+
+## Container verification
+
+The `Container` workflow runs Go vet and race tests before building native
+Linux amd64 and arm64 images. It renders pull, source-build and optional routing
+configurations using `bash docker/check-compose.sh`. Each architecture runs
+`bash docker/check-image.sh <image>` to check offline startup, packaged assets,
+non-root writes and persistence across container replacement. These checks use
+synthetic configuration and never connect to Discord. Publication runs only
+after both architecture checks pass; registry credentials belong in the
+`DOCKERHUB_TOKEN` repository Actions secret.
+
+Keep the Docker quick-start environment example small. The root `.env.example`
+and operating guide remain the full configuration reference. When adding a
+setting, retain their existing documentation checks; `env_file` forwards
+operator settings without adding a parallel Compose allowlist. Deployment and
+migration commands belong in the [Docker guide](../docker/README.md).
