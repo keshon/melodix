@@ -90,10 +90,9 @@ func (d *Sink) run(provider *frameProvider) error {
 	provider.markPull()
 
 	d.conn.SetOpusFrameProvider(provider)
-	// Dropping the provider releases the reader with it. The sender goroutine
-	// disgo starts in its place idles on a nil provider until the connection
-	// closes, which is disgo's own lifecycle and not ours to shorten.
-	defer d.conn.SetOpusFrameProvider(nil)
+	// Disgo 0.20 creates a sender even for nil and panics when replacing it.
+	// End this provider instead; the next track replaces it on the connection.
+	defer provider.Close()
 
 	watch := time.NewTicker(transportCheckInterval)
 	defer watch.Stop()
